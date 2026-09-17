@@ -125,21 +125,7 @@ func serviceAutoInboundTag(serviceID int64) string {
 
 func pickAvailableAutoInboundPort(config map[string]any) (int, error) {
 	used, ranges := extractUsedPorts(config)
-	for i := 0; i < 200; i++ {
-		candidate, err := randomPort(autoInboundMinPort, autoInboundMaxPort)
-		if err != nil {
-			break
-		}
-		if !isPortUsed(candidate, used, ranges) {
-			return candidate, nil
-		}
-	}
-	for candidate := autoInboundMinPort; candidate <= autoInboundMaxPort; candidate++ {
-		if !isPortUsed(candidate, used, ranges) {
-			return candidate, nil
-		}
-	}
-	return 0, ErrNoAvailablePort
+	return pickAvailablePortFrom(used, ranges)
 }
 
 func randomPort(minPort int, maxPort int) (int, error) {

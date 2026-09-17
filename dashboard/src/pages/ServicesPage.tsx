@@ -71,7 +71,7 @@ import { type FC, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
 import type { Admin, AdminPermissions } from "types/Admin";
-import { AdminTrafficLimitMode } from "types/Admin";
+import { AdminRole, AdminTrafficLimitMode } from "types/Admin";
 import type {
 	ServiceCreatePayload,
 	ServiceAdmin,
@@ -110,6 +110,8 @@ type ServiceDialogProps = {
 	refreshInbounds: () => Promise<void>;
 	refreshHosts: () => void;
 };
+
+const AUTO_CONFIGURE_SERVICE_NAME = "Best Protocols (Auto)";
 
 const GB_IN_BYTES = 1024 * 1024 * 1024;
 const MB_IN_BYTES = 1024 * 1024;
@@ -816,7 +818,12 @@ const ServicesPage: FC = () => {
 	const inbounds = useDashboard((state) => state.inbounds);
 	const refetchUsers = useDashboard((state) => state.refetchUsers);
 
+	const isSudoOrAbove =
+		userData.role === AdminRole.FullAccess || userData.role === AdminRole.Sudo;
+
 	const dialogDisclosure = useDisclosure();
+	const autoConfigureDisclosure = useDisclosure();
+	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [editingService, setEditingService] = useState<ServiceDetail | null>(
 		null,
 	);
@@ -897,6 +904,29 @@ const ServicesPage: FC = () => {
 	const openCreateDialog = () => {
 		setEditingService(null);
 		dialogDisclosure.onOpen();
+	};
+
+	const handleAutoConfigureBestProtocols = async () => {
+		setIsAutoConfiguring(true);
+		try {
+			await fetch("/core/auto-configure", { method: "POST" });
+			await Promise.all([fetchServices(), fetchInbounds()]);
+			fetchHosts();
+			autoConfigureDisclosure.onClose();
+			toast({
+				status: "success",
+				title: t("services.autoConfigure.success", {
+					name: AUTO_CONFIGURE_SERVICE_NAME,
+				}),
+			});
+		} catch (error: any) {
+			toast({
+				status: "error",
+				title: error?.data?.detail ?? t("services.autoConfigure.failed"),
+			});
+		} finally {
+			setIsAutoConfiguring(false);
+		}
 	};
 
 	const openEditDialog = async (serviceId: number) => {
@@ -1788,17 +1818,32 @@ const ServicesPage: FC = () => {
 				title={t("services.listHeader")}
 				summaryItems={serviceSummaryItems}
 				actions={
-					<Button
-						leftIcon={<PlusIcon width={18} />}
-						colorScheme="primary"
-						onClick={openCreateDialog}
-						size="sm"
-						h="36px"
-						px={3}
-						borderRadius="4px"
-					>
-						{t("services.addService")}
-					</Button>
+					<HStack spacing={2}>
+						{isSudoOrAbove && (
+							<Button
+								variant="outline"
+								colorScheme="primary"
+								onClick={autoConfigureDisclosure.onOpen}
+								size="sm"
+								h="36px"
+								px={3}
+								borderRadius="4px"
+							>
+								{t("services.autoConfigure.button")}
+							</Button>
+						)}
+						<Button
+							leftIcon={<PlusIcon width={18} />}
+							colorScheme="primary"
+							onClick={openCreateDialog}
+							size="sm"
+							h="36px"
+							px={3}
+							borderRadius="4px"
+						>
+							{t("services.addService")}
+						</Button>
+					</HStack>
 				}
 			/>
 
@@ -2091,6 +2136,19 @@ const ServicesPage: FC = () => {
 				colorScheme="primary"
 				isLoading={isResetting}
 				isConfirmDisabled={resetServiceId == null}
+			/>
+
+			<ConfirmDialog
+				isOpen={autoConfigureDisclosure.isOpen}
+				onClose={autoConfigureDisclosure.onClose}
+				onConfirm={handleAutoConfigureBestProtocols}
+				title={t("services.autoConfigure.confirmTitle")}
+				description={t("services.autoConfigure.confirmBody", {
+					name: AUTO_CONFIGURE_SERVICE_NAME,
+				})}
+				confirmLabel={t("services.autoConfigure.button")}
+				colorScheme="primary"
+				isLoading={isAutoConfiguring}
 			/>
 
 			<AppDialog
