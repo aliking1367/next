@@ -3,15 +3,23 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/aliking1367/next/internal/app/xrayconfig"
 )
 
 // autoProvisionServiceName is the fixed name of the service that bundles the
 // hosts created by the auto-provision button, so re-running it finds and
 // reuses the same service instead of creating duplicates.
 const autoProvisionServiceName = "Best Protocols (Auto)"
+
+const (
+	verifyProtocolsTimeout     = 20 * time.Second
+	verifyProtocolProbeTimeout = 4 * time.Second
+)
 
 type autoProvisionResponse struct {
 	ServiceID   int64  `json:"service_id"`
@@ -75,6 +83,45 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 		ServiceName: autoProvisionServiceName,
 		Protocols:   protocols,
 		Detail:      "Best protocols configured",
+	})
+}
+
+// handleCoreVerifyProtocols re-tests the auto-configured inbounds: it dials
+// each one on this machine and completes a TLS/REALITY handshake where the
+// protocol allows it. It is a separate action from auto-configure because
+// Xray applies a new config asynchronously (the node operation queue), so a
+// check run in the same request would race the reload.
+func (s *Server) handleCoreVerifyProtocols(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if err := requireServiceSudo(r); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), verifyProtocolsTimeout)
+	defer cancel()
+
+	results := make([]xrayconfig.ReachabilityResult, 0, len(xrayconfig.AutoProvisionTags()))
+	for _, tag := range xrayconfig.AutoProvisionTags() {
+		inbound, err := s.configRepo.GetInbound(ctx, tag)
+		if err != nil {
+			if errors.Is(err, xrayconfig.ErrInboundNotFound) {
+				continue
+			}
+			writeError(w, http.StatusInternalServerError, "Failed to read inbound "+tag+": "+err.Error())
+			return
+		}
+		probeCtx, probeCancel := context.WithTimeout(ctx, verifyProtocolProbeTimeout)
+		results = append(results, xrayconfig.CheckInboundReachability(probeCtx, inbound))
+		probeCancel()
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"results": results,
+		"detail":  "Verified from this server only; reachability from a client network still needs a real client test.",
 	})
 }
 

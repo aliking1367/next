@@ -22,6 +22,7 @@ type Config struct {
 	NodeUsageFlushBatchSize      int
 	RecordNodeUsage              bool
 	RecordNodeUserUsages         bool
+	DisableProtocolCatalogFetch  bool
 	AdminLifecycleInterval       string
 	UserLifecycleInterval        string
 	UserLifecycleBatchSize       int
@@ -70,6 +71,7 @@ func LoadConfig() (Config, error) {
 		NodeUsageFlushBatchSize:      parseIntDefault(lookup("NEXT_NODE_USAGE_FLUSH_BATCH_SIZE"), 2000),
 		RecordNodeUsage:              true,
 		RecordNodeUserUsages:         true,
+		DisableProtocolCatalogFetch:  parseBoolDefault(lookup("NEXT_DISABLE_PROTOCOL_CATALOG_FETCH"), false),
 		AdminLifecycleInterval:       lookup("NEXT_ADMIN_LIFECYCLE_INTERVAL"),
 		UserLifecycleInterval:        firstNonEmpty(lookup("NEXT_USER_LIFECYCLE_INTERVAL"), secondsEnv(lookup("JOB_REVIEW_USERS_INTERVAL"))),
 		UserLifecycleBatchSize:       parseIntDefault(lookup("NEXT_USER_LIFECYCLE_BATCH_SIZE", "JOB_REVIEW_USERS_BATCH_SIZE"), 500),

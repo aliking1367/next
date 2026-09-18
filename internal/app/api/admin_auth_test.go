@@ -303,7 +303,7 @@ func testAdminServer(t *testing.T) (*Server, *sql.DB) {
 		nodeController: nodecontroller.NewController(nodecontroller.NewRepository(db, "sqlite")),
 		nodeMutations:  nodeapp.NewRepository(db, "sqlite"),
 		warpService:    warpapp.NewService(warpRepo, warpapp.NewClient("")),
-		configRepo:     xrayconfig.NewRepository(db, "sqlite", xrayconfig.Options{}),
+		configRepo:     xrayconfig.NewRepository(db, "sqlite", xrayconfig.Options{DisableCatalogFetch: true}),
 		settingsRepo:   settingsapp.NewRepository(db, "sqlite"),
 		backupService:  backupapp.NewService(db, "sqlite", "sqlite:///"+filepath.ToSlash(path)),
 		certificateManager: certificateapp.NewManager(db, certificateapp.Config{

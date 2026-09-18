@@ -118,6 +118,10 @@ type Options struct {
 	UseVerifyPeerCertByName *bool
 	MutationRecorder        MutationRecorder
 	RollbackMarker          RollbackMarker
+	// DisableCatalogFetch keeps auto-provisioning entirely offline: it uses
+	// the catalog embedded in this binary instead of refreshing it from the
+	// project repository.
+	DisableCatalogFetch bool
 }
 
 type Config struct {

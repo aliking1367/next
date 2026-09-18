@@ -36,7 +36,7 @@ type AutoProvisionResult struct {
 type autoProvisionSpec struct {
 	protocol string
 	tag      string
-	build    func(tag string, port int) (map[string]any, error)
+	build    func(tag string, port int, catalog Catalog, usedDests map[string]bool) (map[string]any, error)
 }
 
 func autoProvisionSpecs() []autoProvisionSpec {
@@ -46,6 +46,17 @@ func autoProvisionSpecs() []autoProvisionSpec {
 		{protocol: "hysteria", tag: "auto-hysteria2", build: buildAutoHysteria2},
 		{protocol: "shadowsocks", tag: "auto-shadowsocks", build: buildAutoShadowsocks},
 	}
+}
+
+// AutoProvisionTags lists the inbound tags AutoProvisionBestProtocols owns,
+// in the order they are provisioned.
+func AutoProvisionTags() []string {
+	specs := autoProvisionSpecs()
+	tags := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		tags = append(tags, spec.tag)
+	}
+	return tags
 }
 
 // AutoProvisionBestProtocols creates a curated set of modern, well-hardened
@@ -63,6 +74,8 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context) (AutoProvisi
 		return AutoProvisionResult{}, err
 	}
 	used, ranges := extractUsedPorts(config)
+	catalog := r.loadCatalog(ctx)
+	usedDests := map[string]bool{}
 
 	result := AutoProvisionResult{}
 	for _, spec := range autoProvisionSpecs() {
@@ -84,7 +97,7 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context) (AutoProvisi
 		}
 		used[port] = true
 
-		payload, err := spec.build(spec.tag, port)
+		payload, err := spec.build(spec.tag, port, catalog, usedDests)
 		if err != nil {
 			return AutoProvisionResult{}, fmt.Errorf("%s: %w", spec.protocol, err)
 		}
@@ -125,7 +138,7 @@ func pickAvailablePortFrom(used map[int]bool, ranges []portRange) (int, error) {
 	return 0, ErrNoAvailablePort
 }
 
-func buildAutoVLESSReality(tag string, port int) (map[string]any, error) {
+func buildAutoVLESSReality(tag string, port int, catalog Catalog, usedDests map[string]bool) (map[string]any, error) {
 	privateKey, _, err := generateRealityKeyPair()
 	if err != nil {
 		return nil, err
@@ -134,6 +147,8 @@ func buildAutoVLESSReality(tag string, port int) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	option := pickRealityDest(catalog.RealityPool, usedDests)
+	usedDests[option.Dest] = true
 	return map[string]any{
 		"tag":      tag,
 		"listen":   "::",
@@ -148,9 +163,9 @@ func buildAutoVLESSReality(tag string, port int) (map[string]any, error) {
 			"security": "reality",
 			"realitySettings": map[string]any{
 				"show":        false,
-				"dest":        "www.microsoft.com:443",
+				"dest":        option.Dest,
 				"xver":        0,
-				"serverNames": []any{"www.microsoft.com"},
+				"serverNames": stringsToAny(option.ServerNames),
 				"privateKey":  privateKey,
 				"shortIds":    []any{shortID},
 			},
@@ -158,7 +173,7 @@ func buildAutoVLESSReality(tag string, port int) (map[string]any, error) {
 	}, nil
 }
 
-func buildAutoTrojanReality(tag string, port int) (map[string]any, error) {
+func buildAutoTrojanReality(tag string, port int, catalog Catalog, usedDests map[string]bool) (map[string]any, error) {
 	privateKey, _, err := generateRealityKeyPair()
 	if err != nil {
 		return nil, err
@@ -167,6 +182,8 @@ func buildAutoTrojanReality(tag string, port int) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	option := pickRealityDest(catalog.RealityPool, usedDests)
+	usedDests[option.Dest] = true
 	return map[string]any{
 		"tag":      tag,
 		"listen":   "::",
@@ -180,9 +197,9 @@ func buildAutoTrojanReality(tag string, port int) (map[string]any, error) {
 			"security": "reality",
 			"realitySettings": map[string]any{
 				"show":        false,
-				"dest":        "www.cloudflare.com:443",
+				"dest":        option.Dest,
 				"xver":        0,
-				"serverNames": []any{"www.cloudflare.com"},
+				"serverNames": stringsToAny(option.ServerNames),
 				"privateKey":  privateKey,
 				"shortIds":    []any{shortID},
 			},
@@ -190,7 +207,15 @@ func buildAutoTrojanReality(tag string, port int) (map[string]any, error) {
 	}, nil
 }
 
-func buildAutoHysteria2(tag string, port int) (map[string]any, error) {
+func stringsToAny(values []string) []any {
+	out := make([]any, len(values))
+	for i, value := range values {
+		out[i] = value
+	}
+	return out
+}
+
+func buildAutoHysteria2(tag string, port int, _ Catalog, _ map[string]bool) (map[string]any, error) {
 	certLines, keyLines, err := generateSelfSignedCertLines("next-hysteria2")
 	if err != nil {
 		return nil, err
@@ -217,7 +242,7 @@ func buildAutoHysteria2(tag string, port int) (map[string]any, error) {
 	}, nil
 }
 
-func buildAutoShadowsocks(tag string, port int) (map[string]any, error) {
+func buildAutoShadowsocks(tag string, port int, _ Catalog, _ map[string]bool) (map[string]any, error) {
 	return map[string]any{
 		"tag":      tag,
 		"listen":   "::",

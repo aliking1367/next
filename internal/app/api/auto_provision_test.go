@@ -96,6 +96,68 @@ func TestCoreAutoConfigureCreatesProtocolsAndBundlesService(t *testing.T) {
 	assertMasterAPICount(t, db, fmt.Sprintf(`SELECT COUNT(*) FROM service_hosts WHERE service_id = %d`, resp.ServiceID), 5)
 }
 
+func TestCoreVerifyProtocolsReportsPerProtocolStatus(t *testing.T) {
+	server, _, token := testAutoProvisionServer(t)
+
+	// Nothing is provisioned yet: there is nothing to verify.
+	rec := adminJSONRequest(t, server, http.MethodPost, "/api/core/verify-protocols", token, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify (empty) status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var empty struct {
+		Results []struct {
+			Tag string `json:"tag"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &empty); err != nil {
+		t.Fatalf("decode empty verify response: %v body=%s", err, rec.Body.String())
+	}
+	if len(empty.Results) != 0 {
+		t.Fatalf("expected no results before provisioning, got %#v", empty.Results)
+	}
+
+	if rec = adminJSONRequest(t, server, http.MethodPost, "/api/core/auto-configure", token, ""); rec.Code != http.StatusOK {
+		t.Fatalf("auto-configure status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = adminJSONRequest(t, server, http.MethodPost, "/api/core/verify-protocols", token, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Results []struct {
+			Tag      string `json:"tag"`
+			Protocol string `json:"protocol"`
+			Port     int    `json:"port"`
+			Status   string `json:"status"`
+			Detail   string `json:"detail"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode verify response: %v body=%s", err, rec.Body.String())
+	}
+	if len(resp.Results) != 4 {
+		t.Fatalf("expected 4 results, got %d: %#v", len(resp.Results), resp.Results)
+	}
+	for _, result := range resp.Results {
+		if result.Port == 0 {
+			t.Errorf("%s: expected a port in the result", result.Tag)
+		}
+		if result.Detail == "" {
+			t.Errorf("%s: expected an explanatory detail", result.Tag)
+		}
+		// No Xray is running in tests, so TCP inbounds must honestly report a
+		// failure rather than claiming success, and Hysteria2 is not probeable.
+		want := "failed"
+		if result.Protocol == "hysteria" {
+			want = "skipped"
+		}
+		if result.Status != want {
+			t.Errorf("%s: expected status %q with no Xray running, got %q (%s)", result.Tag, want, result.Status, result.Detail)
+		}
+	}
+}
+
 // testAutoProvisionServer extends the base admin test fixture with the
 // columns AutoProvisionBestProtocols/CreateInbound and service creation need
 // (usage_coefficient, and the fuller services/hosts/service_hosts shape),

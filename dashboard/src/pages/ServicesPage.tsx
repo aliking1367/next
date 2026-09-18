@@ -113,6 +113,20 @@ type ServiceDialogProps = {
 
 const AUTO_CONFIGURE_SERVICE_NAME = "Best Protocols (Auto)";
 
+type ProtocolCheckResult = {
+	tag: string;
+	protocol: string;
+	port: number;
+	status: "ok" | "failed" | "skipped";
+	detail: string;
+};
+
+const PROTOCOL_CHECK_STATUS_SCHEME: Record<string, string> = {
+	ok: "green",
+	failed: "red",
+	skipped: "gray",
+};
+
 const GB_IN_BYTES = 1024 * 1024 * 1024;
 const MB_IN_BYTES = 1024 * 1024;
 
@@ -824,6 +838,10 @@ const ServicesPage: FC = () => {
 	const dialogDisclosure = useDisclosure();
 	const autoConfigureDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
+	const [isVerifying, setIsVerifying] = useState(false);
+	const [verifyResults, setVerifyResults] = useState<ProtocolCheckResult[] | null>(
+		null,
+	);
 	const [editingService, setEditingService] = useState<ServiceDetail | null>(
 		null,
 	);
@@ -904,6 +922,29 @@ const ServicesPage: FC = () => {
 	const openCreateDialog = () => {
 		setEditingService(null);
 		dialogDisclosure.onOpen();
+	};
+
+	const handleVerifyProtocols = async () => {
+		setIsVerifying(true);
+		try {
+			const response = await fetch<{ results: ProtocolCheckResult[] }>(
+				"/core/verify-protocols",
+				{ method: "POST" },
+			);
+			const results = response?.results ?? [];
+			if (!results.length) {
+				toast({ status: "info", title: t("services.verifyProtocols.none") });
+				return;
+			}
+			setVerifyResults(results);
+		} catch (error: any) {
+			toast({
+				status: "error",
+				title: error?.data?.detail ?? t("services.verifyProtocols.failed"),
+			});
+		} finally {
+			setIsVerifying(false);
+		}
 	};
 
 	const handleAutoConfigureBestProtocols = async () => {
@@ -1821,6 +1862,19 @@ const ServicesPage: FC = () => {
 					<HStack spacing={2}>
 						{isSudoOrAbove && (
 							<Button
+								variant="ghost"
+								onClick={handleVerifyProtocols}
+								isLoading={isVerifying}
+								size="sm"
+								h="36px"
+								px={3}
+								borderRadius="4px"
+							>
+								{t("services.verifyProtocols.button")}
+							</Button>
+						)}
+						{isSudoOrAbove && (
+							<Button
 								variant="outline"
 								colorScheme="primary"
 								onClick={autoConfigureDisclosure.onOpen}
@@ -2150,6 +2204,61 @@ const ServicesPage: FC = () => {
 				colorScheme="primary"
 				isLoading={isAutoConfiguring}
 			/>
+
+			<AppDialog
+				isOpen={verifyResults !== null}
+				onClose={() => setVerifyResults(null)}
+				size="lg"
+				title={t("services.verifyProtocols.title")}
+				overlayProps={{ bg: "blackAlpha.300" }}
+				footer={
+					<Button variant="ghost" onClick={() => setVerifyResults(null)}>
+						{t("close")}
+					</Button>
+				}
+			>
+				<Stack spacing={3}>
+					<Text fontSize="sm" color={labelColor}>
+						{t("services.verifyProtocols.hint")}
+					</Text>
+					<Stack spacing={2}>
+						{(verifyResults ?? []).map((result) => (
+							<HStack
+								key={result.tag}
+								justify="space-between"
+								align="start"
+								spacing={3}
+							>
+								<Box>
+									<Text fontWeight="semibold">
+										{result.protocol} · {result.port}
+									</Text>
+									<Text fontSize="sm" color={labelColor}>
+										{result.detail}
+									</Text>
+								</Box>
+								<Badge
+									colorScheme={
+										PROTOCOL_CHECK_STATUS_SCHEME[result.status] ?? "gray"
+									}
+									borderRadius="md"
+									flexShrink={0}
+								>
+									{t(
+										`services.verifyProtocols.status${
+											result.status.charAt(0).toUpperCase() +
+											result.status.slice(1)
+										}`,
+									)}
+								</Badge>
+							</HStack>
+						))}
+					</Stack>
+					<Text fontSize="sm" color={labelColor}>
+						{t("services.verifyProtocols.retryHint")}
+					</Text>
+				</Stack>
+			</AppDialog>
 
 			<AppDialog
 				isOpen={isDeleteDialogOpen}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-18",
+  "reality_pool": [
+    { "dest": "www.microsoft.com:443", "server_names": ["www.microsoft.com"] },
+    { "dest": "www.apple.com:443", "server_names": ["www.apple.com"] },
+    { "dest": "addons.mozilla.org:443", "server_names": ["addons.mozilla.org"] },
+    { "dest": "www.samsung.com:443", "server_names": ["www.samsung.com"] },
+    { "dest": "www.cloudflare.com:443", "server_names": ["www.cloudflare.com"] }
+  ]
+}

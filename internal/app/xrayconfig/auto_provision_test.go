@@ -4,10 +4,33 @@ package xrayconfig
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 )
 
+// useEmbeddedCatalogForTest forces loadCatalog to skip the network and use
+// the binary's embedded default catalog, so tests are fast and deterministic
+// regardless of network availability.
+func useEmbeddedCatalogForTest(t *testing.T) {
+	t.Helper()
+	original := catalogFetcher
+	catalogFetcher = func(context.Context) (Catalog, error) {
+		return Catalog{}, errors.New("network disabled in tests")
+	}
+	catalogCacheMu.Lock()
+	catalogCacheTime = time.Time{}
+	catalogCacheMu.Unlock()
+	t.Cleanup(func() {
+		catalogFetcher = original
+		catalogCacheMu.Lock()
+		catalogCacheTime = time.Time{}
+		catalogCacheMu.Unlock()
+	})
+}
+
 func TestAutoProvisionBestProtocolsCreatesAllProtocolsWithHosts(t *testing.T) {
+	useEmbeddedCatalogForTest(t)
 	repo, db := testRepository(t)
 	ctx := context.Background()
 

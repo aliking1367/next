@@ -130,6 +130,7 @@ func (s *Server) registerCoreRoutes(r chi.Router) {
 	r.HandleFunc("/core/restart", s.requireSudo(s.handleCoreRestart))
 	r.HandleFunc("/core/ips", s.requireAdmin(s.handleCoreIPs))
 	r.HandleFunc("/core/auto-configure", s.requireSudo(s.handleCoreAutoConfigure))
+	r.HandleFunc("/core/verify-protocols", s.requireSudo(s.handleCoreVerifyProtocols))
 	r.HandleFunc("/core/xray/releases", s.requireSudo(s.handleCoreXrayReleases))
 	r.HandleFunc("/core/geo/templates", s.requireSudo(s.handleGeoTemplates))
 	r.HandleFunc("/core/geo/apply", s.requireSudo(s.handleGeoApply))

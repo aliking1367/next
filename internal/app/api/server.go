@@ -158,8 +158,9 @@ func New(cfg Config) (*Server, error) {
 		recentActionsEnabled: true,
 	}
 	server.configRepo = xrayconfig.NewRepository(pool.DB, pool.Dialect, xrayconfig.Options{
-		MutationRecorder: server.recordXrayMutationTx,
-		RollbackMarker:   server.markRecentActionUndoneTx,
+		MutationRecorder:    server.recordXrayMutationTx,
+		RollbackMarker:      server.markRecentActionUndoneTx,
+		DisableCatalogFetch: cfg.DisableProtocolCatalogFetch,
 	})
 	server.nodeMutations = nodeMutationRepo.WithRecentActionRecorder(server.recordRecentActionEventTx)
 	return server, nil
