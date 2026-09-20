@@ -99,7 +99,7 @@ Do not run the installers with `sudo bash -c "$(curl ...)"`; the downloaded scri
 For the dev channel, use:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/aliking1367/next/dev/scripts/next/next-binary.sh | sudo bash -s -- install --dev
+curl -sL https://raw.githubusercontent.com/aliking1367/next/master/scripts/next/next-binary.sh | sudo bash -s -- install --dev
 ```
 
 Install Next-node on each node server with the binary node installer:

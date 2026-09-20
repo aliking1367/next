@@ -125,7 +125,7 @@ You will lose access to the dashboard as soon as you close the SSH terminal. The
 Next, you need to create a sudo admin for logging into the Next dashboard by the following command
 
 ```bash
-next cli admin create --sudo
+next cli admin create --role full_access
 ```
 
 That's it! You can login to your dashboard using these credentials

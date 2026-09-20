@@ -11,7 +11,7 @@ on:
   push:
     branches:
       - dev
-      - go-usage-bridge
+      - master
     tags:
       - "v*"
   pull_request:
@@ -83,6 +83,8 @@ jobs:
         run: |
           LC_ALL=C.UTF-8 bash scripts/next/test-menu.sh
           bash scripts/next/test-node-installer.sh
+          bash scripts/next/test-initial-admin.sh
+          bash scripts/next/test-dev-channel.sh
 
       - name: Test node wire compatibility
         run: go test ./internal/proto/node/v1
@@ -280,7 +282,7 @@ jobs:
       - build-windows-amd64
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' && github.ref_name == 'dev'
+    if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'master')
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       DEV_RELEASE_TAG: dev-builds

@@ -126,7 +126,7 @@ http://localhost:8000/dashboard/
 Далее, Вам нужно создать главного администратора для входа в панель управления Next, выполнив следующую команду: 
 
 ```bash
-next cli admin create --sudo
+next cli admin create --role full_access
 ```
 
 Готово! Теперь Вы можете войти, используя данные своей учетной записи.

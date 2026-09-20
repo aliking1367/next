@@ -29,7 +29,8 @@ if [ -n "${NEXT_SCRIPT_BASE_URL+x}" ]; then
 fi
 NEXT_SCRIPT_BASE_URL="${NEXT_SCRIPT_BASE_URL:-${NEXT_RAW_BASE}/scripts/next}"
 NEXT_RELEASE_REPO="${NEXT_RELEASE_REPO:-aliking1367/next}"
-NEXT_BINARY_DEV_BRANCH="${NEXT_BINARY_DEV_BRANCH:-dev}"
+# Dev builds come from every push to this branch (the repository has no separate dev branch).
+NEXT_BINARY_DEV_BRANCH="${NEXT_BINARY_DEV_BRANCH:-master}"
 NEXT_BINARY_WORKFLOW_NAME="${NEXT_BINARY_WORKFLOW_NAME:-binary-build}"
 NEXT_BINARY_DEV_MANIFEST_BRANCH="${NEXT_BINARY_DEV_MANIFEST_BRANCH:-dev-build-manifest}"
 NEXT_BINARY_DEV_MANIFEST_PATH="${NEXT_BINARY_DEV_MANIFEST_PATH:-dev-builds.json}"
@@ -477,7 +478,7 @@ print_menu_status_summary() {
 }
 
 set_next_source_ref() {
-    local ref="${1:-dev}"
+    local ref="${1:-master}"
     NEXT_REF="$ref"
     NEXT_RAW_BASE="https://raw.githubusercontent.com/${NEXT_REPO}/${NEXT_REF}"
     if [ "${NEXT_SCRIPT_BASE_URL_EXPLICIT:-0}" != "1" ]; then
@@ -1445,24 +1446,52 @@ prompt_confirmed_secret() {
     done
 }
 
+# Panel login created at install time. Pressing Enter (or installing without a
+# terminal, e.g. piped from curl) gives admin / admin; NEXT_ADMIN_USERNAME and
+# NEXT_ADMIN_PASSWORD override that for unattended installs.
+INITIAL_ADMIN_DEFAULT_USERNAME="admin"
+INITIAL_ADMIN_DEFAULT_PASSWORD="admin"
+
+prompt_initial_admin_password() {
+    local first second
+    while true; do
+        first=$(read_secret "Admin password [Enter = ${INITIAL_ADMIN_DEFAULT_PASSWORD}]: ")
+        if [ -z "$first" ]; then
+            printf "%s" "$INITIAL_ADMIN_DEFAULT_PASSWORD"
+            return
+        fi
+        second=$(read_secret "Confirm admin password: ")
+        if [ "$first" = "$second" ]; then
+            printf "%s" "$first"
+            return
+        fi
+        colorized_echo red "Passwords do not match." >&2
+    done
+}
+
 prompt_initial_admin() {
     INITIAL_ADMIN_CREATE=0
     INITIAL_ADMIN_USERNAME=""
     INITIAL_ADMIN_PASSWORD=""
-    [ -t 0 ] || return
+    if [ ! -t 0 ]; then
+        INITIAL_ADMIN_USERNAME="${NEXT_ADMIN_USERNAME:-$INITIAL_ADMIN_DEFAULT_USERNAME}"
+        INITIAL_ADMIN_PASSWORD="${NEXT_ADMIN_PASSWORD:-$INITIAL_ADMIN_DEFAULT_PASSWORD}"
+        INITIAL_ADMIN_CREATE=1
+        return
+    fi
     ui_section "Initial admin"
     if ! ui_read_yes_no "Create a full-access admin now?" "y"; then
         return
     fi
     while true; do
-        IFS= read -r -p "Admin username [admin]: " INITIAL_ADMIN_USERNAME
-        INITIAL_ADMIN_USERNAME="${INITIAL_ADMIN_USERNAME:-admin}"
+        IFS= read -r -p "Admin username [${INITIAL_ADMIN_DEFAULT_USERNAME}]: " INITIAL_ADMIN_USERNAME
+        INITIAL_ADMIN_USERNAME="${INITIAL_ADMIN_USERNAME:-$INITIAL_ADMIN_DEFAULT_USERNAME}"
         if [[ "$INITIAL_ADMIN_USERNAME" =~ ^[A-Za-z0-9_.@-]{3,64}$ ]]; then
             break
         fi
         colorized_echo red "Username must be 3-64 chars and may contain letters, numbers, dot, underscore, dash, and @."
     done
-    INITIAL_ADMIN_PASSWORD=$(prompt_confirmed_secret "Admin password")
+    INITIAL_ADMIN_PASSWORD=$(prompt_initial_admin_password)
     INITIAL_ADMIN_CREATE=1
 }
 
@@ -1471,7 +1500,19 @@ create_initial_admin_if_requested() {
         return
     fi
     ui_spinner_run "Running database migrations" next_cli migrate up
-    ui_spinner_run "Creating full-access admin ${INITIAL_ADMIN_USERNAME}" next_cli admin create "$INITIAL_ADMIN_USERNAME" --role full_access --password "$INITIAL_ADMIN_PASSWORD"
+    # An existing admin (re-install over an old database) must not abort the install.
+    if ! ui_spinner_run "Creating full-access admin ${INITIAL_ADMIN_USERNAME}" next_cli admin create "$INITIAL_ADMIN_USERNAME" --role full_access --password "$INITIAL_ADMIN_PASSWORD"; then
+        colorized_echo yellow "Could not create admin ${INITIAL_ADMIN_USERNAME}; it may already exist. Set its password with: next cli admin update ${INITIAL_ADMIN_USERNAME} --password <new>"
+        return
+    fi
+    ui_section "Panel login"
+    colorized_echo green "  Username: ${INITIAL_ADMIN_USERNAME}"
+    if [ "$INITIAL_ADMIN_PASSWORD" = "$INITIAL_ADMIN_DEFAULT_PASSWORD" ]; then
+        colorized_echo green "  Password: ${INITIAL_ADMIN_PASSWORD}"
+        colorized_echo yellow "  This is the default password. Change it right after your first login (menu: sudo next -> option 11)."
+    else
+        colorized_echo green "  Password: the one you entered"
+    fi
 }
 
 prompt_phpmyadmin_settings() {
@@ -3387,6 +3428,29 @@ get_binary_dev_artifact_metadata() {
     printf '%s|%s|%s.zip\n' "dev-${head_sha:0:7}" "$artifact_url" "$artifact_name"
 }
 
+# Picks the dev build for `--dev` / `dev-<sha>`.
+#   status 0: metadata line printed
+#   status 1: an explicitly requested dev-<sha> build does not exist
+#   status 2: no dev build is published yet; the caller falls back to the latest stable release
+# It must not `exit`: it runs inside $(...), where exit only ends the subshell and would
+# leave the installer with an empty download URL.
+resolve_binary_dev_metadata() {
+    local binary_arch="$1"
+    local requested_version="$2"
+    local metadata
+
+    if metadata=$(get_binary_dev_artifact_metadata "$binary_arch" "$requested_version") && [ -n "$metadata" ]; then
+        printf '%s\n' "$metadata"
+        return 0
+    fi
+    if [ "$requested_version" != "dev" ]; then
+        colorized_echo red "Dev build ${requested_version} could not be found." >&2
+        return 1
+    fi
+    colorized_echo yellow "No dev build has been published yet; installing the latest stable release instead." >&2
+    return 2
+}
+
 install_binary_cli_launcher() {
     cat > "$BINARY_CLI_LAUNCHER" <<EOF
 #!/usr/bin/env bash
@@ -3479,6 +3543,20 @@ install_binary_next() {
     binary_arch=$(detect_binary_arch)
     tmp_dir=$(mktemp -d)
 
+    local dev_metadata=""
+    local dev_status=0
+    if [ -z "${NEXT_BINARY_SERVER_OVERRIDE:-}${NEXT_BINARY_CLI_OVERRIDE:-}" ] && [[ "$next_version" = "dev" || "$next_version" == dev-* ]]; then
+        dev_metadata=$(resolve_binary_dev_metadata "$binary_arch" "$next_version") || dev_status=$?
+        if [ "$dev_status" -eq 1 ]; then
+            rm -rf "$tmp_dir"
+            exit 1
+        fi
+        if [ "$dev_status" -eq 2 ]; then
+            next_version="latest"
+            set_next_source_for_version "$next_version"
+        fi
+    fi
+
     if [ -n "${NEXT_BINARY_SERVER_OVERRIDE:-}" ] || [ -n "${NEXT_BINARY_CLI_OVERRIDE:-}" ]; then
         if [ ! -f "${NEXT_BINARY_SERVER_OVERRIDE:-}" ] || [ ! -f "${NEXT_BINARY_CLI_OVERRIDE:-}" ]; then
             colorized_echo red "Both NEXT_BINARY_SERVER_OVERRIDE and NEXT_BINARY_CLI_OVERRIDE must point to existing files." >&2
@@ -3489,8 +3567,8 @@ install_binary_next() {
         ui_spinner_run "Installing Next custom CLI binary" install -m 755 "$NEXT_BINARY_CLI_OVERRIDE" "$tmp_dir/next-cli"
         resolved_version="${NEXT_BINARY_OVERRIDE_VERSION:-custom}"
         artifact_url="local-override"
-    elif [[ "$next_version" = "dev" || "$next_version" == dev-* ]]; then
-        IFS='|' read -r resolved_version artifact_url artifact_name < <(get_binary_dev_artifact_metadata "$binary_arch" "$next_version")
+    elif [ -n "$dev_metadata" ]; then
+        IFS='|' read -r resolved_version artifact_url artifact_name <<<"$dev_metadata"
         artifact_name="${artifact_name:-next-binaries.zip}"
         package_path="$tmp_dir/$artifact_name"
         ui_spinner_run "Downloading Next dev binary artifact" curl -fL "$artifact_url" -o "$package_path"

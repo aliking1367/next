@@ -100,7 +100,7 @@ curl -sL https://raw.githubusercontent.com/aliking1367/next/master/scripts/next/
 برای نصب کانال dev:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/aliking1367/next/dev/scripts/next/next-binary.sh | sudo bash -s -- install --dev
+curl -sL https://raw.githubusercontent.com/aliking1367/next/master/scripts/next/next-binary.sh | sudo bash -s -- install --dev
 ```
 
 برای نصب باینری Next-node روی هر سرور نود:
@@ -133,7 +133,7 @@ http://localhost:8000/dashboard/
 در مرحله بعد، باید یک ادمین سودو بسازید
 
 ```bash
-next cli admin create --sudo
+next cli admin create --role full_access
 ```
 
 تمام! حالا با این اطلاعات می‌توانید وارد Next شوید
