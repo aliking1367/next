@@ -1,6 +1,11 @@
 syntax = "proto3";
 
-package next.node.v1;
+// The package name is part of every RPC's wire path (for example
+// /rebecca.node.v1.NodeControlService/Hello). It must stay "rebecca.node.v1":
+// the node this panel talks to is the upstream Rebecca-node binary, which
+// serves exactly that name, so renaming it breaks every panel-to-node call
+// even though the messages are byte-for-byte identical.
+package rebecca.node.v1;
 
 option go_package = "github.com/aliking1367/next/internal/proto/node/v1;nodev1";
 

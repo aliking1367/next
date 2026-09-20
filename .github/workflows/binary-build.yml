@@ -79,6 +79,14 @@ jobs:
       - name: Test binary database lifecycle
         run: bash scripts/next/test-database-maintenance.sh
 
+      - name: Test installer menu and node installer
+        run: |
+          LC_ALL=C.UTF-8 bash scripts/next/test-menu.sh
+          bash scripts/next/test-node-installer.sh
+
+      - name: Test node wire compatibility
+        run: go test ./internal/proto/node/v1
+
       - name: Upload dashboard
         uses: actions/upload-artifact@v4
         with:
@@ -121,7 +129,10 @@ jobs:
 
       - name: Validate installer shell scripts
         shell: bash
-        run: bash -n scripts/next/next-binary.sh scripts/next/next.sh scripts/next/next-node-binary.sh scripts/next/next-node.sh
+        run: |
+          for script in next-binary next next-node-binary next-node; do
+            bash -n "scripts/next/${script}.sh"
+          done
 
       - name: Download dashboard
         uses: actions/download-artifact@v4

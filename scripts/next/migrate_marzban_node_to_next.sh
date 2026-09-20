@@ -2,7 +2,7 @@
 set -euo pipefail
 
 NODE_SEARCH_BASE="/opt"
-NODE_IMAGE_REPO="aliking1367/next-node"
+NODE_IMAGE_REPO="rebeccapanel/rebecca-node"
 DEFAULT_IMAGE_TAG="latest"
 NODE_SCRIPT_URL="https://raw.githubusercontent.com/aliking1367/next/master/scripts/next/next-node.sh"
 
@@ -178,13 +178,13 @@ select_node() {
 
 choose_image_tag() {
     log "Default image tag is 'latest' for $NODE_IMAGE_REPO."
-    read -rp "Do you want to use the 'dev' tag instead (aliking1367/next-node:dev)? [y/N]: " answer || answer=""
+    read -rp "Do you want to use the 'dev' tag instead (rebeccapanel/rebecca-node:dev)? [y/N]: " answer || answer=""
     if [[ "$answer" =~ ^[Yy]$ ]]; then
         DEFAULT_IMAGE_TAG="dev"
-        log "Using image tag 'dev' (aliking1367/next-node:dev)."
+        log "Using image tag 'dev' (rebeccapanel/rebecca-node:dev)."
     else
         DEFAULT_IMAGE_TAG="latest"
-        log "Using image tag 'latest' (aliking1367/next-node:latest)."
+        log "Using image tag 'latest' (rebeccapanel/rebecca-node:latest)."
     fi
 }
 

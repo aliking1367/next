@@ -4,6 +4,12 @@
 // 	protoc        v5.28.3
 // source: next/node/v1/node.proto
 
+// The package name is part of every RPC's wire path (for example
+// /rebecca.node.v1.NodeControlService/Hello). It must stay "rebecca.node.v1":
+// the node this panel talks to is the upstream Rebecca-node binary, which
+// serves exactly that name, so renaming it breaks every panel-to-node call
+// even though the messages are byte-for-byte identical.
+
 package nodev1
 
 import (
@@ -3609,30 +3615,30 @@ var File_next_node_v1_node_proto protoreflect.FileDescriptor
 
 const file_next_node_v1_node_proto_rawDesc = "" +
 	"\n" +
-	"\x17next/node/v1/node.proto\x12\fnext.node.v1\"\a\n" +
+	"\x17next/node/v1/node.proto\x12\x0frebecca.node.v1\"\a\n" +
 	"\x05Empty\"R\n" +
 	"\fHelloRequest\x12\x1b\n" +
 	"\tmaster_id\x18\x01 \x01(\tR\bmasterId\x12%\n" +
-	"\x0emaster_version\x18\x02 \x01(\tR\rmasterVersion\"\xe8\x01\n" +
+	"\x0emaster_version\x18\x02 \x01(\tR\rmasterVersion\"\xeb\x01\n" +
 	"\rHelloResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1b\n" +
 	"\tnode_name\x18\x02 \x01(\tR\bnodeName\x12!\n" +
 	"\fnode_version\x18\x03 \x01(\tR\vnodeVersion\x12!\n" +
 	"\finstall_mode\x18\x04 \x01(\tR\vinstallMode\x12%\n" +
-	"\x0eupdate_channel\x18\x05 \x01(\tR\rupdateChannel\x124\n" +
-	"\aruntime\x18\x06 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\"\x82\x01\n" +
+	"\x0eupdate_channel\x18\x05 \x01(\tR\rupdateChannel\x127\n" +
+	"\aruntime\x18\x06 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\"\x82\x01\n" +
 	"\x0eConnectRequest\x12\x1b\n" +
 	"\tmaster_id\x18\x01 \x01(\tR\bmasterId\x12%\n" +
 	"\x0emaster_version\x18\x02 \x01(\tR\rmasterVersion\x12,\n" +
-	"\x12expected_node_name\x18\x03 \x01(\tR\x10expectedNodeName\"l\n" +
+	"\x12expected_node_name\x18\x03 \x01(\tR\x10expectedNodeName\"o\n" +
 	"\x0fConnectResponse\x12#\n" +
-	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x124\n" +
-	"\aruntime\x18\x02 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\"8\n" +
+	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x127\n" +
+	"\aruntime\x18\x02 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\"8\n" +
 	"\rHealthRequest\x12'\n" +
-	"\x0finclude_metrics\x18\x01 \x01(\bR\x0eincludeMetrics\"\x7f\n" +
-	"\x0eHealthResponse\x124\n" +
-	"\aruntime\x18\x01 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\x127\n" +
-	"\ametrics\x18\x02 \x01(\v2\x1d.next.node.v1.MetricsResponseR\ametrics\"\x8a\x03\n" +
+	"\x0finclude_metrics\x18\x01 \x01(\bR\x0eincludeMetrics\"\x85\x01\n" +
+	"\x0eHealthResponse\x127\n" +
+	"\aruntime\x18\x01 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\x12:\n" +
+	"\ametrics\x18\x02 \x01(\v2 .rebecca.node.v1.MetricsResponseR\ametrics\"\x8d\x03\n" +
 	"\fRuntimeState\x12\x1c\n" +
 	"\tconnected\x18\x01 \x01(\bR\tconnected\x12\x18\n" +
 	"\astarted\x18\x02 \x01(\bR\astarted\x12!\n" +
@@ -3642,9 +3648,9 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x0eupdate_channel\x18\x06 \x01(\tR\rupdateChannel\x12\x18\n" +
 	"\amessage\x18\a \x01(\tR\amessage\x12\"\n" +
 	"\fcapabilities\x18\b \x03(\tR\fcapabilities\x12)\n" +
-	"\x10applied_revision\x18\t \x01(\x04R\x0fappliedRevision\x12I\n" +
+	"\x10applied_revision\x18\t \x01(\x04R\x0fappliedRevision\x12L\n" +
 	"\x11protocol_statuses\x18\n" +
-	" \x03(\v2\x1c.next.node.v1.ProtocolStatusR\x10protocolStatuses\"\xd7\x01\n" +
+	" \x03(\v2\x1f.rebecca.node.v1.ProtocolStatusR\x10protocolStatuses\"\xd7\x01\n" +
 	"\x14RuntimeConfigRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1f\n" +
 	"\vconfig_json\x18\x02 \x01(\tR\n" +
@@ -3654,37 +3660,37 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x10desired_revision\x18\x05 \x01(\x04R\x0fdesiredRevision\"r\n" +
 	"\x12StopRuntimeRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x129\n" +
-	"\x19collect_usage_before_stop\x18\x02 \x01(\bR\x16collectUsageBeforeStop\"\xa6\x01\n" +
+	"\x19collect_usage_before_stop\x18\x02 \x01(\bR\x16collectUsageBeforeStop\"\xa9\x01\n" +
 	"\x15RuntimeActionResponse\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1a\n" +
-	"\baccepted\x18\x02 \x01(\bR\baccepted\x124\n" +
-	"\aruntime\x18\x03 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage\"\x87\x01\n" +
+	"\baccepted\x18\x02 \x01(\bR\baccepted\x127\n" +
+	"\aruntime\x18\x03 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\"\x8a\x01\n" +
 	"\x12InboundUserRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1f\n" +
 	"\vinbound_tag\x18\x02 \x01(\tR\n" +
-	"inboundTag\x12-\n" +
-	"\x04user\x18\x03 \x01(\v2\x19.next.node.v1.InboundUserR\x04user\"t\n" +
+	"inboundTag\x120\n" +
+	"\x04user\x18\x03 \x01(\v2\x1c.rebecca.node.v1.InboundUserR\x04user\"t\n" +
 	"\x18RemoveInboundUserRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1f\n" +
 	"\vinbound_tag\x18\x02 \x01(\tR\n" +
 	"inboundTag\x12\x14\n" +
-	"\x05email\x18\x03 \x01(\tR\x05email\"\xb9\x01\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\"\xbc\x01\n" +
 	"\vInboundUser\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
-	"\bprotocol\x18\x02 \x01(\tR\bprotocol\x12=\n" +
-	"\x06fields\x18\x03 \x03(\v2%.next.node.v1.InboundUser.FieldsEntryR\x06fields\x1a9\n" +
+	"\bprotocol\x18\x02 \x01(\tR\bprotocol\x12@\n" +
+	"\x06fields\x18\x03 \x03(\v2(.rebecca.node.v1.InboundUser.FieldsEntryR\x06fields\x1a9\n" +
 	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"9\n" +
 	"\x0eMetricsRequest\x12'\n" +
-	"\x0finclude_runtime\x18\x01 \x01(\bR\x0eincludeRuntime\"\x8e\x02\n" +
-	"\x0fMetricsResponse\x124\n" +
-	"\aruntime\x18\x01 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\x123\n" +
-	"\x06system\x18\x02 \x01(\v2\x1b.next.node.v1.SystemMetricsR\x06system\x129\n" +
-	"\btransfer\x18\x03 \x01(\v2\x1d.next.node.v1.TransferMetricsR\btransfer\x12&\n" +
-	"\x0fsampled_at_unix\x18\x04 \x01(\x03R\rsampledAtUnix\x12-\n" +
-	"\x04xray\x18\x05 \x01(\v2\x19.next.node.v1.XrayMetricsR\x04xray\"\x12\n" +
+	"\x0finclude_runtime\x18\x01 \x01(\bR\x0eincludeRuntime\"\x9a\x02\n" +
+	"\x0fMetricsResponse\x127\n" +
+	"\aruntime\x18\x01 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\x126\n" +
+	"\x06system\x18\x02 \x01(\v2\x1e.rebecca.node.v1.SystemMetricsR\x06system\x12<\n" +
+	"\btransfer\x18\x03 \x01(\v2 .rebecca.node.v1.TransferMetricsR\btransfer\x12&\n" +
+	"\x0fsampled_at_unix\x18\x04 \x01(\x03R\rsampledAtUnix\x120\n" +
+	"\x04xray\x18\x05 \x01(\v2\x1c.rebecca.node.v1.XrayMetricsR\x04xray\"\x12\n" +
 	"\x10PublicIPsRequest\";\n" +
 	"\x11PublicIPsResponse\x12\x12\n" +
 	"\x04ipv4\x18\x01 \x01(\tR\x04ipv4\x12\x12\n" +
@@ -3719,7 +3725,7 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\vconfig_json\x18\t \x01(\tR\n" +
 	"configJson\x12\x19\n" +
 	"\btest_url\x18\n" +
-	" \x01(\tR\atestUrl\"\xa1\x02\n" +
+	" \x01(\tR\atestUrl\"\xa4\x02\n" +
 	"\x11RouteTestResponse\x12\x18\n" +
 	"\amatched\x18\x01 \x01(\bR\amatched\x12!\n" +
 	"\foutbound_tag\x18\x02 \x01(\tR\voutboundTag\x12\x1d\n" +
@@ -3729,18 +3735,18 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\asuccess\x18\x05 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05delay\x18\x06 \x01(\x03R\x05delay\x12\x1f\n" +
 	"\vstatus_code\x18\a \x01(\x05R\n" +
-	"statusCode\x12I\n" +
-	"\x10outbound_traffic\x18\b \x03(\v2\x1e.next.node.v1.RouteTestTrafficR\x0foutboundTraffic\"H\n" +
+	"statusCode\x12L\n" +
+	"\x10outbound_traffic\x18\b \x03(\v2!.rebecca.node.v1.RouteTestTrafficR\x0foutboundTraffic\"H\n" +
 	"\x10RouteTestTraffic\x12\x10\n" +
 	"\x03tag\x18\x01 \x01(\tR\x03tag\x12\x0e\n" +
 	"\x02up\x18\x02 \x01(\x03R\x02up\x12\x12\n" +
 	"\x04down\x18\x03 \x01(\x03R\x04down\"S\n" +
 	"\x14RuntimeUpdateRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"b\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"e\n" +
 	"\x10GeoUpdateRequest\x12!\n" +
-	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12+\n" +
-	"\x05files\x18\x02 \x03(\v2\x15.next.node.v1.GeoFileR\x05files\"/\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12.\n" +
+	"\x05files\x18\x02 \x03(\v2\x18.rebecca.node.v1.GeoFileR\x05files\"/\n" +
 	"\aGeoFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\":\n" +
@@ -3751,10 +3757,10 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\achannel\x18\x02 \x01(\tR\achannel\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\"6\n" +
 	"\x11HostRebootRequest\x12!\n" +
-	"\foperation_id\x18\x01 \x01(\tR\voperationId\"\xa1\x01\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\"\xa4\x01\n" +
 	"\x0eIPBlockRequest\x12!\n" +
-	"\foperation_id\x18\x01 \x01(\tR\voperationId\x122\n" +
-	"\x06blocks\x18\x02 \x03(\v2\x1a.next.node.v1.IPBlockEntryR\x06blocks\x12\x1b\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\x125\n" +
+	"\x06blocks\x18\x02 \x03(\v2\x1d.rebecca.node.v1.IPBlockEntryR\x06blocks\x12\x1b\n" +
 	"\ttcp_ports\x18\x03 \x03(\rR\btcpPorts\x12\x1b\n" +
 	"\tudp_ports\x18\x04 \x03(\rR\budpPorts\"r\n" +
 	"\fIPBlockEntry\x12\x0e\n" +
@@ -3782,13 +3788,13 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x0eproxy_password\x18\b \x01(\tR\rproxyPassword\"F\n" +
 	"\x12WindscribeLocation\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
-	"\tavailable\x18\x02 \x01(\bR\tavailable\"\xe8\x01\n" +
+	"\tavailable\x18\x02 \x01(\bR\tavailable\"\xee\x01\n" +
 	"\x17WindscribeProxyResponse\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1a\n" +
-	"\baccepted\x18\x02 \x01(\bR\baccepted\x124\n" +
-	"\aruntime\x18\x03 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage\x12>\n" +
-	"\tlocations\x18\x05 \x03(\v2 .next.node.v1.WindscribeLocationR\tlocations\"\xae\x01\n" +
+	"\baccepted\x18\x02 \x01(\bR\baccepted\x127\n" +
+	"\aruntime\x18\x03 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12A\n" +
+	"\tlocations\x18\x05 \x03(\v2#.rebecca.node.v1.WindscribeLocationR\tlocations\"\xae\x01\n" +
 	"\x13PsiphonProxyRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1f\n" +
 	"\vconfig_json\x18\x02 \x01(\tR\n" +
@@ -3800,13 +3806,13 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x14PsiphonProxyInstance\x12\x1a\n" +
 	"\blocation\x18\x01 \x01(\tR\blocation\x12\x1d\n" +
 	"\n" +
-	"socks_port\x18\x02 \x01(\rR\tsocksPort\"\x85\x02\n" +
+	"socks_port\x18\x02 \x01(\rR\tsocksPort\"\x8b\x02\n" +
 	"\x14PsiphonProxyResponse\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1a\n" +
-	"\baccepted\x18\x02 \x01(\bR\baccepted\x124\n" +
-	"\aruntime\x18\x03 \x01(\v2\x1a.next.node.v1.RuntimeStateR\aruntime\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage\x12@\n" +
-	"\tinstances\x18\x05 \x03(\v2\".next.node.v1.PsiphonProxyInstanceR\tinstances\x12\x1c\n" +
+	"\baccepted\x18\x02 \x01(\bR\baccepted\x127\n" +
+	"\aruntime\x18\x03 \x01(\v2\x1d.rebecca.node.v1.RuntimeStateR\aruntime\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12C\n" +
+	"\tinstances\x18\x05 \x03(\v2%.rebecca.node.v1.PsiphonProxyInstanceR\tinstances\x12\x1c\n" +
 	"\tlocations\x18\x06 \x03(\tR\tlocations\"\x9f\x02\n" +
 	"\rSystemMetrics\x12\x1b\n" +
 	"\tcpu_cores\x18\x01 \x01(\x05R\bcpuCores\x12(\n" +
@@ -3824,13 +3830,13 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x0edownload_speed\x18\x04 \x01(\x04R\rdownloadSpeed\"N\n" +
 	"\x13CollectUsageRequest\x12!\n" +
 	"\fcollector_id\x18\x01 \x01(\tR\vcollectorId\x12\x14\n" +
-	"\x05reset\x18\x02 \x01(\bR\x05reset\"\xd3\x01\n" +
+	"\x05reset\x18\x02 \x01(\bR\x05reset\"\xdc\x01\n" +
 	"\x0eUserUsageBatch\x12\x19\n" +
-	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x123\n" +
-	"\x05stats\x18\x02 \x03(\v2\x1d.next.node.v1.UserUsageSampleR\x05stats\x129\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x126\n" +
+	"\x05stats\x18\x02 \x03(\v2 .rebecca.node.v1.UserUsageSampleR\x05stats\x12<\n" +
 	"\n" +
-	"online_ips\x18\x03 \x03(\v2\x1a.next.node.v1.OnlineUserIPR\tonlineIps\x126\n" +
-	"\x06speeds\x18\x04 \x03(\v2\x1e.next.node.v1.UserTrafficSpeedR\x06speeds\"X\n" +
+	"online_ips\x18\x03 \x03(\v2\x1d.rebecca.node.v1.OnlineUserIPR\tonlineIps\x129\n" +
+	"\x06speeds\x18\x04 \x03(\v2!.rebecca.node.v1.UserTrafficSpeedR\x06speeds\"X\n" +
 	"\x10UserTrafficSpeed\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x16\n" +
 	"\x06upload\x18\x02 \x01(\x04R\x06upload\x12\x1a\n" +
@@ -3839,18 +3845,18 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x04R\x05value\x12\x1f\n" +
 	"\vinbound_tag\x18\x03 \x01(\tR\n" +
-	"inboundTag\"`\n" +
+	"inboundTag\"c\n" +
 	"\fOnlineUserIP\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\x12(\n" +
-	"\x03ips\x18\x03 \x03(\v2\x16.next.node.v1.OnlineIPR\x03ips\"@\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12+\n" +
+	"\x03ips\x18\x03 \x03(\v2\x19.rebecca.node.v1.OnlineIPR\x03ips\"@\n" +
 	"\bOnlineIP\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12$\n" +
-	"\x0elast_seen_unix\x18\x02 \x01(\x03R\flastSeenUnix\"\xaf\x01\n" +
+	"\x0elast_seen_unix\x18\x02 \x01(\x03R\flastSeenUnix\"\xb5\x01\n" +
 	"\x12OutboundUsageBatch\x12\x19\n" +
-	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x127\n" +
-	"\x05stats\x18\x02 \x03(\v2!.next.node.v1.OutboundUsageSampleR\x05stats\x12E\n" +
-	"\rinbound_stats\x18\x03 \x03(\v2 .next.node.v1.InboundUsageSampleR\finboundStats\"K\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x12:\n" +
+	"\x05stats\x18\x02 \x03(\v2$.rebecca.node.v1.OutboundUsageSampleR\x05stats\x12H\n" +
+	"\rinbound_stats\x18\x03 \x03(\v2#.rebecca.node.v1.InboundUsageSampleR\finboundStats\"K\n" +
 	"\x13OutboundUsageSample\x12\x10\n" +
 	"\x03tag\x18\x01 \x01(\tR\x03tag\x12\x0e\n" +
 	"\x02up\x18\x02 \x01(\x04R\x02up\x12\x12\n" +
@@ -3885,45 +3891,45 @@ const file_next_node_v1_node_proto_rawDesc = "" +
 	"\x11cpu_usage_percent\x18\x02 \x01(\x01R\x0fcpuUsagePercent\x12\x1f\n" +
 	"\vmemory_used\x18\x03 \x01(\x04R\n" +
 	"memoryUsed\x12%\n" +
-	"\x0euptime_seconds\x18\x04 \x01(\x04R\ruptimeSeconds2\xe3\x01\n" +
-	"\x12NodeControlService\x12@\n" +
-	"\x05Hello\x12\x1a.next.node.v1.HelloRequest\x1a\x1b.next.node.v1.HelloResponse\x12F\n" +
-	"\aConnect\x12\x1c.next.node.v1.ConnectRequest\x1a\x1d.next.node.v1.ConnectResponse\x12C\n" +
-	"\x06Health\x12\x1b.next.node.v1.HealthRequest\x1a\x1c.next.node.v1.HealthResponse2\xd0\r\n" +
-	"\x12NodeRuntimeService\x12W\n" +
-	"\fStartRuntime\x12\".next.node.v1.RuntimeConfigRequest\x1a#.next.node.v1.RuntimeActionResponse\x12Y\n" +
-	"\x0eRestartRuntime\x12\".next.node.v1.RuntimeConfigRequest\x1a#.next.node.v1.RuntimeActionResponse\x12T\n" +
-	"\vStopRuntime\x12 .next.node.v1.StopRuntimeRequest\x1a#.next.node.v1.RuntimeActionResponse\x12U\n" +
+	"\x0euptime_seconds\x18\x04 \x01(\x04R\ruptimeSeconds2\xf5\x01\n" +
+	"\x12NodeControlService\x12F\n" +
+	"\x05Hello\x12\x1d.rebecca.node.v1.HelloRequest\x1a\x1e.rebecca.node.v1.HelloResponse\x12L\n" +
+	"\aConnect\x12\x1f.rebecca.node.v1.ConnectRequest\x1a .rebecca.node.v1.ConnectResponse\x12I\n" +
+	"\x06Health\x12\x1e.rebecca.node.v1.HealthRequest\x1a\x1f.rebecca.node.v1.HealthResponse2\xc8\x0e\n" +
+	"\x12NodeRuntimeService\x12]\n" +
+	"\fStartRuntime\x12%.rebecca.node.v1.RuntimeConfigRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12_\n" +
+	"\x0eRestartRuntime\x12%.rebecca.node.v1.RuntimeConfigRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12Z\n" +
+	"\vStopRuntime\x12#.rebecca.node.v1.StopRuntimeRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12[\n" +
 	"\n" +
-	"SyncConfig\x12\".next.node.v1.RuntimeConfigRequest\x1a#.next.node.v1.RuntimeActionResponse\x12P\n" +
-	"\aAddUser\x12 .next.node.v1.InboundUserRequest\x1a#.next.node.v1.RuntimeActionResponse\x12S\n" +
+	"SyncConfig\x12%.rebecca.node.v1.RuntimeConfigRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12V\n" +
+	"\aAddUser\x12#.rebecca.node.v1.InboundUserRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12Y\n" +
 	"\n" +
-	"UpdateUser\x12 .next.node.v1.InboundUserRequest\x1a#.next.node.v1.RuntimeActionResponse\x12Y\n" +
+	"UpdateUser\x12#.rebecca.node.v1.InboundUserRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12_\n" +
 	"\n" +
-	"RemoveUser\x12&.next.node.v1.RemoveInboundUserRequest\x1a#.next.node.v1.RuntimeActionResponse\x12F\n" +
-	"\aMetrics\x12\x1c.next.node.v1.MetricsRequest\x1a\x1d.next.node.v1.MetricsResponse\x12L\n" +
-	"\tPublicIPs\x12\x1e.next.node.v1.PublicIPsRequest\x1a\x1f.next.node.v1.PublicIPsResponse\x12U\n" +
-	"\fTestOutbound\x12!.next.node.v1.OutboundTestRequest\x1a\".next.node.v1.OutboundTestResponse\x12L\n" +
-	"\tTestRoute\x12\x1e.next.node.v1.RouteTestRequest\x1a\x1f.next.node.v1.RouteTestResponse\x12X\n" +
-	"\rUpdateRuntime\x12\".next.node.v1.RuntimeUpdateRequest\x1a#.next.node.v1.RuntimeActionResponse\x12P\n" +
-	"\tUpdateGeo\x12\x1e.next.node.v1.GeoUpdateRequest\x1a#.next.node.v1.RuntimeActionResponse\x12Z\n" +
-	"\x0eRestartService\x12#.next.node.v1.ServiceRestartRequest\x1a#.next.node.v1.RuntimeActionResponse\x12X\n" +
-	"\rUpdateService\x12\".next.node.v1.ServiceUpdateRequest\x1a#.next.node.v1.RuntimeActionResponse\x12R\n" +
+	"RemoveUser\x12).rebecca.node.v1.RemoveInboundUserRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12L\n" +
+	"\aMetrics\x12\x1f.rebecca.node.v1.MetricsRequest\x1a .rebecca.node.v1.MetricsResponse\x12R\n" +
+	"\tPublicIPs\x12!.rebecca.node.v1.PublicIPsRequest\x1a\".rebecca.node.v1.PublicIPsResponse\x12[\n" +
+	"\fTestOutbound\x12$.rebecca.node.v1.OutboundTestRequest\x1a%.rebecca.node.v1.OutboundTestResponse\x12R\n" +
+	"\tTestRoute\x12!.rebecca.node.v1.RouteTestRequest\x1a\".rebecca.node.v1.RouteTestResponse\x12^\n" +
+	"\rUpdateRuntime\x12%.rebecca.node.v1.RuntimeUpdateRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12V\n" +
+	"\tUpdateGeo\x12!.rebecca.node.v1.GeoUpdateRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12`\n" +
+	"\x0eRestartService\x12&.rebecca.node.v1.ServiceRestartRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12^\n" +
+	"\rUpdateService\x12%.rebecca.node.v1.ServiceUpdateRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12X\n" +
 	"\n" +
-	"RebootHost\x12\x1f.next.node.v1.HostRebootRequest\x1a#.next.node.v1.RuntimeActionResponse\x12R\n" +
-	"\rApplyIPBlocks\x12\x1c.next.node.v1.IPBlockRequest\x1a#.next.node.v1.RuntimeActionResponse\x12S\n" +
-	"\rApplyTorProxy\x12\x1d.next.node.v1.TorProxyRequest\x1a#.next.node.v1.RuntimeActionResponse\x12b\n" +
-	"\x13ConfigureWindscribe\x12$.next.node.v1.WindscribeProxyRequest\x1a%.next.node.v1.WindscribeProxyResponse\x12Y\n" +
-	"\x10ConfigurePsiphon\x12!.next.node.v1.PsiphonProxyRequest\x1a\".next.node.v1.PsiphonProxyResponse2\xb4\x03\n" +
-	"\x10NodeUsageService\x12L\n" +
-	"\x12CollectOnlineUsers\x12\x13.next.node.v1.Empty\x1a!.next.node.v1.OnlineUsersResponse\x12S\n" +
-	"\x10CollectUserUsage\x12!.next.node.v1.CollectUsageRequest\x1a\x1c.next.node.v1.UserUsageBatch\x12M\n" +
-	"\fAckUserUsage\x12\x1d.next.node.v1.AckUsageRequest\x1a\x1e.next.node.v1.AckUsageResponse\x12[\n" +
-	"\x14CollectOutboundUsage\x12!.next.node.v1.CollectUsageRequest\x1a .next.node.v1.OutboundUsageBatch\x12Q\n" +
-	"\x10AckOutboundUsage\x12\x1d.next.node.v1.AckUsageRequest\x1a\x1e.next.node.v1.AckUsageResponse2Y\n" +
-	"\x0fNodeLogsService\x12F\n" +
+	"RebootHost\x12\".rebecca.node.v1.HostRebootRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12X\n" +
+	"\rApplyIPBlocks\x12\x1f.rebecca.node.v1.IPBlockRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12Y\n" +
+	"\rApplyTorProxy\x12 .rebecca.node.v1.TorProxyRequest\x1a&.rebecca.node.v1.RuntimeActionResponse\x12h\n" +
+	"\x13ConfigureWindscribe\x12'.rebecca.node.v1.WindscribeProxyRequest\x1a(.rebecca.node.v1.WindscribeProxyResponse\x12_\n" +
+	"\x10ConfigurePsiphon\x12$.rebecca.node.v1.PsiphonProxyRequest\x1a%.rebecca.node.v1.PsiphonProxyResponse2\xd2\x03\n" +
+	"\x10NodeUsageService\x12R\n" +
+	"\x12CollectOnlineUsers\x12\x16.rebecca.node.v1.Empty\x1a$.rebecca.node.v1.OnlineUsersResponse\x12Y\n" +
+	"\x10CollectUserUsage\x12$.rebecca.node.v1.CollectUsageRequest\x1a\x1f.rebecca.node.v1.UserUsageBatch\x12S\n" +
+	"\fAckUserUsage\x12 .rebecca.node.v1.AckUsageRequest\x1a!.rebecca.node.v1.AckUsageResponse\x12a\n" +
+	"\x14CollectOutboundUsage\x12$.rebecca.node.v1.CollectUsageRequest\x1a#.rebecca.node.v1.OutboundUsageBatch\x12W\n" +
+	"\x10AckOutboundUsage\x12 .rebecca.node.v1.AckUsageRequest\x1a!.rebecca.node.v1.AckUsageResponse2_\n" +
+	"\x0fNodeLogsService\x12L\n" +
 	"\n" +
-	"StreamLogs\x12\x1f.next.node.v1.StreamLogsRequest\x1a\x15.next.node.v1.LogLine0\x01B;Z9github.com/aliking1367/next/internal/proto/node/v1;nodev1b\x06proto3"
+	"StreamLogs\x12\".rebecca.node.v1.StreamLogsRequest\x1a\x18.rebecca.node.v1.LogLine0\x01B;Z9github.com/aliking1367/next/internal/proto/node/v1;nodev1b\x06proto3"
 
 var (
 	file_next_node_v1_node_proto_rawDescOnce sync.Once
@@ -3939,148 +3945,148 @@ func file_next_node_v1_node_proto_rawDescGZIP() []byte {
 
 var file_next_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
 var file_next_node_v1_node_proto_goTypes = []any{
-	(*Empty)(nil),                    // 0: next.node.v1.Empty
-	(*HelloRequest)(nil),             // 1: next.node.v1.HelloRequest
-	(*HelloResponse)(nil),            // 2: next.node.v1.HelloResponse
-	(*ConnectRequest)(nil),           // 3: next.node.v1.ConnectRequest
-	(*ConnectResponse)(nil),          // 4: next.node.v1.ConnectResponse
-	(*HealthRequest)(nil),            // 5: next.node.v1.HealthRequest
-	(*HealthResponse)(nil),           // 6: next.node.v1.HealthResponse
-	(*RuntimeState)(nil),             // 7: next.node.v1.RuntimeState
-	(*RuntimeConfigRequest)(nil),     // 8: next.node.v1.RuntimeConfigRequest
-	(*StopRuntimeRequest)(nil),       // 9: next.node.v1.StopRuntimeRequest
-	(*RuntimeActionResponse)(nil),    // 10: next.node.v1.RuntimeActionResponse
-	(*InboundUserRequest)(nil),       // 11: next.node.v1.InboundUserRequest
-	(*RemoveInboundUserRequest)(nil), // 12: next.node.v1.RemoveInboundUserRequest
-	(*InboundUser)(nil),              // 13: next.node.v1.InboundUser
-	(*MetricsRequest)(nil),           // 14: next.node.v1.MetricsRequest
-	(*MetricsResponse)(nil),          // 15: next.node.v1.MetricsResponse
-	(*PublicIPsRequest)(nil),         // 16: next.node.v1.PublicIPsRequest
-	(*PublicIPsResponse)(nil),        // 17: next.node.v1.PublicIPsResponse
-	(*OutboundTestRequest)(nil),      // 18: next.node.v1.OutboundTestRequest
-	(*OutboundTestResponse)(nil),     // 19: next.node.v1.OutboundTestResponse
-	(*RouteTestRequest)(nil),         // 20: next.node.v1.RouteTestRequest
-	(*RouteTestResponse)(nil),        // 21: next.node.v1.RouteTestResponse
-	(*RouteTestTraffic)(nil),         // 22: next.node.v1.RouteTestTraffic
-	(*RuntimeUpdateRequest)(nil),     // 23: next.node.v1.RuntimeUpdateRequest
-	(*GeoUpdateRequest)(nil),         // 24: next.node.v1.GeoUpdateRequest
-	(*GeoFile)(nil),                  // 25: next.node.v1.GeoFile
-	(*ServiceRestartRequest)(nil),    // 26: next.node.v1.ServiceRestartRequest
-	(*ServiceUpdateRequest)(nil),     // 27: next.node.v1.ServiceUpdateRequest
-	(*HostRebootRequest)(nil),        // 28: next.node.v1.HostRebootRequest
-	(*IPBlockRequest)(nil),           // 29: next.node.v1.IPBlockRequest
-	(*IPBlockEntry)(nil),             // 30: next.node.v1.IPBlockEntry
-	(*TorProxyRequest)(nil),          // 31: next.node.v1.TorProxyRequest
-	(*WindscribeProxyRequest)(nil),   // 32: next.node.v1.WindscribeProxyRequest
-	(*WindscribeLocation)(nil),       // 33: next.node.v1.WindscribeLocation
-	(*WindscribeProxyResponse)(nil),  // 34: next.node.v1.WindscribeProxyResponse
-	(*PsiphonProxyRequest)(nil),      // 35: next.node.v1.PsiphonProxyRequest
-	(*PsiphonProxyInstance)(nil),     // 36: next.node.v1.PsiphonProxyInstance
-	(*PsiphonProxyResponse)(nil),     // 37: next.node.v1.PsiphonProxyResponse
-	(*SystemMetrics)(nil),            // 38: next.node.v1.SystemMetrics
-	(*TransferMetrics)(nil),          // 39: next.node.v1.TransferMetrics
-	(*CollectUsageRequest)(nil),      // 40: next.node.v1.CollectUsageRequest
-	(*UserUsageBatch)(nil),           // 41: next.node.v1.UserUsageBatch
-	(*UserTrafficSpeed)(nil),         // 42: next.node.v1.UserTrafficSpeed
-	(*UserUsageSample)(nil),          // 43: next.node.v1.UserUsageSample
-	(*OnlineUserIP)(nil),             // 44: next.node.v1.OnlineUserIP
-	(*OnlineIP)(nil),                 // 45: next.node.v1.OnlineIP
-	(*OutboundUsageBatch)(nil),       // 46: next.node.v1.OutboundUsageBatch
-	(*OutboundUsageSample)(nil),      // 47: next.node.v1.OutboundUsageSample
-	(*InboundUsageSample)(nil),       // 48: next.node.v1.InboundUsageSample
-	(*AckUsageRequest)(nil),          // 49: next.node.v1.AckUsageRequest
-	(*AckUsageResponse)(nil),         // 50: next.node.v1.AckUsageResponse
-	(*StreamLogsRequest)(nil),        // 51: next.node.v1.StreamLogsRequest
-	(*LogLine)(nil),                  // 52: next.node.v1.LogLine
-	(*OnlineUsersResponse)(nil),      // 53: next.node.v1.OnlineUsersResponse
-	(*ProtocolStatus)(nil),           // 54: next.node.v1.ProtocolStatus
-	(*XrayMetrics)(nil),              // 55: next.node.v1.XrayMetrics
-	nil,                              // 56: next.node.v1.InboundUser.FieldsEntry
+	(*Empty)(nil),                    // 0: rebecca.node.v1.Empty
+	(*HelloRequest)(nil),             // 1: rebecca.node.v1.HelloRequest
+	(*HelloResponse)(nil),            // 2: rebecca.node.v1.HelloResponse
+	(*ConnectRequest)(nil),           // 3: rebecca.node.v1.ConnectRequest
+	(*ConnectResponse)(nil),          // 4: rebecca.node.v1.ConnectResponse
+	(*HealthRequest)(nil),            // 5: rebecca.node.v1.HealthRequest
+	(*HealthResponse)(nil),           // 6: rebecca.node.v1.HealthResponse
+	(*RuntimeState)(nil),             // 7: rebecca.node.v1.RuntimeState
+	(*RuntimeConfigRequest)(nil),     // 8: rebecca.node.v1.RuntimeConfigRequest
+	(*StopRuntimeRequest)(nil),       // 9: rebecca.node.v1.StopRuntimeRequest
+	(*RuntimeActionResponse)(nil),    // 10: rebecca.node.v1.RuntimeActionResponse
+	(*InboundUserRequest)(nil),       // 11: rebecca.node.v1.InboundUserRequest
+	(*RemoveInboundUserRequest)(nil), // 12: rebecca.node.v1.RemoveInboundUserRequest
+	(*InboundUser)(nil),              // 13: rebecca.node.v1.InboundUser
+	(*MetricsRequest)(nil),           // 14: rebecca.node.v1.MetricsRequest
+	(*MetricsResponse)(nil),          // 15: rebecca.node.v1.MetricsResponse
+	(*PublicIPsRequest)(nil),         // 16: rebecca.node.v1.PublicIPsRequest
+	(*PublicIPsResponse)(nil),        // 17: rebecca.node.v1.PublicIPsResponse
+	(*OutboundTestRequest)(nil),      // 18: rebecca.node.v1.OutboundTestRequest
+	(*OutboundTestResponse)(nil),     // 19: rebecca.node.v1.OutboundTestResponse
+	(*RouteTestRequest)(nil),         // 20: rebecca.node.v1.RouteTestRequest
+	(*RouteTestResponse)(nil),        // 21: rebecca.node.v1.RouteTestResponse
+	(*RouteTestTraffic)(nil),         // 22: rebecca.node.v1.RouteTestTraffic
+	(*RuntimeUpdateRequest)(nil),     // 23: rebecca.node.v1.RuntimeUpdateRequest
+	(*GeoUpdateRequest)(nil),         // 24: rebecca.node.v1.GeoUpdateRequest
+	(*GeoFile)(nil),                  // 25: rebecca.node.v1.GeoFile
+	(*ServiceRestartRequest)(nil),    // 26: rebecca.node.v1.ServiceRestartRequest
+	(*ServiceUpdateRequest)(nil),     // 27: rebecca.node.v1.ServiceUpdateRequest
+	(*HostRebootRequest)(nil),        // 28: rebecca.node.v1.HostRebootRequest
+	(*IPBlockRequest)(nil),           // 29: rebecca.node.v1.IPBlockRequest
+	(*IPBlockEntry)(nil),             // 30: rebecca.node.v1.IPBlockEntry
+	(*TorProxyRequest)(nil),          // 31: rebecca.node.v1.TorProxyRequest
+	(*WindscribeProxyRequest)(nil),   // 32: rebecca.node.v1.WindscribeProxyRequest
+	(*WindscribeLocation)(nil),       // 33: rebecca.node.v1.WindscribeLocation
+	(*WindscribeProxyResponse)(nil),  // 34: rebecca.node.v1.WindscribeProxyResponse
+	(*PsiphonProxyRequest)(nil),      // 35: rebecca.node.v1.PsiphonProxyRequest
+	(*PsiphonProxyInstance)(nil),     // 36: rebecca.node.v1.PsiphonProxyInstance
+	(*PsiphonProxyResponse)(nil),     // 37: rebecca.node.v1.PsiphonProxyResponse
+	(*SystemMetrics)(nil),            // 38: rebecca.node.v1.SystemMetrics
+	(*TransferMetrics)(nil),          // 39: rebecca.node.v1.TransferMetrics
+	(*CollectUsageRequest)(nil),      // 40: rebecca.node.v1.CollectUsageRequest
+	(*UserUsageBatch)(nil),           // 41: rebecca.node.v1.UserUsageBatch
+	(*UserTrafficSpeed)(nil),         // 42: rebecca.node.v1.UserTrafficSpeed
+	(*UserUsageSample)(nil),          // 43: rebecca.node.v1.UserUsageSample
+	(*OnlineUserIP)(nil),             // 44: rebecca.node.v1.OnlineUserIP
+	(*OnlineIP)(nil),                 // 45: rebecca.node.v1.OnlineIP
+	(*OutboundUsageBatch)(nil),       // 46: rebecca.node.v1.OutboundUsageBatch
+	(*OutboundUsageSample)(nil),      // 47: rebecca.node.v1.OutboundUsageSample
+	(*InboundUsageSample)(nil),       // 48: rebecca.node.v1.InboundUsageSample
+	(*AckUsageRequest)(nil),          // 49: rebecca.node.v1.AckUsageRequest
+	(*AckUsageResponse)(nil),         // 50: rebecca.node.v1.AckUsageResponse
+	(*StreamLogsRequest)(nil),        // 51: rebecca.node.v1.StreamLogsRequest
+	(*LogLine)(nil),                  // 52: rebecca.node.v1.LogLine
+	(*OnlineUsersResponse)(nil),      // 53: rebecca.node.v1.OnlineUsersResponse
+	(*ProtocolStatus)(nil),           // 54: rebecca.node.v1.ProtocolStatus
+	(*XrayMetrics)(nil),              // 55: rebecca.node.v1.XrayMetrics
+	nil,                              // 56: rebecca.node.v1.InboundUser.FieldsEntry
 }
 var file_next_node_v1_node_proto_depIdxs = []int32{
-	7,  // 0: next.node.v1.HelloResponse.runtime:type_name -> next.node.v1.RuntimeState
-	7,  // 1: next.node.v1.ConnectResponse.runtime:type_name -> next.node.v1.RuntimeState
-	7,  // 2: next.node.v1.HealthResponse.runtime:type_name -> next.node.v1.RuntimeState
-	15, // 3: next.node.v1.HealthResponse.metrics:type_name -> next.node.v1.MetricsResponse
-	54, // 4: next.node.v1.RuntimeState.protocol_statuses:type_name -> next.node.v1.ProtocolStatus
-	7,  // 5: next.node.v1.RuntimeActionResponse.runtime:type_name -> next.node.v1.RuntimeState
-	13, // 6: next.node.v1.InboundUserRequest.user:type_name -> next.node.v1.InboundUser
-	56, // 7: next.node.v1.InboundUser.fields:type_name -> next.node.v1.InboundUser.FieldsEntry
-	7,  // 8: next.node.v1.MetricsResponse.runtime:type_name -> next.node.v1.RuntimeState
-	38, // 9: next.node.v1.MetricsResponse.system:type_name -> next.node.v1.SystemMetrics
-	39, // 10: next.node.v1.MetricsResponse.transfer:type_name -> next.node.v1.TransferMetrics
-	55, // 11: next.node.v1.MetricsResponse.xray:type_name -> next.node.v1.XrayMetrics
-	22, // 12: next.node.v1.RouteTestResponse.outbound_traffic:type_name -> next.node.v1.RouteTestTraffic
-	25, // 13: next.node.v1.GeoUpdateRequest.files:type_name -> next.node.v1.GeoFile
-	30, // 14: next.node.v1.IPBlockRequest.blocks:type_name -> next.node.v1.IPBlockEntry
-	7,  // 15: next.node.v1.WindscribeProxyResponse.runtime:type_name -> next.node.v1.RuntimeState
-	33, // 16: next.node.v1.WindscribeProxyResponse.locations:type_name -> next.node.v1.WindscribeLocation
-	7,  // 17: next.node.v1.PsiphonProxyResponse.runtime:type_name -> next.node.v1.RuntimeState
-	36, // 18: next.node.v1.PsiphonProxyResponse.instances:type_name -> next.node.v1.PsiphonProxyInstance
-	43, // 19: next.node.v1.UserUsageBatch.stats:type_name -> next.node.v1.UserUsageSample
-	44, // 20: next.node.v1.UserUsageBatch.online_ips:type_name -> next.node.v1.OnlineUserIP
-	42, // 21: next.node.v1.UserUsageBatch.speeds:type_name -> next.node.v1.UserTrafficSpeed
-	45, // 22: next.node.v1.OnlineUserIP.ips:type_name -> next.node.v1.OnlineIP
-	47, // 23: next.node.v1.OutboundUsageBatch.stats:type_name -> next.node.v1.OutboundUsageSample
-	48, // 24: next.node.v1.OutboundUsageBatch.inbound_stats:type_name -> next.node.v1.InboundUsageSample
-	1,  // 25: next.node.v1.NodeControlService.Hello:input_type -> next.node.v1.HelloRequest
-	3,  // 26: next.node.v1.NodeControlService.Connect:input_type -> next.node.v1.ConnectRequest
-	5,  // 27: next.node.v1.NodeControlService.Health:input_type -> next.node.v1.HealthRequest
-	8,  // 28: next.node.v1.NodeRuntimeService.StartRuntime:input_type -> next.node.v1.RuntimeConfigRequest
-	8,  // 29: next.node.v1.NodeRuntimeService.RestartRuntime:input_type -> next.node.v1.RuntimeConfigRequest
-	9,  // 30: next.node.v1.NodeRuntimeService.StopRuntime:input_type -> next.node.v1.StopRuntimeRequest
-	8,  // 31: next.node.v1.NodeRuntimeService.SyncConfig:input_type -> next.node.v1.RuntimeConfigRequest
-	11, // 32: next.node.v1.NodeRuntimeService.AddUser:input_type -> next.node.v1.InboundUserRequest
-	11, // 33: next.node.v1.NodeRuntimeService.UpdateUser:input_type -> next.node.v1.InboundUserRequest
-	12, // 34: next.node.v1.NodeRuntimeService.RemoveUser:input_type -> next.node.v1.RemoveInboundUserRequest
-	14, // 35: next.node.v1.NodeRuntimeService.Metrics:input_type -> next.node.v1.MetricsRequest
-	16, // 36: next.node.v1.NodeRuntimeService.PublicIPs:input_type -> next.node.v1.PublicIPsRequest
-	18, // 37: next.node.v1.NodeRuntimeService.TestOutbound:input_type -> next.node.v1.OutboundTestRequest
-	20, // 38: next.node.v1.NodeRuntimeService.TestRoute:input_type -> next.node.v1.RouteTestRequest
-	23, // 39: next.node.v1.NodeRuntimeService.UpdateRuntime:input_type -> next.node.v1.RuntimeUpdateRequest
-	24, // 40: next.node.v1.NodeRuntimeService.UpdateGeo:input_type -> next.node.v1.GeoUpdateRequest
-	26, // 41: next.node.v1.NodeRuntimeService.RestartService:input_type -> next.node.v1.ServiceRestartRequest
-	27, // 42: next.node.v1.NodeRuntimeService.UpdateService:input_type -> next.node.v1.ServiceUpdateRequest
-	28, // 43: next.node.v1.NodeRuntimeService.RebootHost:input_type -> next.node.v1.HostRebootRequest
-	29, // 44: next.node.v1.NodeRuntimeService.ApplyIPBlocks:input_type -> next.node.v1.IPBlockRequest
-	31, // 45: next.node.v1.NodeRuntimeService.ApplyTorProxy:input_type -> next.node.v1.TorProxyRequest
-	32, // 46: next.node.v1.NodeRuntimeService.ConfigureWindscribe:input_type -> next.node.v1.WindscribeProxyRequest
-	35, // 47: next.node.v1.NodeRuntimeService.ConfigurePsiphon:input_type -> next.node.v1.PsiphonProxyRequest
-	0,  // 48: next.node.v1.NodeUsageService.CollectOnlineUsers:input_type -> next.node.v1.Empty
-	40, // 49: next.node.v1.NodeUsageService.CollectUserUsage:input_type -> next.node.v1.CollectUsageRequest
-	49, // 50: next.node.v1.NodeUsageService.AckUserUsage:input_type -> next.node.v1.AckUsageRequest
-	40, // 51: next.node.v1.NodeUsageService.CollectOutboundUsage:input_type -> next.node.v1.CollectUsageRequest
-	49, // 52: next.node.v1.NodeUsageService.AckOutboundUsage:input_type -> next.node.v1.AckUsageRequest
-	51, // 53: next.node.v1.NodeLogsService.StreamLogs:input_type -> next.node.v1.StreamLogsRequest
-	2,  // 54: next.node.v1.NodeControlService.Hello:output_type -> next.node.v1.HelloResponse
-	4,  // 55: next.node.v1.NodeControlService.Connect:output_type -> next.node.v1.ConnectResponse
-	6,  // 56: next.node.v1.NodeControlService.Health:output_type -> next.node.v1.HealthResponse
-	10, // 57: next.node.v1.NodeRuntimeService.StartRuntime:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 58: next.node.v1.NodeRuntimeService.RestartRuntime:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 59: next.node.v1.NodeRuntimeService.StopRuntime:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 60: next.node.v1.NodeRuntimeService.SyncConfig:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 61: next.node.v1.NodeRuntimeService.AddUser:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 62: next.node.v1.NodeRuntimeService.UpdateUser:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 63: next.node.v1.NodeRuntimeService.RemoveUser:output_type -> next.node.v1.RuntimeActionResponse
-	15, // 64: next.node.v1.NodeRuntimeService.Metrics:output_type -> next.node.v1.MetricsResponse
-	17, // 65: next.node.v1.NodeRuntimeService.PublicIPs:output_type -> next.node.v1.PublicIPsResponse
-	19, // 66: next.node.v1.NodeRuntimeService.TestOutbound:output_type -> next.node.v1.OutboundTestResponse
-	21, // 67: next.node.v1.NodeRuntimeService.TestRoute:output_type -> next.node.v1.RouteTestResponse
-	10, // 68: next.node.v1.NodeRuntimeService.UpdateRuntime:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 69: next.node.v1.NodeRuntimeService.UpdateGeo:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 70: next.node.v1.NodeRuntimeService.RestartService:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 71: next.node.v1.NodeRuntimeService.UpdateService:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 72: next.node.v1.NodeRuntimeService.RebootHost:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 73: next.node.v1.NodeRuntimeService.ApplyIPBlocks:output_type -> next.node.v1.RuntimeActionResponse
-	10, // 74: next.node.v1.NodeRuntimeService.ApplyTorProxy:output_type -> next.node.v1.RuntimeActionResponse
-	34, // 75: next.node.v1.NodeRuntimeService.ConfigureWindscribe:output_type -> next.node.v1.WindscribeProxyResponse
-	37, // 76: next.node.v1.NodeRuntimeService.ConfigurePsiphon:output_type -> next.node.v1.PsiphonProxyResponse
-	53, // 77: next.node.v1.NodeUsageService.CollectOnlineUsers:output_type -> next.node.v1.OnlineUsersResponse
-	41, // 78: next.node.v1.NodeUsageService.CollectUserUsage:output_type -> next.node.v1.UserUsageBatch
-	50, // 79: next.node.v1.NodeUsageService.AckUserUsage:output_type -> next.node.v1.AckUsageResponse
-	46, // 80: next.node.v1.NodeUsageService.CollectOutboundUsage:output_type -> next.node.v1.OutboundUsageBatch
-	50, // 81: next.node.v1.NodeUsageService.AckOutboundUsage:output_type -> next.node.v1.AckUsageResponse
-	52, // 82: next.node.v1.NodeLogsService.StreamLogs:output_type -> next.node.v1.LogLine
+	7,  // 0: rebecca.node.v1.HelloResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	7,  // 1: rebecca.node.v1.ConnectResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	7,  // 2: rebecca.node.v1.HealthResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	15, // 3: rebecca.node.v1.HealthResponse.metrics:type_name -> rebecca.node.v1.MetricsResponse
+	54, // 4: rebecca.node.v1.RuntimeState.protocol_statuses:type_name -> rebecca.node.v1.ProtocolStatus
+	7,  // 5: rebecca.node.v1.RuntimeActionResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	13, // 6: rebecca.node.v1.InboundUserRequest.user:type_name -> rebecca.node.v1.InboundUser
+	56, // 7: rebecca.node.v1.InboundUser.fields:type_name -> rebecca.node.v1.InboundUser.FieldsEntry
+	7,  // 8: rebecca.node.v1.MetricsResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	38, // 9: rebecca.node.v1.MetricsResponse.system:type_name -> rebecca.node.v1.SystemMetrics
+	39, // 10: rebecca.node.v1.MetricsResponse.transfer:type_name -> rebecca.node.v1.TransferMetrics
+	55, // 11: rebecca.node.v1.MetricsResponse.xray:type_name -> rebecca.node.v1.XrayMetrics
+	22, // 12: rebecca.node.v1.RouteTestResponse.outbound_traffic:type_name -> rebecca.node.v1.RouteTestTraffic
+	25, // 13: rebecca.node.v1.GeoUpdateRequest.files:type_name -> rebecca.node.v1.GeoFile
+	30, // 14: rebecca.node.v1.IPBlockRequest.blocks:type_name -> rebecca.node.v1.IPBlockEntry
+	7,  // 15: rebecca.node.v1.WindscribeProxyResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	33, // 16: rebecca.node.v1.WindscribeProxyResponse.locations:type_name -> rebecca.node.v1.WindscribeLocation
+	7,  // 17: rebecca.node.v1.PsiphonProxyResponse.runtime:type_name -> rebecca.node.v1.RuntimeState
+	36, // 18: rebecca.node.v1.PsiphonProxyResponse.instances:type_name -> rebecca.node.v1.PsiphonProxyInstance
+	43, // 19: rebecca.node.v1.UserUsageBatch.stats:type_name -> rebecca.node.v1.UserUsageSample
+	44, // 20: rebecca.node.v1.UserUsageBatch.online_ips:type_name -> rebecca.node.v1.OnlineUserIP
+	42, // 21: rebecca.node.v1.UserUsageBatch.speeds:type_name -> rebecca.node.v1.UserTrafficSpeed
+	45, // 22: rebecca.node.v1.OnlineUserIP.ips:type_name -> rebecca.node.v1.OnlineIP
+	47, // 23: rebecca.node.v1.OutboundUsageBatch.stats:type_name -> rebecca.node.v1.OutboundUsageSample
+	48, // 24: rebecca.node.v1.OutboundUsageBatch.inbound_stats:type_name -> rebecca.node.v1.InboundUsageSample
+	1,  // 25: rebecca.node.v1.NodeControlService.Hello:input_type -> rebecca.node.v1.HelloRequest
+	3,  // 26: rebecca.node.v1.NodeControlService.Connect:input_type -> rebecca.node.v1.ConnectRequest
+	5,  // 27: rebecca.node.v1.NodeControlService.Health:input_type -> rebecca.node.v1.HealthRequest
+	8,  // 28: rebecca.node.v1.NodeRuntimeService.StartRuntime:input_type -> rebecca.node.v1.RuntimeConfigRequest
+	8,  // 29: rebecca.node.v1.NodeRuntimeService.RestartRuntime:input_type -> rebecca.node.v1.RuntimeConfigRequest
+	9,  // 30: rebecca.node.v1.NodeRuntimeService.StopRuntime:input_type -> rebecca.node.v1.StopRuntimeRequest
+	8,  // 31: rebecca.node.v1.NodeRuntimeService.SyncConfig:input_type -> rebecca.node.v1.RuntimeConfigRequest
+	11, // 32: rebecca.node.v1.NodeRuntimeService.AddUser:input_type -> rebecca.node.v1.InboundUserRequest
+	11, // 33: rebecca.node.v1.NodeRuntimeService.UpdateUser:input_type -> rebecca.node.v1.InboundUserRequest
+	12, // 34: rebecca.node.v1.NodeRuntimeService.RemoveUser:input_type -> rebecca.node.v1.RemoveInboundUserRequest
+	14, // 35: rebecca.node.v1.NodeRuntimeService.Metrics:input_type -> rebecca.node.v1.MetricsRequest
+	16, // 36: rebecca.node.v1.NodeRuntimeService.PublicIPs:input_type -> rebecca.node.v1.PublicIPsRequest
+	18, // 37: rebecca.node.v1.NodeRuntimeService.TestOutbound:input_type -> rebecca.node.v1.OutboundTestRequest
+	20, // 38: rebecca.node.v1.NodeRuntimeService.TestRoute:input_type -> rebecca.node.v1.RouteTestRequest
+	23, // 39: rebecca.node.v1.NodeRuntimeService.UpdateRuntime:input_type -> rebecca.node.v1.RuntimeUpdateRequest
+	24, // 40: rebecca.node.v1.NodeRuntimeService.UpdateGeo:input_type -> rebecca.node.v1.GeoUpdateRequest
+	26, // 41: rebecca.node.v1.NodeRuntimeService.RestartService:input_type -> rebecca.node.v1.ServiceRestartRequest
+	27, // 42: rebecca.node.v1.NodeRuntimeService.UpdateService:input_type -> rebecca.node.v1.ServiceUpdateRequest
+	28, // 43: rebecca.node.v1.NodeRuntimeService.RebootHost:input_type -> rebecca.node.v1.HostRebootRequest
+	29, // 44: rebecca.node.v1.NodeRuntimeService.ApplyIPBlocks:input_type -> rebecca.node.v1.IPBlockRequest
+	31, // 45: rebecca.node.v1.NodeRuntimeService.ApplyTorProxy:input_type -> rebecca.node.v1.TorProxyRequest
+	32, // 46: rebecca.node.v1.NodeRuntimeService.ConfigureWindscribe:input_type -> rebecca.node.v1.WindscribeProxyRequest
+	35, // 47: rebecca.node.v1.NodeRuntimeService.ConfigurePsiphon:input_type -> rebecca.node.v1.PsiphonProxyRequest
+	0,  // 48: rebecca.node.v1.NodeUsageService.CollectOnlineUsers:input_type -> rebecca.node.v1.Empty
+	40, // 49: rebecca.node.v1.NodeUsageService.CollectUserUsage:input_type -> rebecca.node.v1.CollectUsageRequest
+	49, // 50: rebecca.node.v1.NodeUsageService.AckUserUsage:input_type -> rebecca.node.v1.AckUsageRequest
+	40, // 51: rebecca.node.v1.NodeUsageService.CollectOutboundUsage:input_type -> rebecca.node.v1.CollectUsageRequest
+	49, // 52: rebecca.node.v1.NodeUsageService.AckOutboundUsage:input_type -> rebecca.node.v1.AckUsageRequest
+	51, // 53: rebecca.node.v1.NodeLogsService.StreamLogs:input_type -> rebecca.node.v1.StreamLogsRequest
+	2,  // 54: rebecca.node.v1.NodeControlService.Hello:output_type -> rebecca.node.v1.HelloResponse
+	4,  // 55: rebecca.node.v1.NodeControlService.Connect:output_type -> rebecca.node.v1.ConnectResponse
+	6,  // 56: rebecca.node.v1.NodeControlService.Health:output_type -> rebecca.node.v1.HealthResponse
+	10, // 57: rebecca.node.v1.NodeRuntimeService.StartRuntime:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 58: rebecca.node.v1.NodeRuntimeService.RestartRuntime:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 59: rebecca.node.v1.NodeRuntimeService.StopRuntime:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 60: rebecca.node.v1.NodeRuntimeService.SyncConfig:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 61: rebecca.node.v1.NodeRuntimeService.AddUser:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 62: rebecca.node.v1.NodeRuntimeService.UpdateUser:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 63: rebecca.node.v1.NodeRuntimeService.RemoveUser:output_type -> rebecca.node.v1.RuntimeActionResponse
+	15, // 64: rebecca.node.v1.NodeRuntimeService.Metrics:output_type -> rebecca.node.v1.MetricsResponse
+	17, // 65: rebecca.node.v1.NodeRuntimeService.PublicIPs:output_type -> rebecca.node.v1.PublicIPsResponse
+	19, // 66: rebecca.node.v1.NodeRuntimeService.TestOutbound:output_type -> rebecca.node.v1.OutboundTestResponse
+	21, // 67: rebecca.node.v1.NodeRuntimeService.TestRoute:output_type -> rebecca.node.v1.RouteTestResponse
+	10, // 68: rebecca.node.v1.NodeRuntimeService.UpdateRuntime:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 69: rebecca.node.v1.NodeRuntimeService.UpdateGeo:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 70: rebecca.node.v1.NodeRuntimeService.RestartService:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 71: rebecca.node.v1.NodeRuntimeService.UpdateService:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 72: rebecca.node.v1.NodeRuntimeService.RebootHost:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 73: rebecca.node.v1.NodeRuntimeService.ApplyIPBlocks:output_type -> rebecca.node.v1.RuntimeActionResponse
+	10, // 74: rebecca.node.v1.NodeRuntimeService.ApplyTorProxy:output_type -> rebecca.node.v1.RuntimeActionResponse
+	34, // 75: rebecca.node.v1.NodeRuntimeService.ConfigureWindscribe:output_type -> rebecca.node.v1.WindscribeProxyResponse
+	37, // 76: rebecca.node.v1.NodeRuntimeService.ConfigurePsiphon:output_type -> rebecca.node.v1.PsiphonProxyResponse
+	53, // 77: rebecca.node.v1.NodeUsageService.CollectOnlineUsers:output_type -> rebecca.node.v1.OnlineUsersResponse
+	41, // 78: rebecca.node.v1.NodeUsageService.CollectUserUsage:output_type -> rebecca.node.v1.UserUsageBatch
+	50, // 79: rebecca.node.v1.NodeUsageService.AckUserUsage:output_type -> rebecca.node.v1.AckUsageResponse
+	46, // 80: rebecca.node.v1.NodeUsageService.CollectOutboundUsage:output_type -> rebecca.node.v1.OutboundUsageBatch
+	50, // 81: rebecca.node.v1.NodeUsageService.AckOutboundUsage:output_type -> rebecca.node.v1.AckUsageResponse
+	52, // 82: rebecca.node.v1.NodeLogsService.StreamLogs:output_type -> rebecca.node.v1.LogLine
 	54, // [54:83] is the sub-list for method output_type
 	25, // [25:54] is the sub-list for method input_type
 	25, // [25:25] is the sub-list for extension type_name

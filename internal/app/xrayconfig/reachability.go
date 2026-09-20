@@ -18,25 +18,29 @@ const (
 )
 
 // ReachabilityResult reports whether one inbound is actually serving traffic
-// on the machine that runs it.
+// on the node that runs it.
 //
-// This answers "did Xray pick up this config and open the port", which is the
-// part a server can prove about itself. It deliberately does not claim
-// anything about reachability from a particular client network — that depends
-// on upstream filtering and can only be confirmed by a real client there.
+// This answers "did the node's Xray pick up this config and open the port",
+// as seen from the panel server. It deliberately does not claim anything
+// about reachability from a particular client network — that depends on
+// upstream filtering and can only be confirmed by a real client there.
 type ReachabilityResult struct {
 	Tag      string `json:"tag"`
 	Protocol string `json:"protocol"`
 	Port     int    `json:"port"`
+	NodeID   int64  `json:"node_id,omitempty"`
+	NodeName string `json:"node_name,omitempty"`
+	Address  string `json:"address,omitempty"`
 	Status   string `json:"status"`
 	Detail   string `json:"detail"`
 }
 
-// CheckInboundReachability dials an inbound on the local machine and, for
-// TLS/REALITY inbounds, completes a TLS handshake against it. A REALITY
-// inbound answers an unauthenticated handshake by proxying its masquerade
-// target, so a successful handshake also proves the REALITY fallback works.
-func CheckInboundReachability(ctx context.Context, inbound map[string]any) ReachabilityResult {
+// CheckInboundReachability dials an inbound at host (the address of the node
+// that runs Xray — the panel itself never does) and, for TLS/REALITY
+// inbounds, completes a TLS handshake against it. A REALITY inbound answers
+// an unauthenticated handshake by proxying its masquerade target, so a
+// successful handshake also proves the REALITY fallback works.
+func CheckInboundReachability(ctx context.Context, host string, inbound map[string]any) ReachabilityResult {
 	tag := stringValue(inbound["tag"])
 	protocol := normalizeProxyProtocol(stringValue(inbound["protocol"]))
 	result := ReachabilityResult{Tag: tag, Protocol: protocol}
@@ -48,16 +52,23 @@ func CheckInboundReachability(ctx context.Context, inbound map[string]any) Reach
 		return result
 	}
 	result.Port = port
+	host = strings.TrimSpace(host)
+	result.Address = host
 
 	stream := mapValue(inbound["streamSettings"])
 	network := streamNetwork(stream)
 	if protocol == "hysteria" || network == "hysteria" || network == "quic" {
 		result.Status = ReachabilitySkipped
-		result.Detail = "UDP/QUIC inbound: a listening socket cannot be probed locally, test it from a client"
+		result.Detail = "UDP/QUIC inbound: a listening socket cannot be probed remotely, test it from a client"
+		return result
+	}
+	if host == "" {
+		result.Status = ReachabilityFailed
+		result.Detail = "the node has no address to probe"
 		return result
 	}
 
-	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	address := net.JoinHostPort(host, strconv.Itoa(port))
 	dialer := net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
@@ -114,7 +125,7 @@ func inboundHandshakeServerName(stream map[string]any, security string) string {
 
 func tcpFailureDetail(err error) string {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return "connection timed out; Xray may still be reloading its config"
+		return "connection timed out; the node's Xray may still be reloading, or a firewall drops it"
 	}
-	return "port is not accepting connections; Xray may not have applied the config yet"
+	return "port is not accepting connections; the node's Xray may not have applied the config yet, or a firewall blocks it"
 }

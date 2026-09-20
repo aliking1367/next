@@ -123,7 +123,7 @@ func (s *MaintenanceService) Info(ctx context.Context) (MaintenanceInfo, error) 
 	return MaintenanceInfo{
 		Panel:      panel,
 		Node:       nil,
-		NodeUpdate: s.Updates.Status(ctx, "aliking1367/next-node", nil, ""),
+		NodeUpdate: s.Updates.Status(ctx, "rebeccapanel/Rebecca-node", nil, ""),
 	}, nil
 }
 

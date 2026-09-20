@@ -147,11 +147,13 @@ if [ -n "${NEXT_SCRIPT_BASE_URL+x}" ]; then
     NEXT_SCRIPT_BASE_URL_EXPLICIT=1
 fi
 NEXT_SCRIPT_BASE_URL="${NEXT_SCRIPT_BASE_URL:-https://raw.githubusercontent.com/${NEXT_REPO}/${NEXT_REF}/scripts/next}"
-NEXT_NODE_RELEASE_REPO="${NEXT_NODE_RELEASE_REPO:-aliking1367/next-node}"
+NEXT_NODE_RELEASE_REPO="${NEXT_NODE_RELEASE_REPO:-rebeccapanel/Rebecca-node}"
 NEXT_NODE_BINARY_DEV_BRANCH="${NEXT_NODE_BINARY_DEV_BRANCH:-dev}"
 NEXT_NODE_BINARY_DEV_RELEASE_TAG="${NEXT_NODE_BINARY_DEV_RELEASE_TAG:-dev-binaries}"
 NEXT_NODE_BINARY_WORKFLOW_NAME="${NEXT_NODE_BINARY_WORKFLOW_NAME:-binary-build}"
-NEXT_NODE_BINARY_ARTIFACT_PREFIX="${NEXT_NODE_BINARY_ARTIFACT_PREFIX:-next-node-binaries}"
+NEXT_NODE_BINARY_ARTIFACT_PREFIX="${NEXT_NODE_BINARY_ARTIFACT_PREFIX:-rebecca-node-binaries}"
+# Release assets are published by the upstream node project under its own name.
+NEXT_NODE_ASSET_PREFIX="${NEXT_NODE_ASSET_PREFIX:-rebecca-node}"
 DEFAULT_XRAY_CORE_VERSION="${DEFAULT_XRAY_CORE_VERSION:-v26.7.11}"
 
 # Default node channel values
@@ -467,7 +469,7 @@ discover_node_instances() {
     DISCOVERED_NODE_PATHS=()
     DISCOVERED_NODE_NAMES=()
     while IFS= read -r -d '' compose; do
-        if ! grep -qi "aliking1367/next-node" "$compose"; then
+        if ! grep -qi "rebeccapanel/rebecca-node" "$compose"; then
             continue
         fi
         local dir name
@@ -534,12 +536,12 @@ set_branch_variables() {
         dev|development)
             BRANCH="dev"
             IMAGE_TAG="dev"
-            DOCKER_IMAGE="aliking1367/next-node:dev"
+            DOCKER_IMAGE="rebeccapanel/rebecca-node:dev"
         ;;
         *)
             BRANCH="master"
             IMAGE_TAG="latest"
-            DOCKER_IMAGE="aliking1367/next-node:latest"
+            DOCKER_IMAGE="rebeccapanel/rebecca-node:latest"
         ;;
     esac
     SCRIPT_BRANCH="$BRANCH"
@@ -746,7 +748,7 @@ select_node_version() {
 BRANCH="master"
 IMAGE_TAG="latest"
 SCRIPT_BRANCH="master"
-DOCKER_IMAGE="aliking1367/next-node:latest"
+DOCKER_IMAGE="rebeccapanel/rebecca-node:latest"
 SCRIPT_URL="$NEXT_SCRIPT_BASE_URL/$NEXT_NODE_SCRIPT_SOURCE_FILE"
 if [ -f "$BRANCH_FILE" ]; then
     saved_branch=$(tr -d '[:space:]' < "$BRANCH_FILE")
@@ -989,7 +991,7 @@ get_node_binary_release_asset_metadata() {
     for attempt in $(seq 1 "$attempts"); do
         release_payload=$(curl -fsSL "$release_api" 2>/dev/null) || release_payload=""
         resolved_tag=$(echo "$release_payload" | jq -r '.tag_name // empty')
-        node_asset_name="next-node-${resolved_tag}-linux-${binary_arch}"
+        node_asset_name="${NEXT_NODE_ASSET_PREFIX}-${resolved_tag}-linux-${binary_arch}"
         node_asset_url=$(echo "$release_payload" | jq -r --arg name "$node_asset_name" '
             .assets[]?
             | select(.name == $name)
@@ -1033,7 +1035,7 @@ get_node_binary_dev_artifact_metadata() {
     local nightly_workflow
     local workflow_path
 
-    release_asset_name="next-node-dev-linux-${binary_arch}"
+    release_asset_name="${NEXT_NODE_ASSET_PREFIX}-dev-linux-${binary_arch}"
     release_api="https://api.github.com/repos/${NEXT_NODE_RELEASE_REPO}/releases/tags/${NEXT_NODE_BINARY_DEV_RELEASE_TAG}"
     if release_payload=$(curl -fsSL "$release_api" 2>/dev/null); then
         release_asset_url=$(echo "$release_payload" | jq -r --arg name "$release_asset_name" '
@@ -1093,7 +1095,7 @@ get_node_binary_dev_artifact_metadata() {
         artifact_name=$(echo "$artifacts_payload" | jq -r --arg preferred "${NEXT_NODE_BINARY_ARTIFACT_PREFIX}-linux-${binary_arch}" --arg arch "linux-${binary_arch}" '
             [
                 .artifacts[]?
-                | select((.expired | not) and (.name == $preferred or ((.name | startswith("next-node")) and (.name | contains($arch)))))
+                | select((.expired | not) and (.name == $preferred or ((.name | startswith("rebecca-node")) and (.name | contains($arch)))))
             ]
             | sort_by(if .name == $preferred then 0 else 1 end, .created_at)
             | .[0].name // empty
@@ -1150,6 +1152,10 @@ Environment=NEXT_NODE_APP_NAME=$APP_NAME
 Environment=NEXT_NODE_APP_DIR=$APP_DIR
 Environment=NEXT_NODE_DATA_DIR=$DATA_DIR
 Environment=NEXT_DATA_DIR=$DATA_DIR
+Environment=REBECCA_NODE_APP_NAME=$APP_NAME
+Environment=REBECCA_DATA_DIR=$DATA_DIR
+Environment=REBECCA_NODE_INSTALL_MODE=binary
+Environment=REBECCA_NODE_BINARY_METADATA_FILE=$BINARY_METADATA_FILE
 Environment=NEXT_NODE_INSTALL_MODE=binary
 Environment=NEXT_NODE_BINARY_METADATA_FILE=$BINARY_METADATA_FILE
 ExecStart=$BINARY_NODE
@@ -1246,6 +1252,7 @@ configure_binary_node_env() {
     set_env_value "XRAY_API_PORT" "$XRAY_API_PORT"
 
     set_env_value "NEXT_DATA_DIR" "$DATA_DIR"
+    set_env_value "REBECCA_DATA_DIR" "$DATA_DIR"
     set_env_value "SSL_CLIENT_CERT_FILE" "$CERT_FILE"
     set_env_value "SSL_CERT_FILE" "$CERT_FILE"
     set_env_value "SSL_KEY_FILE" "$CERT_KEY_FILE"
@@ -1270,7 +1277,7 @@ normalize_node_dev_artifact() {
 
     candidate=$(
         find "$tmp_dir" -maxdepth 5 -type f \
-            \( -name "next-node" -o -name "next-node*linux-${binary_arch}" -o -name "next-node-*" \) \
+            \( -name "next-node" -o -name "rebecca-node" -o -name "next-node*linux-${binary_arch}" -o -name "rebecca-node*linux-${binary_arch}" -o -name "next-node-*" -o -name "rebecca-node-*" \) \
             ! -name "*.sha256" ! -name "*.zip" ! -name "*.tar.gz" ! -name "*.tgz" 2>/dev/null \
         | while IFS= read -r file; do
             size=$(wc -c < "$file" 2>/dev/null || echo 0)
@@ -1489,6 +1496,7 @@ services:
     network_mode: host
     environment:
       NEXT_DATA_DIR: "/var/lib/next-node"
+      REBECCA_DATA_DIR: "/var/lib/next-node"
       SSL_CLIENT_CERT_FILE: "/var/lib/next-node/cert.pem"
       SSL_CERT_FILE: "/var/lib/next-node/cert.pem"
       SSL_KEY_FILE: "/var/lib/next-node/cert.key"
@@ -1640,12 +1648,12 @@ update_next_node() {
             ;;
             *)
                 set_branch_variables master
-                DOCKER_IMAGE="aliking1367/next-node:${requested_version}"
+                DOCKER_IMAGE="rebeccapanel/rebecca-node:${requested_version}"
             ;;
         esac
         echo "$BRANCH" > "$BRANCH_FILE"
         if [ -f "$COMPOSE_FILE" ]; then
-            sed -i "s|^[[:space:]]*image:.*aliking1367/next-node.*|    image: $DOCKER_IMAGE|" "$COMPOSE_FILE"
+            sed -i "s|^[[:space:]]*image:.*rebeccapanel/rebecca-node.*|    image: $DOCKER_IMAGE|" "$COMPOSE_FILE"
         fi
     fi
     $COMPOSE -f $COMPOSE_FILE -p "$APP_NAME" pull
@@ -2010,7 +2018,7 @@ update_command() {
             ;;
             *)
                 set_branch_variables master
-                DOCKER_IMAGE="aliking1367/next-node:${node_version}"
+                DOCKER_IMAGE="rebeccapanel/rebecca-node:${node_version}"
             ;;
         esac
         echo "$BRANCH" > "$BRANCH_FILE"

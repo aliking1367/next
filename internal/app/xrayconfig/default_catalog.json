@@ -1,11 +1,18 @@
 {
-  "version": 1,
-  "updated_at": "2026-09-18",
+  "version": 2,
+  "updated_at": "2026-09-19",
   "reality_pool": [
     { "dest": "www.microsoft.com:443", "server_names": ["www.microsoft.com"] },
-    { "dest": "www.apple.com:443", "server_names": ["www.apple.com"] },
     { "dest": "addons.mozilla.org:443", "server_names": ["addons.mozilla.org"] },
     { "dest": "www.samsung.com:443", "server_names": ["www.samsung.com"] },
-    { "dest": "www.cloudflare.com:443", "server_names": ["www.cloudflare.com"] }
+    { "dest": "www.amazon.com:443", "server_names": ["www.amazon.com"] },
+    { "dest": "www.nvidia.com:443", "server_names": ["www.nvidia.com"] },
+    { "dest": "www.oracle.com:443", "server_names": ["www.oracle.com"] },
+    { "dest": "www.ibm.com:443", "server_names": ["www.ibm.com"] },
+    { "dest": "www.adobe.com:443", "server_names": ["www.adobe.com"] },
+    { "dest": "www.intel.com:443", "server_names": ["www.intel.com"] },
+    { "dest": "www.lenovo.com:443", "server_names": ["www.lenovo.com"] },
+    { "dest": "www.dell.com:443", "server_names": ["www.dell.com"] },
+    { "dest": "www.hp.com:443", "server_names": ["www.hp.com"] }
   ]
 }

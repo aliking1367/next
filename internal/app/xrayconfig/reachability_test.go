@@ -50,7 +50,7 @@ func TestCheckInboundReachabilityReportsOpenPlainPort(t *testing.T) {
 		"protocol": "shadowsocks",
 		"port":     listenerPort(t, listener),
 	}
-	result := CheckInboundReachability(context.Background(), inbound)
+	result := CheckInboundReachability(context.Background(), "127.0.0.1", inbound)
 	if result.Status != ReachabilityOK {
 		t.Fatalf("expected ok, got %s (%s)", result.Status, result.Detail)
 	}
@@ -71,7 +71,7 @@ func TestCheckInboundReachabilityReportsClosedPort(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	result := CheckInboundReachability(ctx, inbound)
+	result := CheckInboundReachability(ctx, "127.0.0.1", inbound)
 	if result.Status != ReachabilityFailed {
 		t.Fatalf("expected failed for a closed port, got %s (%s)", result.Status, result.Detail)
 	}
@@ -111,7 +111,7 @@ func TestCheckInboundReachabilityCompletesTLSHandshake(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result := CheckInboundReachability(ctx, inbound)
+	result := CheckInboundReachability(ctx, "127.0.0.1", inbound)
 	if result.Status != ReachabilityOK {
 		t.Fatalf("expected ok, got %s (%s)", result.Status, result.Detail)
 	}
@@ -151,7 +151,7 @@ func TestCheckInboundReachabilityFailsWhenTLSPortSpeaksPlainText(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result := CheckInboundReachability(ctx, inbound)
+	result := CheckInboundReachability(ctx, "127.0.0.1", inbound)
 	if result.Status != ReachabilityFailed {
 		t.Fatalf("expected failed when the port does not speak TLS, got %s (%s)", result.Status, result.Detail)
 	}
@@ -167,19 +167,30 @@ func TestCheckInboundReachabilitySkipsHysteria(t *testing.T) {
 			"security": "tls",
 		},
 	}
-	result := CheckInboundReachability(context.Background(), inbound)
+	result := CheckInboundReachability(context.Background(), "127.0.0.1", inbound)
 	if result.Status != ReachabilitySkipped {
 		t.Fatalf("expected hysteria to be skipped, got %s (%s)", result.Status, result.Detail)
 	}
 }
 
 func TestCheckInboundReachabilityRejectsInboundWithoutPort(t *testing.T) {
-	result := CheckInboundReachability(context.Background(), map[string]any{
+	result := CheckInboundReachability(context.Background(), "127.0.0.1", map[string]any{
 		"tag":      "auto-vless-reality",
 		"protocol": "vless",
 	})
 	if result.Status != ReachabilityFailed {
 		t.Fatalf("expected failed for a portless inbound, got %s", result.Status)
+	}
+}
+
+func TestCheckInboundReachabilityFailsWithoutNodeAddress(t *testing.T) {
+	result := CheckInboundReachability(context.Background(), "  ", map[string]any{
+		"tag":      "auto-vless-reality",
+		"protocol": "vless",
+		"port":     443,
+	})
+	if result.Status != ReachabilityFailed {
+		t.Fatalf("expected failed when the node has no address, got %s (%s)", result.Status, result.Detail)
 	}
 }
 

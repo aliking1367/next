@@ -4,6 +4,12 @@
 // - protoc             v5.28.3
 // source: next/node/v1/node.proto
 
+// The package name is part of every RPC's wire path (for example
+// /rebecca.node.v1.NodeControlService/Hello). It must stay "rebecca.node.v1":
+// the node this panel talks to is the upstream Rebecca-node binary, which
+// serves exactly that name, so renaming it breaks every panel-to-node call
+// even though the messages are byte-for-byte identical.
+
 package nodev1
 
 import (
@@ -19,9 +25,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NodeControlService_Hello_FullMethodName   = "/next.node.v1.NodeControlService/Hello"
-	NodeControlService_Connect_FullMethodName = "/next.node.v1.NodeControlService/Connect"
-	NodeControlService_Health_FullMethodName  = "/next.node.v1.NodeControlService/Health"
+	NodeControlService_Hello_FullMethodName   = "/rebecca.node.v1.NodeControlService/Hello"
+	NodeControlService_Connect_FullMethodName = "/rebecca.node.v1.NodeControlService/Connect"
+	NodeControlService_Health_FullMethodName  = "/rebecca.node.v1.NodeControlService/Health"
 )
 
 // NodeControlServiceClient is the client API for NodeControlService service.
@@ -176,7 +182,7 @@ func _NodeControlService_Health_Handler(srv interface{}, ctx context.Context, de
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NodeControlService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "next.node.v1.NodeControlService",
+	ServiceName: "rebecca.node.v1.NodeControlService",
 	HandlerType: (*NodeControlServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -197,26 +203,26 @@ var NodeControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	NodeRuntimeService_StartRuntime_FullMethodName        = "/next.node.v1.NodeRuntimeService/StartRuntime"
-	NodeRuntimeService_RestartRuntime_FullMethodName      = "/next.node.v1.NodeRuntimeService/RestartRuntime"
-	NodeRuntimeService_StopRuntime_FullMethodName         = "/next.node.v1.NodeRuntimeService/StopRuntime"
-	NodeRuntimeService_SyncConfig_FullMethodName          = "/next.node.v1.NodeRuntimeService/SyncConfig"
-	NodeRuntimeService_AddUser_FullMethodName             = "/next.node.v1.NodeRuntimeService/AddUser"
-	NodeRuntimeService_UpdateUser_FullMethodName          = "/next.node.v1.NodeRuntimeService/UpdateUser"
-	NodeRuntimeService_RemoveUser_FullMethodName          = "/next.node.v1.NodeRuntimeService/RemoveUser"
-	NodeRuntimeService_Metrics_FullMethodName             = "/next.node.v1.NodeRuntimeService/Metrics"
-	NodeRuntimeService_PublicIPs_FullMethodName           = "/next.node.v1.NodeRuntimeService/PublicIPs"
-	NodeRuntimeService_TestOutbound_FullMethodName        = "/next.node.v1.NodeRuntimeService/TestOutbound"
-	NodeRuntimeService_TestRoute_FullMethodName           = "/next.node.v1.NodeRuntimeService/TestRoute"
-	NodeRuntimeService_UpdateRuntime_FullMethodName       = "/next.node.v1.NodeRuntimeService/UpdateRuntime"
-	NodeRuntimeService_UpdateGeo_FullMethodName           = "/next.node.v1.NodeRuntimeService/UpdateGeo"
-	NodeRuntimeService_RestartService_FullMethodName      = "/next.node.v1.NodeRuntimeService/RestartService"
-	NodeRuntimeService_UpdateService_FullMethodName       = "/next.node.v1.NodeRuntimeService/UpdateService"
-	NodeRuntimeService_RebootHost_FullMethodName          = "/next.node.v1.NodeRuntimeService/RebootHost"
-	NodeRuntimeService_ApplyIPBlocks_FullMethodName       = "/next.node.v1.NodeRuntimeService/ApplyIPBlocks"
-	NodeRuntimeService_ApplyTorProxy_FullMethodName       = "/next.node.v1.NodeRuntimeService/ApplyTorProxy"
-	NodeRuntimeService_ConfigureWindscribe_FullMethodName = "/next.node.v1.NodeRuntimeService/ConfigureWindscribe"
-	NodeRuntimeService_ConfigurePsiphon_FullMethodName    = "/next.node.v1.NodeRuntimeService/ConfigurePsiphon"
+	NodeRuntimeService_StartRuntime_FullMethodName        = "/rebecca.node.v1.NodeRuntimeService/StartRuntime"
+	NodeRuntimeService_RestartRuntime_FullMethodName      = "/rebecca.node.v1.NodeRuntimeService/RestartRuntime"
+	NodeRuntimeService_StopRuntime_FullMethodName         = "/rebecca.node.v1.NodeRuntimeService/StopRuntime"
+	NodeRuntimeService_SyncConfig_FullMethodName          = "/rebecca.node.v1.NodeRuntimeService/SyncConfig"
+	NodeRuntimeService_AddUser_FullMethodName             = "/rebecca.node.v1.NodeRuntimeService/AddUser"
+	NodeRuntimeService_UpdateUser_FullMethodName          = "/rebecca.node.v1.NodeRuntimeService/UpdateUser"
+	NodeRuntimeService_RemoveUser_FullMethodName          = "/rebecca.node.v1.NodeRuntimeService/RemoveUser"
+	NodeRuntimeService_Metrics_FullMethodName             = "/rebecca.node.v1.NodeRuntimeService/Metrics"
+	NodeRuntimeService_PublicIPs_FullMethodName           = "/rebecca.node.v1.NodeRuntimeService/PublicIPs"
+	NodeRuntimeService_TestOutbound_FullMethodName        = "/rebecca.node.v1.NodeRuntimeService/TestOutbound"
+	NodeRuntimeService_TestRoute_FullMethodName           = "/rebecca.node.v1.NodeRuntimeService/TestRoute"
+	NodeRuntimeService_UpdateRuntime_FullMethodName       = "/rebecca.node.v1.NodeRuntimeService/UpdateRuntime"
+	NodeRuntimeService_UpdateGeo_FullMethodName           = "/rebecca.node.v1.NodeRuntimeService/UpdateGeo"
+	NodeRuntimeService_RestartService_FullMethodName      = "/rebecca.node.v1.NodeRuntimeService/RestartService"
+	NodeRuntimeService_UpdateService_FullMethodName       = "/rebecca.node.v1.NodeRuntimeService/UpdateService"
+	NodeRuntimeService_RebootHost_FullMethodName          = "/rebecca.node.v1.NodeRuntimeService/RebootHost"
+	NodeRuntimeService_ApplyIPBlocks_FullMethodName       = "/rebecca.node.v1.NodeRuntimeService/ApplyIPBlocks"
+	NodeRuntimeService_ApplyTorProxy_FullMethodName       = "/rebecca.node.v1.NodeRuntimeService/ApplyTorProxy"
+	NodeRuntimeService_ConfigureWindscribe_FullMethodName = "/rebecca.node.v1.NodeRuntimeService/ConfigureWindscribe"
+	NodeRuntimeService_ConfigurePsiphon_FullMethodName    = "/rebecca.node.v1.NodeRuntimeService/ConfigurePsiphon"
 )
 
 // NodeRuntimeServiceClient is the client API for NodeRuntimeService service.
@@ -932,7 +938,7 @@ func _NodeRuntimeService_ConfigurePsiphon_Handler(srv interface{}, ctx context.C
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NodeRuntimeService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "next.node.v1.NodeRuntimeService",
+	ServiceName: "rebecca.node.v1.NodeRuntimeService",
 	HandlerType: (*NodeRuntimeServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -1021,11 +1027,11 @@ var NodeRuntimeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	NodeUsageService_CollectOnlineUsers_FullMethodName   = "/next.node.v1.NodeUsageService/CollectOnlineUsers"
-	NodeUsageService_CollectUserUsage_FullMethodName     = "/next.node.v1.NodeUsageService/CollectUserUsage"
-	NodeUsageService_AckUserUsage_FullMethodName         = "/next.node.v1.NodeUsageService/AckUserUsage"
-	NodeUsageService_CollectOutboundUsage_FullMethodName = "/next.node.v1.NodeUsageService/CollectOutboundUsage"
-	NodeUsageService_AckOutboundUsage_FullMethodName     = "/next.node.v1.NodeUsageService/AckOutboundUsage"
+	NodeUsageService_CollectOnlineUsers_FullMethodName   = "/rebecca.node.v1.NodeUsageService/CollectOnlineUsers"
+	NodeUsageService_CollectUserUsage_FullMethodName     = "/rebecca.node.v1.NodeUsageService/CollectUserUsage"
+	NodeUsageService_AckUserUsage_FullMethodName         = "/rebecca.node.v1.NodeUsageService/AckUserUsage"
+	NodeUsageService_CollectOutboundUsage_FullMethodName = "/rebecca.node.v1.NodeUsageService/CollectOutboundUsage"
+	NodeUsageService_AckOutboundUsage_FullMethodName     = "/rebecca.node.v1.NodeUsageService/AckOutboundUsage"
 )
 
 // NodeUsageServiceClient is the client API for NodeUsageService service.
@@ -1246,7 +1252,7 @@ func _NodeUsageService_AckOutboundUsage_Handler(srv interface{}, ctx context.Con
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NodeUsageService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "next.node.v1.NodeUsageService",
+	ServiceName: "rebecca.node.v1.NodeUsageService",
 	HandlerType: (*NodeUsageServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -1275,7 +1281,7 @@ var NodeUsageService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	NodeLogsService_StreamLogs_FullMethodName = "/next.node.v1.NodeLogsService/StreamLogs"
+	NodeLogsService_StreamLogs_FullMethodName = "/rebecca.node.v1.NodeLogsService/StreamLogs"
 )
 
 // NodeLogsServiceClient is the client API for NodeLogsService service.
@@ -1366,7 +1372,7 @@ type NodeLogsService_StreamLogsServer = grpc.ServerStreamingServer[LogLine]
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NodeLogsService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "next.node.v1.NodeLogsService",
+	ServiceName: "rebecca.node.v1.NodeLogsService",
 	HandlerType: (*NodeLogsServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{

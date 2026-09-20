@@ -69,6 +69,7 @@ import { motion } from "framer-motion";
 import useGetUser from "hooks/useGetUser";
 import { type FC, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { fetch } from "service/http";
 import type { Admin, AdminPermissions } from "types/Admin";
 import { AdminRole, AdminTrafficLimitMode } from "types/Admin";
@@ -113,13 +114,45 @@ type ServiceDialogProps = {
 
 const AUTO_CONFIGURE_SERVICE_NAME = "Best Protocols (Auto)";
 
+// Mirrors the server's rules for the optional Cloudflare domain: a plain
+// domain name, not an IP address, URL or host:port. Empty means "no CDN".
+const isValidCdnDomain = (value: string) => {
+	const domain = value.trim().toLowerCase().replace(/\.$/, "");
+	if (!domain) {
+		return true;
+	}
+	if (domain.length > 253 || !domain.includes(".")) {
+		return false;
+	}
+	if (/^\d+(\.\d+){3}$/.test(domain)) {
+		return false;
+	}
+	return domain
+		.split(".")
+		.every((label) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+};
+
 type ProtocolCheckResult = {
 	tag: string;
 	protocol: string;
 	port: number;
+	node_id?: number;
+	node_name?: string;
+	address?: string;
 	status: "ok" | "failed" | "skipped";
 	detail: string;
 };
+
+type AutoConfigureResponse = {
+	warning?: ProvisionNodeWarning;
+	retired?: string[];
+	cdn_requested?: boolean;
+};
+
+type ProvisionNodeWarning =
+	| "no_nodes"
+	| "no_connected_nodes"
+	| "no_default_config_nodes";
 
 const PROTOCOL_CHECK_STATUS_SCHEME: Record<string, string> = {
 	ok: "green",
@@ -838,8 +871,13 @@ const ServicesPage: FC = () => {
 	const dialogDisclosure = useDisclosure();
 	const autoConfigureDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
+	const [cdnDomain, setCdnDomain] = useState("");
+	const navigate = useNavigate();
 	const [isVerifying, setIsVerifying] = useState(false);
 	const [verifyResults, setVerifyResults] = useState<ProtocolCheckResult[] | null>(
+		null,
+	);
+	const [nodeWarning, setNodeWarning] = useState<ProvisionNodeWarning | null>(
 		null,
 	);
 	const [editingService, setEditingService] = useState<ServiceDetail | null>(
@@ -927,11 +965,15 @@ const ServicesPage: FC = () => {
 	const handleVerifyProtocols = async () => {
 		setIsVerifying(true);
 		try {
-			const response = await fetch<{ results: ProtocolCheckResult[] }>(
-				"/core/verify-protocols",
-				{ method: "POST" },
-			);
+			const response = await fetch<{
+				results: ProtocolCheckResult[];
+				warning?: ProvisionNodeWarning;
+			}>("/core/verify-protocols", { method: "POST" });
 			const results = response?.results ?? [];
+			if (response?.warning) {
+				setNodeWarning(response.warning);
+				return;
+			}
 			if (!results.length) {
 				toast({ status: "info", title: t("services.verifyProtocols.none") });
 				return;
@@ -947,18 +989,42 @@ const ServicesPage: FC = () => {
 		}
 	};
 
+	const cdnDomainInvalid = !isValidCdnDomain(cdnDomain);
+
 	const handleAutoConfigureBestProtocols = async () => {
+		if (cdnDomainInvalid) {
+			return;
+		}
 		setIsAutoConfiguring(true);
 		try {
-			await fetch("/core/auto-configure", { method: "POST" });
+			const domain = cdnDomain.trim();
+			const response = await fetch<AutoConfigureResponse>(
+				"/core/auto-configure",
+				{
+					method: "POST",
+					body: domain ? { cdn_domain: domain } : undefined,
+				},
+			);
 			await Promise.all([fetchServices(), fetchInbounds()]);
 			fetchHosts();
 			autoConfigureDisclosure.onClose();
+			if (response?.warning) {
+				// The inbounds exist, but without a connected node nothing serves
+				// them — say so instead of reporting a success that isn't one yet.
+				setNodeWarning(response.warning);
+				return;
+			}
+			const retired = response?.retired?.length ?? 0;
 			toast({
 				status: "success",
+				duration: 9000,
+				isClosable: true,
 				title: t("services.autoConfigure.success", {
 					name: AUTO_CONFIGURE_SERVICE_NAME,
 				}),
+				description: retired
+					? t("services.autoConfigure.retiredNote", { count: retired })
+					: undefined,
 			});
 		} catch (error: any) {
 			toast({
@@ -2192,18 +2258,85 @@ const ServicesPage: FC = () => {
 				isConfirmDisabled={resetServiceId == null}
 			/>
 
-			<ConfirmDialog
+			<AppDialog
 				isOpen={autoConfigureDisclosure.isOpen}
 				onClose={autoConfigureDisclosure.onClose}
-				onConfirm={handleAutoConfigureBestProtocols}
+				size="lg"
 				title={t("services.autoConfigure.confirmTitle")}
-				description={t("services.autoConfigure.confirmBody", {
-					name: AUTO_CONFIGURE_SERVICE_NAME,
-				})}
-				confirmLabel={t("services.autoConfigure.button")}
-				colorScheme="primary"
-				isLoading={isAutoConfiguring}
-			/>
+				overlayProps={{ bg: "blackAlpha.300" }}
+				footer={
+					<>
+						<Button variant="ghost" onClick={autoConfigureDisclosure.onClose}>
+							{t("cancel")}
+						</Button>
+						<Button
+							colorScheme="primary"
+							onClick={handleAutoConfigureBestProtocols}
+							isLoading={isAutoConfiguring}
+							isDisabled={cdnDomainInvalid}
+						>
+							{t("services.autoConfigure.button")}
+						</Button>
+					</>
+				}
+			>
+				<Stack spacing={4}>
+					<Text>
+						{t("services.autoConfigure.confirmBody", {
+							name: AUTO_CONFIGURE_SERVICE_NAME,
+						})}
+					</Text>
+					<FormControl isInvalid={cdnDomainInvalid}>
+						<FormLabel>{t("services.autoConfigure.cdnLabel")}</FormLabel>
+						<Input
+							value={cdnDomain}
+							onChange={(event) => setCdnDomain(event.target.value)}
+							placeholder={t("services.autoConfigure.cdnPlaceholder")}
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>
+							{cdnDomainInvalid
+								? t("services.autoConfigure.cdnInvalid")
+								: t("services.autoConfigure.cdnHelp")}
+						</FormHelperText>
+					</FormControl>
+				</Stack>
+			</AppDialog>
+
+			<AppDialog
+				isOpen={nodeWarning !== null}
+				onClose={() => setNodeWarning(null)}
+				size="lg"
+				title={t("services.nodeWarning.title")}
+				overlayProps={{ bg: "blackAlpha.300" }}
+				footer={
+					<>
+						<Button variant="ghost" onClick={() => setNodeWarning(null)}>
+							{t("close")}
+						</Button>
+						<Button
+							colorScheme="primary"
+							onClick={() => {
+								setNodeWarning(null);
+								navigate("/node-settings");
+							}}
+						>
+							{t("services.nodeWarning.openNodes")}
+						</Button>
+					</>
+				}
+			>
+				<Stack spacing={3}>
+					<Text>
+						{nodeWarning ? t(`services.nodeWarning.${nodeWarning}`) : ""}
+					</Text>
+					<Text fontSize="sm" color={labelColor}>
+						{t("services.nodeWarning.addressHint")}
+					</Text>
+				</Stack>
+			</AppDialog>
 
 			<AppDialog
 				isOpen={verifyResults !== null}
@@ -2224,14 +2357,18 @@ const ServicesPage: FC = () => {
 					<Stack spacing={2}>
 						{(verifyResults ?? []).map((result) => (
 							<HStack
-								key={result.tag}
+								key={`${result.node_id ?? 0}-${result.tag}`}
 								justify="space-between"
 								align="start"
 								spacing={3}
 							>
 								<Box>
 									<Text fontWeight="semibold">
-										{result.protocol} · {result.port}
+										{t(`services.autoConfigure.recipe.${result.tag}`, {
+											defaultValue: result.protocol,
+										})}{" "}
+										· {result.port}
+										{result.node_name ? ` · ${result.node_name}` : ""}
 									</Text>
 									<Text fontSize="sm" color={labelColor}>
 										{result.detail}

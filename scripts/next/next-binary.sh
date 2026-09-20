@@ -463,6 +463,19 @@ get_xray_runtime_status() {
 print_menu_status_summary() {
     local container_id service_status="stopped"
     local version uptime xray_status
+    if [ "$(get_install_mode)" = "binary" ]; then
+        if systemctl is-active --quiet "$APP_NAME.service" 2>/dev/null; then
+            service_status="running"
+        fi
+        version=$(get_current_next_version)
+        uptime=$(systemctl show -p ActiveEnterTimestamp --value "$APP_NAME.service" 2>/dev/null || true)
+        ui_status_row "Version" "${version}"
+        ui_status_row "Service" "${service_status}"
+        ui_status_row "Mode" "binary"
+        ui_status_row "Xray" "runs on nodes"
+        ui_status_row "Started" "${uptime:--}"
+        return
+    fi
     container_id=$(get_docker_container_id)
     if [ -n "$container_id" ] && [ "$(docker inspect -f '{{.State.Running}}' "$container_id" 2>/dev/null)" = "true" ]; then
         service_status="running"
@@ -5148,6 +5161,800 @@ read_menu_command() {
     done
 }
 
+# ---------------------------------------------------------------------------
+# Finglish guided menu: Persian written in Latin letters, so it reads
+# correctly in any SSH terminal (right-to-left Persian script usually breaks
+# there). It only *guides*: every action runs the script's own command.
+#
+# Each action re-runs this script as a separate process. Those commands call
+# `exit` on failure, and running them in-process would close the menu.
+# ---------------------------------------------------------------------------
+
+fg_self() {
+    local candidate
+    if [ -n "${NEXT_SELF:-}" ]; then
+        printf '%s' "$NEXT_SELF"
+        return
+    fi
+    candidate="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+    if [ -f "$candidate" ] && grep -q "^dispatch_command()" "$candidate" 2>/dev/null; then
+        printf '%s' "$candidate"
+        return
+    fi
+    printf '%s' "$NEXT_SCRIPT_INSTALL_PATH"
+}
+
+fg_run() {
+    bash "$(fg_self)" "$@"
+}
+
+fg_ok() { colorized_echo green "  $*"; }
+fg_warn() { colorized_echo yellow "  $*"; }
+fg_err() { colorized_echo red "  $*"; }
+fg_info() { colorized_echo cyan "  $*"; }
+fg_say() { printf '  %s\n' "$*"; }
+fg_blank() { printf '\n'; }
+
+fg_dim() {
+    printf '  '
+    ui_color "38;5;245" "$*"
+    printf '\n'
+}
+
+fg_pause() {
+    printf '\n'
+    read -r -p "  Baraye bargasht be menu, Enter bezanid... " _ || true
+}
+
+# fg_read "porsesh" [pishfarz] -> FG_REPLY. Returns 1 when input ends.
+fg_read() {
+    local prompt="$1" default="${2:-}" suffix=""
+    [ -n "$default" ] && suffix=" [$default]"
+    if ! read -r -p "  ${prompt}${suffix}: " FG_REPLY; then
+        FG_REPLY=""
+        return 1
+    fi
+    FG_REPLY="${FG_REPLY:-$default}"
+}
+
+# fg_confirm "porsesh" [y|n] -> 0 for bale. b = bale (yes), n = kheyr (no).
+fg_confirm() {
+    local question="$1" default="${2:-n}" hint answer
+    if [ "$default" = "y" ]; then
+        hint="[B/n]"
+    else
+        hint="[b/N]"
+    fi
+    while true; do
+        if ! read -r -p "  ${question} ${hint} (b = bale, n = kheyr): " answer; then
+            return 1
+        fi
+        answer="${answer:-$default}"
+        case "$answer" in
+            b|B|y|Y|bale|Bale|yes|Yes) return 0 ;;
+            n|N|kheyr|Kheyr|no|No) return 1 ;;
+        esac
+        fg_err "Faghat 'b' (bale) ya 'n' (kheyr) benevisid."
+    done
+}
+
+fg_installed() {
+    is_next_installed
+}
+
+fg_require_installed() {
+    if ! fg_installed; then
+        fg_err "Panel hanuz roye in server nasb nashode."
+        fg_say "Aval gozine 1 (Nasb-e panel) ra ejra konid."
+        return 1
+    fi
+}
+
+fg_result() {
+    local rc="$1" ok_message="$2" fail_message="$3"
+    if [ "$rc" -eq 0 ]; then
+        fg_ok "$ok_message"
+    else
+        fg_err "$fail_message (kod-e khata: $rc)"
+    fi
+}
+
+fg_service_state() {
+    local container_id
+    if ! fg_installed; then
+        echo "nasb-nashode"
+        return
+    fi
+    if is_binary_install; then
+        if systemctl is-active --quiet "$APP_NAME.service" 2>/dev/null; then
+            echo "roshan"
+        else
+            echo "khamoosh"
+        fi
+        return
+    fi
+    container_id=$(get_docker_container_id)
+    if [ -n "$container_id" ] && [ "$(docker inspect -f '{{.State.Running}}' "$container_id" 2>/dev/null)" = "true" ]; then
+        echo "roshan"
+    else
+        echo "khamoosh"
+    fi
+}
+
+fg_version() {
+    local tag=""
+    if [ -f "$BINARY_METADATA_FILE" ]; then
+        tag=$(sed -nE 's/.*"tag"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$BINARY_METADATA_FILE" | head -n 1)
+    fi
+    [ -z "$tag" ] && tag=$(get_current_next_version)
+    printf '%s' "${tag:-unknown}"
+}
+
+fg_env_value() {
+    [ -f "$ENV_FILE" ] || return 0
+    grep -E "^[[:space:]]*$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d " \"'"
+}
+
+# fg_panel_url [masir] -> address-e dashboard (ya masir-e digar-i az an)
+fg_panel_url() {
+    local path="${1:-dashboard/}" port scheme host
+    port=$(fg_env_value UVICORN_PORT)
+    port="${port:-8000}"
+    scheme="http"
+    [ -n "$(fg_env_value UVICORN_SSL_CERTFILE)" ] && scheme="https"
+    host=$(get_domain_from_env)
+    [ -z "$host" ] && host=$(detect_public_ip 2>/dev/null || true)
+    [ -z "$host" ] && host="IP-SERVER"
+    printf '%s://%s:%s/%s' "$scheme" "$host" "$port" "$path"
+}
+
+fg_state_label() {
+    case "$1" in
+        roshan) printf 'Roshan (kar mikonad)' ;;
+        khamoosh) printf 'Khamoosh (kar nemikonad)' ;;
+        *) printf 'Nasb nashode' ;;
+    esac
+}
+
+fg_item() {
+    printf '  '
+    ui_color "38;5;45;1" "$(printf '%3s)' "$1")"
+    printf ' '
+    ui_color "38;5;231;1" "$(printf '%-29s' "$2")"
+    ui_color "38;5;245" "$3"
+    printf '\n'
+}
+
+fg_group() {
+    printf '\n'
+    ui_color "38;5;117;1" "  $1"
+    printf '\n'
+}
+
+fg_print_menu() {
+    local state
+    state=$(fg_service_state)
+    ui_clear
+    ui_header "Next Panel  -  Menu-ye Modiriyat" "Adad-e gozine ra benevisid va Enter bezanid."
+    ui_section "Vaziyat"
+    if fg_installed; then
+        ui_status_row "Nesekhe" "$(fg_version)"
+        ui_status_row "Vaziyat" "$(fg_state_label "$state")"
+        ui_status_row "Noe-e nasb" "$(get_install_mode)"
+    else
+        ui_status_row "Vaziyat" "$(fg_state_label "$state")"
+    fi
+
+    fg_group "Nasb va Update"
+    fg_item 1 "Nasb-e panel" "Avalin nasb roye in server"
+    fg_item 2 "Update-e panel" "Raftan be nesekhe-ye jadid"
+    fg_item 3 "Update-e script-e menu" "Jadid-tarin nesekhe-ye 'next'"
+    fg_item 4 "Hazf-e panel" "Pak kardan-e kamel (khatarnak)"
+
+    fg_group "Modiriyat-e panel"
+    fg_item 5 "Vaziyat-e panel" "Roshan ya khamoosh + jozeeyat"
+    fg_item 6 "Roshan kardan" "Start-e panel"
+    fg_item 7 "Khamoosh kardan" "Stop-e panel"
+    fg_item 8 "Restart" "Khamoosh va dobare roshan"
+    fg_item 9 "Namayesh-e log" "Log-e zende (kharej: Ctrl+C)"
+
+    fg_group "Modirha (Admin)"
+    fg_item 10 "Sakhtan-e modir-e jadid" "Ba noe-e dastresi-e delkhah"
+    fg_item 11 "Taghir-e ramz-e modir" "Agar ramz ra faramoosh kardid"
+    fg_item 12 "List-e modirha" "Namayesh-e modirha-ye mojood"
+
+    fg_group "Node va Xray"
+    fg_item 13 "Rahnama-ye Node (mohem)" "Chera Xray 'Stopped' ast?"
+    fg_item 14 "Nasb-e Node roye in server" "Xray ra roshan konid"
+
+    fg_group "Bekaap va Tanzimat"
+    fg_item 15 "Bekaap-e dasti" "Nosekhe-ye poshtiban ba yek klik"
+    fg_item 16 "Bekaap-e khodkar (Telegram)" "Ersal-e zamanbandi-shode"
+    fg_item 17 "SSL (gavahi-e amniyat)" "Baraye baz kardan-e dashboard"
+    fg_item 18 "Virayesh-e tanzimat (.env)" "Port, database va ..."
+    fg_item 19 "Etelaat va address-e panel" "Chetor vared dashboard shavam?"
+
+    printf '\n'
+    fg_item 0 "Khoroj" ""
+    printf '\n'
+    case "$state" in
+        nasb-nashode) fg_warn "Panel hanuz nasb nashode. Az gozine 1 shoroo konid." ;;
+        khamoosh) fg_warn "Panel khamoosh ast. Gozine 6 ra bezanid ta roshan shavad." ;;
+        *) fg_dim "Nokte: Xray faghat roye Node ejra mishavad. Gozine 13 ra bekhanid." ;;
+    esac
+    printf '\n'
+}
+
+# ---- Nasb va Update --------------------------------------------------------
+
+fg_action_install() {
+    local database version_arg=() version_label rc choice
+    fg_info "Nasb-e panel"
+    fg_blank
+    if fg_installed; then
+        fg_warn "Panel ghablan roye in server nasb shode ($APP_DIR)."
+        fg_say "Baraye be-rooz-resani az gozine 2 (Update) estefade konid."
+        fg_say "Agar mikhahid az aval nasb konid, aval gozine 4 (Hazf) ra bezanid."
+        return 0
+    fi
+    fg_say "In gozine panel ra roye hamin server nasb mikonad."
+    fg_say "Pish-niaz: Ubuntu, dastresi-e root, va internet."
+    fg_blank
+    fg_say "Database ra entekhab konid:"
+    fg_say " 1) SQLite   - sadetarin, baraye shoroo (pishnahad)"
+    fg_say " 2) MySQL    - baraye tedad-e karbar-e ziad"
+    fg_say " 3) MariaDB  - shabih-e MySQL"
+    fg_say " 0) Bargasht"
+    fg_read "Entekhab" "1" || return 0
+    choice="$FG_REPLY"
+    case "$choice" in
+        1) database="sqlite" ;;
+        2) database="mysql" ;;
+        3) database="mariadb" ;;
+        *) fg_say "Bargasht be menu."; return 0 ;;
+    esac
+
+    fg_blank
+    fg_say "Nesekhe ra entekhab konid:"
+    fg_say " 1) Akharin nesekhe-ye paydar (pishnahad)"
+    fg_say " 2) Nesekhe-ye khas (mesl-e v1.4.0)"
+    fg_read "Entekhab" "1" || return 0
+    case "$FG_REPLY" in
+        2)
+            fg_read "Nesekhe ra benevisid (mesl-e v1.4.0)" || return 0
+            if [[ ! "$FG_REPLY" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                fg_err "Format-e nesekhe dorost nist. Mesl-e v1.4.0 benevisid."
+                return 0
+            fi
+            version_arg=(--version "$FG_REPLY")
+            version_label="$FG_REPLY"
+            ;;
+        *)
+            version_arg=(--version latest)
+            version_label="akharin nesekhe"
+            ;;
+    esac
+
+    fg_blank
+    fg_say "Kholase: database = $database , nesekhe = $version_label"
+    if [ "$database" != "sqlite" ]; then
+        fg_warn "Nasb-konande yek ramz-e ghavi baraye database mikhahad (hadeaghal 12 harf, harf-e bozorg va kochak, adad va alamat)."
+    fi
+    fg_blank
+    fg_info "Nasb-konande chand porsesh be englisi mipursad. Rahnama:"
+    fg_say " - Dashboard port                       -> Enter (8000) ya port-e delkhah"
+    fg_say " - Create a full-access admin now?      -> y"
+    fg_say " - Admin username                       -> masalan: admin"
+    fg_say " - Admin password (2 bar)               -> ramz-e ghavi"
+    fg_blank
+    fg_confirm "Nasb shoroo shavad?" y || { fg_say "Laghv shod."; return 0; }
+    fg_blank
+    fg_run install --binary --database "$database" "${version_arg[@]}"
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Nasb tamam shod." "Nasb ba khata mowajeh shod"
+    if [ "$rc" -eq 0 ]; then
+        fg_blank
+        fg_info "Marhale-ye badi:"
+        fg_say " 1) Gozine 19: chetor vared dashboard shavid."
+        fg_say " 2) Gozine 13: Node ra nasb konid (bedun-e Node, Xray roshan nist)."
+    fi
+}
+
+fg_action_update() {
+    local version_arg=() label rc choice
+    fg_require_installed || return 0
+    fg_info "Update-e panel"
+    fg_blank
+    fg_say "Nesekhe-ye felli: $(fg_version)"
+    fg_blank
+    fg_say " 1) Akharin nesekhe-ye paydar (pishnahad)"
+    fg_say " 2) Nesekhe-ye khas (mesl-e v1.4.0)"
+    fg_say " 0) Bargasht"
+    fg_read "Entekhab" "1" || return 0
+    choice="$FG_REPLY"
+    case "$choice" in
+        1)
+            version_arg=(--version latest)
+            label="akharin nesekhe"
+            ;;
+        2)
+            fg_read "Nesekhe ra benevisid (mesl-e v1.4.0)" || return 0
+            if [[ ! "$FG_REPLY" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                fg_err "Format-e nesekhe dorost nist. Mesl-e v1.4.0 benevisid."
+                return 0
+            fi
+            version_arg=(--version "$FG_REPLY")
+            label="$FG_REPLY"
+            ;;
+        *) fg_say "Bargasht be menu."; return 0 ;;
+    esac
+
+    fg_blank
+    fg_say "Panel be $label update mishavad va chand saniye restart mishavad."
+    fg_say "Karbaran-e proxy moamulan ghat' nemishavand (Xray roye Node ast)."
+    fg_blank
+    if fg_confirm "Ghabl az update yek bekaap begiram? (pishnahad)" y; then
+        fg_run backup
+        rc=$?
+        if [ "$rc" -ne 0 ]; then
+            fg_err "Bekaap ba khata mowajeh shod (kod: $rc)."
+            fg_confirm "Ba in hal update anjam shavad?" n || { fg_say "Laghv shod."; return 0; }
+        fi
+    fi
+    fg_blank
+    fg_confirm "Update shoroo shavad?" y || { fg_say "Laghv shod."; return 0; }
+    fg_blank
+    fg_run update "${version_arg[@]}"
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Update anjam shod. Panel chand saniye-ye digar khodkar restart mishavad." "Update ba khata mowajeh shod"
+}
+
+fg_action_update_script() {
+    local rc
+    fg_info "Update-e script-e menu"
+    fg_blank
+    fg_say "In gozine faghat dastoor-e 'next' (hamin menu) ra be-rooz mikonad."
+    fg_say "Panel be-rooz nemishavad; baraye an gozine 2 ra bezanid."
+    fg_blank
+    fg_confirm "Edame midahid?" y || { fg_say "Laghv shod."; return 0; }
+    fg_run script-update
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Script be-rooz shod." "Update-e script ba khata mowajeh shod"
+    if [ "$rc" -eq 0 ]; then
+        fg_say "Baraye didan-e menu-ye jadid, dobare 'sudo next' ra ejra konid."
+        exit 0
+    fi
+}
+
+fg_action_uninstall() {
+    local rc typed
+    fg_require_installed || return 0
+    fg_warn "Hazf-e kamel-e panel"
+    fg_blank
+    fg_say "In kar panel va service-e an ra az roye in server pak mikonad."
+    fg_say "Baad az an mitavanid entekhab konid database va gavahi-ha ham pak shavand."
+    fg_warn "Agar bekaap nadarid, karbaran va tanzimat az dast miravad!"
+    fg_blank
+    fg_say "Baraye edame, kalame-ye HAZF ra (ba harf-e bozorg) benevisid."
+    fg_read "Tayid" || return 0
+    typed="$FG_REPLY"
+    if [ "$typed" != "HAZF" ]; then
+        fg_say "Laghv shod. Hichchiz pak nashod."
+        return 0
+    fi
+    fg_blank
+    fg_info "Hazf-konande do porsesh be englisi mipursad. Rahnama:"
+    fg_say " 1) Do you really want to uninstall Next?    -> y"
+    fg_say " 2) Do you want to remove Next's data files? -> y faghat agar mikhahid database va"
+    fg_say "    gavahi-ha ham pak shavand; 'n' bezanid ta dade-ha bemanad."
+    fg_blank
+    fg_run uninstall
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Hazf anjam shod." "Hazf ba khata mowajeh shod"
+}
+
+# ---- Modiriyat-e panel -----------------------------------------------------
+
+fg_action_status() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Vaziyat-e panel"
+    fg_blank
+    fg_run status
+    rc=$?
+    fg_blank
+    if [ "$rc" -ne 0 ]; then
+        fg_warn "Panel roshan nist. Gozine 6 (Roshan kardan) ya gozine 9 (Log) ra bezanid."
+    else
+        fg_ok "Panel roshan ast. Address: $(fg_panel_url)"
+    fi
+}
+
+fg_action_start() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Roshan kardan-e panel"
+    fg_blank
+    fg_run up
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Panel roshan shod." "Roshan kardan ba khata mowajeh shod (gozine 9 ra bebinid)"
+}
+
+fg_action_stop() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Khamoosh kardan-e panel"
+    fg_blank
+    fg_say "Ta zamani ke panel khamoosh ast, dashboard va modiriyat kar nemikonad."
+    fg_say "Karbaran-e proxy moamulan ta vaghti Node roshan ast vasl mimanand."
+    fg_blank
+    fg_confirm "Panel khamoosh shavad?" n || { fg_say "Laghv shod."; return 0; }
+    fg_run down
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Panel khamoosh shod." "Khamoosh kardan ba khata mowajeh shod"
+}
+
+fg_action_restart() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Restart-e panel"
+    fg_blank
+    fg_say "Panel chand saniye khamoosh va dobare roshan mishavad."
+    fg_blank
+    fg_confirm "Restart shavad?" y || { fg_say "Laghv shod."; return 0; }
+    fg_run restart
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Panel restart shod." "Restart ba khata mowajeh shod (gozine 9 ra bebinid)"
+}
+
+fg_action_logs() {
+    fg_require_installed || return 0
+    fg_info "Log-e zende-ye panel"
+    fg_blank
+    fg_say "Baraye kharej shodan az log va bargasht be menu: Ctrl+C bezanid."
+    fg_blank
+    fg_run logs
+    fg_blank
+    fg_say "Az log kharej shodid."
+}
+
+# ---- Modirha ---------------------------------------------------------------
+
+fg_action_admin_create() {
+    local username role rc
+    fg_require_installed || return 0
+    fg_info "Sakhtan-e modir-e jadid"
+    fg_blank
+    while true; do
+        fg_read "Nam-e karbari (3 ta 64 harf: harf, adad, . _ - @)" || return 0
+        username="$FG_REPLY"
+        [ -z "$username" ] && { fg_say "Laghv shod."; return 0; }
+        if [[ "$username" =~ ^[A-Za-z0-9_.@-]{3,64}$ ]]; then
+            break
+        fi
+        fg_err "Nam-e karbari motabar nist. Faghat harf-e englisi, adad va . _ - @ (3 ta 64 harf)."
+    done
+    fg_blank
+    fg_say "Noe-e dastresi:"
+    fg_say " 1) Modir-e kamel (full_access) - dastresi be hame chiz"
+    fg_say " 2) Sudo                        - modir ba dastresi-e mahdud-shode"
+    fg_say " 3) Standard                    - faghat karbaran-e khodash ra modiriyat mikonad"
+    fg_say " 4) Reseller                    - namayande-ye foroush"
+    fg_say " 0) Bargasht"
+    fg_read "Entekhab" "1" || return 0
+    case "$FG_REPLY" in
+        1) role="full_access" ;;
+        2) role="sudo" ;;
+        3) role="standard" ;;
+        4) role="reseller" ;;
+        *) fg_say "Bargasht be menu."; return 0 ;;
+    esac
+    fg_blank
+    fg_say "Baraye modir '$username' ba noe-e '$role'."
+    fg_say "Barnameh ramz ra do bar mipursad (hangam-e type, chizi neshan dade nemishavad)."
+    fg_blank
+    fg_run cli admin create "$username" --role "$role"
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Modir '$username' sakhte shod." "Sakhtan-e modir ba khata mowajeh shod"
+}
+
+fg_action_admin_password() {
+    local username rc
+    fg_require_installed || return 0
+    fg_info "Taghir-e ramz-e modir"
+    fg_blank
+    fg_run cli admin list
+    fg_blank
+    fg_read "Nam-e karbari-e modir" || return 0
+    username="$FG_REPLY"
+    [ -z "$username" ] && { fg_say "Laghv shod."; return 0; }
+    if [[ ! "$username" =~ ^[A-Za-z0-9_.@-]{3,64}$ ]]; then
+        fg_err "Nam-e karbari motabar nist."
+        return 0
+    fi
+    fg_say "Ramz-e jadid ra barnameh mipursad. Tokenhaye ghabli in modir bi-eatebar mishavand."
+    fg_blank
+    fg_run cli admin set-password "$username"
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Ramz-e '$username' avaz shod." "Taghir-e ramz ba khata mowajeh shod"
+}
+
+fg_action_admin_list() {
+    fg_require_installed || return 0
+    fg_info "List-e modirha"
+    fg_blank
+    fg_run cli admin list
+}
+
+# ---- Node va Xray ----------------------------------------------------------
+
+fg_action_node_guide() {
+    fg_info "Rahnama-ye Node (Xray)"
+    fg_blank
+    fg_warn "Chera Xray 'Stopped' ast va karbar vasl nemishavad?"
+    fg_say "Panel faghat 'modir' ast va khodash Xray ejra nemikonad."
+    fg_say "Xray faghat roye 'Node' ejra mishavad. Bedun-e Node hich proxy-i kar nemikonad."
+    fg_say "Node ra mitavanid roye hamin server ya server-e digar nasb konid."
+    fg_blank
+    fg_info "Marhale-ha:"
+    fg_say " 1) Dar dashboard: Node settings > Add Node"
+    fg_say "      Address: IP-ye OMOOMI-ye server ya dameneh (na 127.0.0.1!)"
+    fg_say "      Adres-e server dar config-e karbaran az hamin address miayad."
+    fg_say "      Service port: 62050     API port: 62051"
+    fg_say "      Baad 'Node install bundle' ra kamel COPY konid."
+    fg_say " 2) Nasb-e Node va Paste kardan-e bundle:"
+    fg_say "      Agar Node hamin server ast: dar hamin menu gozine 14 ra bezanid."
+    fg_say "      Agar server-e digar ast, roye an server (ba sudo) in dastoor ra bezanid:"
+    fg_say "      curl -sL ${NEXT_SCRIPT_BASE_URL}/next-node-binary.sh | sudo bash -s -- install"
+    fg_say " 3) Sabr konid vaziyat-e Node dar dashboard 'Connected' shavad."
+    fg_say " 4) Dar Services: 'Auto-Configure Best Protocols' ra bezanid."
+    fg_say " 5) Yek karbar besazid va service-e 'Best Protocols (Auto)' ra be-o bedahid."
+    fg_blank
+    if fg_installed; then
+        fg_say "Safhe-ye Node dar panel-e shoma:"
+        fg_ok "$(fg_panel_url dashboard/node-settings)"
+    fi
+    fg_blank
+    fg_dim "Port-haye 62050 va 62051 bayad az panel be Node baz bashand (firewall)."
+}
+
+fg_action_node_install() {
+    local script_url tmp_script rc
+    fg_info "Nasb-e Node roye in server"
+    fg_blank
+    fg_say "Aval bayad dar dashboard yek Node besazid va 'Node install bundle' ra copy konid."
+    fg_say "Agar nasakhtid, aval gozine 13 (Rahnama) ra bekhanid."
+    fg_blank
+    fg_confirm "Bundle ra az dashboard gereftid?" n || { fg_say "Aval gozine 13 ra bekhanid; baad bargardid."; return 0; }
+    fg_blank
+    fg_info "Nasb-konande-ye Node be englisi mipursad. Rahnama:"
+    fg_say " - Release channel        -> Enter (latest)"
+    fg_say " - Node install bundle    -> kamel Paste konid; baad az 'END PRIVATE KEY' khodkar edame miyabad"
+    fg_say " - SERVICE_PORT           -> Enter (62050) ya hamun-ke dar dashboard neveshtid"
+    fg_say " - XRAY_API_PORT          -> Enter (62051) ya hamun-ke dar dashboard neveshtid"
+    fg_blank
+    fg_confirm "Nasb-e Node shoroo shavad?" y || { fg_say "Laghv shod."; return 0; }
+    fg_blank
+    script_url="${NEXT_SCRIPT_BASE_URL}/next-node-binary.sh"
+    tmp_script=$(mktemp)
+    if ! curl -fsSL "$script_url" -o "$tmp_script"; then
+        rm -f "$tmp_script"
+        fg_err "Daryaft-e nasb-konande-ye Node ba khata mowajeh shod. Internet ra check konid."
+        return 0
+    fi
+    bash "$tmp_script" install
+    rc=$?
+    rm -f "$tmp_script"
+    fg_blank
+    fg_result "$rc" "Nasb-e Node tamam shod. Dar dashboard montazer 'Connected' bemanid." "Nasb-e Node ba khata mowajeh shod"
+}
+
+# ---- Bekaap va Tanzimat ----------------------------------------------------
+
+fg_action_backup() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Bekaap-e dasti"
+    fg_blank
+    fg_say "Yek nosekhe-ye poshtiban az database va tanzimat gerefte mishavad."
+    fg_blank
+    fg_run backup
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Bekaap gerefte shod." "Bekaap ba khata mowajeh shod"
+}
+
+fg_action_backup_telegram() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Bekaap-e khodkar be Telegram"
+    fg_blank
+    fg_say "Yek bekaap-e zamanbandi-shode misazad va an ra be bot-e Telegram-e shoma mifrestad."
+    fg_say "Be Bot Token va Chat ID niaz darid; barnameh be englisi mipursad."
+    fg_blank
+    fg_confirm "Edame midahid?" y || { fg_say "Laghv shod."; return 0; }
+    fg_run backup-service
+    rc=$?
+    fg_blank
+    fg_result "$rc" "Bekaap-e khodkar tanzim shod." "Tanzim-e bekaap-e khodkar ba khata mowajeh shod"
+}
+
+fg_action_ssl() {
+    local email target choice rc
+    fg_require_installed || return 0
+    fg_info "SSL (gavahi-e amniyat)"
+    fg_blank
+    fg_say "Dashboard be dalil-e amniyati faghat ba SSL az tarigh-e internet baz mishavad."
+    fg_say " 1) Ba dameneh (pishnahad)  - dameneh bayad be IP-ye in server eshare konad (A record)"
+    fg_say " 2) Ba IP-ye omoomi-ye server"
+    fg_say " 3) Tajdid-e (renew) gavahi-e mojood"
+    fg_say " 0) Bargasht"
+    fg_read "Entekhab" "1" || return 0
+    choice="$FG_REPLY"
+    case "$choice" in
+        1|2)
+            fg_read "Email (baraye gavahi)" || return 0
+            email="$FG_REPLY"
+            if [[ ! "$email" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; then
+                fg_err "Email motabar nist."
+                return 0
+            fi
+            if [ "$choice" = "1" ]; then
+                fg_read "Dameneh (mesl-e panel.example.com)" || return 0
+                target="$FG_REPLY"
+                if [[ ! "$target" =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$ ]]; then
+                    fg_err "Dameneh motabar nist."
+                    return 0
+                fi
+                fg_blank
+                fg_run ssl issue --email "$email" --domains "$target"
+            else
+                target=$(detect_public_ip 2>/dev/null || true)
+                fg_read "IP-ye omoomi" "$target" || return 0
+                target="$FG_REPLY"
+                if ! is_valid_ip "$target"; then
+                    fg_err "IP motabar nist."
+                    return 0
+                fi
+                fg_blank
+                fg_run ssl issue --email "$email" --ip-address "$target"
+            fi
+            rc=$?
+            ;;
+        3)
+            fg_run ssl renew
+            rc=$?
+            ;;
+        *)
+            fg_say "Bargasht be menu."
+            return 0
+            ;;
+    esac
+    fg_blank
+    fg_result "$rc" "SSL anjam shod. Agar address kar nakard, gozine 8 (Restart) ra bezanid." "SSL ba khata mowajeh shod"
+}
+
+fg_action_edit_env() {
+    local rc
+    fg_require_installed || return 0
+    fg_info "Virayesh-e tanzimat (.env)"
+    fg_blank
+    fg_say "File-e tanzimat dar $ENV_FILE baz mishavad."
+    fg_say "Tanzimat-e mohem: UVICORN_PORT (port-e dashboard), SQLALCHEMY_DATABASE_URL (database)."
+    fg_warn "Ba deghat virayesh konid; ghalat-e emlayi mitavanad panel ra az kar bendazad."
+    fg_blank
+    fg_confirm "File baz shavad?" y || { fg_say "Laghv shod."; return 0; }
+    fg_run edit-env
+    fg_blank
+    fg_say "Tanzimat faghat baad az restart-e panel ammali mishavad."
+    if fg_confirm "Panel hala restart shavad?" y; then
+        fg_run restart
+        rc=$?
+        fg_result "$rc" "Panel restart shod." "Restart ba khata mowajeh shod"
+    fi
+}
+
+fg_action_info() {
+    local db_url db_kind port ip
+    fg_require_installed || return 0
+    fg_info "Etelaat va address-e panel"
+    fg_blank
+    port=$(fg_env_value UVICORN_PORT)
+    db_url=$(fg_env_value SQLALCHEMY_DATABASE_URL)
+    db_kind="${db_url%%:*}"
+    ui_status_row "Nesekhe" "$(fg_version)"
+    ui_status_row "Vaziyat" "$(fg_state_label "$(fg_service_state)")"
+    ui_status_row "Noe-e nasb" "$(get_install_mode)"
+    ui_status_row "Database" "${db_kind:-nashenakhte}"
+    ui_status_row "Port" "${port:-8000}"
+    ui_status_row "Pooshe-ye panel" "$APP_DIR"
+    ui_status_row "Pooshe-ye dade" "$DATA_DIR"
+    ui_status_row "Tanzimat" "$ENV_FILE"
+    fg_blank
+    fg_info "Address-e dashboard:"
+    fg_ok "$(fg_panel_url)"
+    fg_blank
+    if [ -z "$(fg_env_value UVICORN_SSL_CERTFILE)" ]; then
+        fg_warn "SSL faal nist, pas dashboard az tarigh-e IP dar internet baz nemishavad."
+        fg_say "Rah-e 1: gozine 17 (SSL) ra bezanid va ba dameneh/IP gavahi begirid."
+        fg_say "Rah-e 2 (movaghat, baraye test): dar computer-e khodetan in dastoor ra bezanid:"
+        ip=$(detect_public_ip 2>/dev/null || true)
+        fg_say "    ssh -L ${port:-8000}:localhost:${port:-8000} root@${ip:-IP-SERVER}"
+        fg_say "   baad dar browser bezanid:  http://localhost:${port:-8000}/dashboard/"
+        fg_dim "   Ba bastan-e terminal-e SSH dastresi ghat' mishavad."
+    fi
+}
+
+# ---- Halghe-ye asli ---------------------------------------------------------
+
+fg_require_root() {
+    if [ "$(id -u)" = "0" ] || [ "${NEXT_MENU_ALLOW_NON_ROOT:-0}" = "1" ]; then
+        return 0
+    fi
+    fg_err "Baraye modiriyat bayad ba dastresi-e root vared shavid."
+    fg_say "In dastoor ra bezanid:  sudo next"
+    return 1
+}
+
+fg_screen() {
+    ui_clear
+    "$@"
+    fg_pause
+}
+
+finglish_menu() {
+    local choice
+    set +e
+    fg_require_root || return 1
+    trap ':' INT
+    while true; do
+        fg_print_menu
+        if ! read -r -p "  Adad-e gozine (0 = khoroj): " choice; then
+            printf '\n'
+            return 0
+        fi
+        case "$choice" in
+            1) fg_screen fg_action_install ;;
+            2) fg_screen fg_action_update ;;
+            3) fg_screen fg_action_update_script ;;
+            4) fg_screen fg_action_uninstall ;;
+            5) fg_screen fg_action_status ;;
+            6) fg_screen fg_action_start ;;
+            7) fg_screen fg_action_stop ;;
+            8) fg_screen fg_action_restart ;;
+            9) fg_screen fg_action_logs ;;
+            10) fg_screen fg_action_admin_create ;;
+            11) fg_screen fg_action_admin_password ;;
+            12) fg_screen fg_action_admin_list ;;
+            13) fg_screen fg_action_node_guide ;;
+            14) fg_screen fg_action_node_install ;;
+            15) fg_screen fg_action_backup ;;
+            16) fg_screen fg_action_backup_telegram ;;
+            17) fg_screen fg_action_ssl ;;
+            18) fg_screen fg_action_edit_env ;;
+            19) fg_screen fg_action_info ;;
+            0|q|Q|exit|khoroj)
+                fg_ok "Khodahafez!"
+                return 0
+                ;;
+            "") ;;
+            *)
+                fg_err "Gozine-ye namotabar. Yek adad az 0 ta 19 benevisid."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 usage() {
     local script_name="${0##*/}"
     colorized_echo blue "=============================="
@@ -5181,6 +5988,8 @@ usage() {
     colorized_echo yellow "  edit            - Edit docker-compose.yml (via nano or vi editor)"
     colorized_echo yellow "  edit-env        - Edit environment file (via nano or vi editor)"
     colorized_echo yellow "  ssl             - Issue or renew SSL certificates"
+    colorized_echo yellow "  menu            - Menu-ye rahnama (Finglish); hamintor: sudo next"
+    colorized_echo yellow "  menu-en         - Classic English menu"
     colorized_echo yellow "  help            - Show this help message"
     
     
@@ -5242,6 +6051,11 @@ dispatch_command() {
         ssl) ssl_command "$@" ;;
         edit) edit_command "$@" ;;
         edit-env) edit_env_command "$@" ;;
+        menu|menu-fa|rahnama) finglish_menu ;;
+        menu-en)
+            read_menu_command || exit 0
+            dispatch_command $MENU_COMMAND
+            ;;
         help) usage ;;
         *) usage ;;
     esac
@@ -5249,8 +6063,12 @@ dispatch_command() {
 
 if [ "${NEXT_SOURCE_ONLY:-0}" != "1" ]; then
     if [ $# -eq 0 ]; then
-        read_menu_command || exit 0
-        set -- $MENU_COMMAND
+        if [ -t 0 ] && [ -t 1 ]; then
+            finglish_menu
+            exit $?
+        fi
+        usage
+        exit 0
     fi
 
     dispatch_command "$@"
