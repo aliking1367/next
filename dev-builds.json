@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "project": "Next",
+  "latest": "dev-7f316e5",
+  "updated_at": "2026-09-20T13:34:09Z",
+  "builds": [
+    {
+      "tag": "dev-7f316e5",
+      "sha": "7f316e5470761e95028d3f128d31e8c3a62ac731",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "35513650736",
+      "run_number": "33",
+      "created_at": "2026-09-20T13:34:09Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-7f316e5.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-7f316e5.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-7f316e5.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-7f316e5.tar.gz"
+        }
+      }
+    }
+  ]
+}
