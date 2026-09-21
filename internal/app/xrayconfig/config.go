@@ -2170,7 +2170,17 @@ func mergePolicy(runtime map[string]any) {
 		},
 	}
 	current := mapValue(runtime["policy"])
-	runtime["policy"] = mergeMaps(current, forced)
+	merged := mergeMaps(current, forced)
+	// Inbound traffic is shown in the panel, so its counters default to on;
+	// an explicit value from the core settings is kept.
+	system := mapValue(merged["system"])
+	for _, key := range []string{"statsInboundDownlink", "statsInboundUplink"} {
+		if _, set := system[key]; !set {
+			system[key] = true
+		}
+	}
+	merged["system"] = system
+	runtime["policy"] = merged
 }
 
 func ensureAPIInbound(runtime map[string]any, host string, port int) {

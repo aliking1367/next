@@ -699,7 +699,8 @@ func (r Repository) ensureNodeNameAvailableTx(ctx context.Context, tx *sql.Tx, n
 		return wrapInvalid("name is required")
 	}
 	var existing int64
-	err := tx.QueryRowContext(ctx, `SELECT id FROM nodes WHERE name = ? LIMIT 1`, name).Scan(&existing)
+	var existingName, status sql.NullString
+	err := tx.QueryRowContext(ctx, `SELECT id, name, status FROM nodes WHERE name = ? LIMIT 1`, name).Scan(&existing, &existingName, &status)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -709,7 +710,22 @@ func (r Repository) ensureNodeNameAvailableTx(ctx context.Context, tx *sql.Tx, n
 	if exceptID > 0 && existing == exceptID {
 		return nil
 	}
+	if strings.EqualFold(strings.TrimSpace(status.String), StatusDeleted) {
+		// Deleted nodes are soft-deleted and would hold their unique name forever;
+		// rename the tombstone so the name can be used again.
+		return releaseDeletedNodeNameTx(ctx, tx, existing, existingName.String)
+	}
 	return typedError(ErrorConflict, fmt.Sprintf(`Node "%s" already exists`, name))
+}
+
+func releaseDeletedNodeNameTx(ctx context.Context, tx *sql.Tx, nodeID int64, name string) error {
+	suffix := fmt.Sprintf(" [deleted #%d]", nodeID)
+	base := []rune(name)
+	if limit := MaxNodeNameLength - len([]rune(suffix)); limit > 0 && len(base) > limit {
+		base = base[:limit]
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE nodes SET name = ? WHERE id = ?`, string(base)+suffix, nodeID)
+	return err
 }
 
 func (r Repository) enqueueNodeOperationTx(ctx context.Context, tx *sql.Tx, operationType string, nodeID *int64, userID *int64, payload any, now time.Time) error {

@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flosch/pongo2/v6"
 	outboundsubapp "github.com/aliking1367/next/internal/app/outboundsub"
 	"github.com/aliking1367/next/internal/app/usage"
+	"github.com/flosch/pongo2/v6"
 )
 
 type SubscriptionClientConfig struct {
@@ -1104,12 +1104,12 @@ func selectSubscriptionClientType(userAgent string, settings SubscriptionSetting
 		if rule.Pattern == "" {
 			continue
 		}
-		
+
 		re, err := regexp.Compile(rule.Pattern)
 		if err != nil {
 			continue
 		}
-		
+
 		if re.MatchString(ua) {
 			return rule.Result
 		}
@@ -1119,10 +1119,14 @@ func selectSubscriptionClientType(userAgent string, settings SubscriptionSetting
 
 func subscriptionHeaders(user UserDetail, req SubscriptionRenderRequest, settings SubscriptionSettings) map[string]string {
 	return map[string]string{
-		"content-disposition":     `attachment; filename="` + user.Username + `"`,
-		"profile-web-page-url":    req.URL,
-		"support-url":             strings.TrimSpace(settings.SubscriptionSupportURL),
-		"profile-title":           "base64:" + base64.StdEncoding.EncodeToString([]byte(firstNonEmptyString(settings.SubscriptionProfileTitle, "Subscription"))),
+		"content-disposition":  `attachment; filename="` + user.Username + `"`,
+		"profile-web-page-url": req.URL,
+		"support-url":          strings.TrimSpace(settings.SubscriptionSupportURL),
+		// The title accepts the same placeholders as config remarks, e.g.
+		// "{USERNAME} - {DAYS_LEFT} days", so apps that show the title
+		// (V2Box and others) can name each subscription after its user.
+		"profile-title": "base64:" + base64.StdEncoding.EncodeToString([]byte(formatSubscriptionPlaceholderRemark(user,
+			firstNonEmptyString(settings.SubscriptionProfileTitle, "Subscription")))),
 		"profile-update-interval": firstNonEmptyString(settings.SubscriptionUpdateInterval, "12"),
 		"subscription-userinfo":   fmt.Sprintf("upload=0; download=%d; total=%d; expire=%d", user.UsedTraffic, int64OrZero(user.DataLimit), int64OrZero(user.Expire)),
 	}

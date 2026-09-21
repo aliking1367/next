@@ -33,6 +33,8 @@ export type MyAccountResponse = {
 	users_limit: number | null;
 	current_users_count: number;
 	remaining_users: number | null;
+	/** Account expiry as a unix timestamp; null or 0 means no expiry. */
+	expire?: number | null;
 	daily_usage: MyAccountUsagePoint[];
 	node_usages: MyAccountNodeUsage[];
 	service_limits: MyAccountServiceLimit[];

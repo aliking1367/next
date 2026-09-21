@@ -67,7 +67,7 @@ func TestUsageCollectionResetsXrayCountersByDefault(t *testing.T) {
 	}
 }
 
-func TestCollectUsageDialFailureMarksNodeDegraded(t *testing.T) {
+func TestCollectUsageFailureLeavesNodeHealthToTheHealthSweep(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "usage-status.db")+"?_pragma=busy_timeout(30000)")
 	if err != nil {
@@ -137,7 +137,9 @@ INSERT INTO nodes (
 	if len(result.Errors) == 0 {
 		t.Fatal("expected usage collection error")
 	}
+	// A failed usage round must not flip the node's health: the health sweep
+	// decides that. Only the error is reported.
 	assertString(t, db, `SELECT status FROM nodes WHERE id = 7`, "connected")
-	assertString(t, db, `SELECT agent_status FROM nodes WHERE id = 7`, "degraded")
+	assertInt64(t, db, `SELECT COUNT(*) FROM nodes WHERE id = 7 AND agent_status IS NULL`, 1)
 	assertInt64(t, db, `SELECT COUNT(*) FROM node_operations`, 0)
 }

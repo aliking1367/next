@@ -503,12 +503,33 @@ func (r Repository) FlushStagedUsageHistory(ctx context.Context, limit int, opti
 		return UsageHistoryFlushResult{}, err
 	}
 	defer tx.Rollback()
+	// Rows whose node or user no longer exists (removed by hand from the
+	// database, or left behind by a restored backup) would fail the history
+	// foreign keys, abort this transaction and block every later flush, so
+	// they are skipped here and still marked processed below.
+	nodeIDs := make([]int64, 0, len(userRows)+len(outboundRows))
+	userIDs := make([]int64, 0, len(userRows))
+	for _, row := range userRows {
+		nodeIDs = append(nodeIDs, row.NodeID)
+		userIDs = append(userIDs, row.UserID)
+	}
+	for _, row := range outboundRows {
+		nodeIDs = append(nodeIDs, row.NodeID)
+	}
+	liveNodes, err := existingRowIDsTx(ctx, tx, "nodes", nodeIDs)
+	if err != nil {
+		return UsageHistoryFlushResult{}, err
+	}
+	liveUsers, err := existingRowIDsTx(ctx, tx, "users", userIDs)
+	if err != nil {
+		return UsageHistoryFlushResult{}, err
+	}
 	userUsage := map[usageHistoryKey]map[int64]int64{}
 	for _, row := range userRows {
 		if options.SkipNodeUserUsageHistory {
 			continue
 		}
-		if row.UsedTraffic <= 0 {
+		if row.UsedTraffic <= 0 || !liveNodes[row.NodeID] || !liveUsers[row.UserID] {
 			continue
 		}
 		key := usageHistoryKey{Bucket: row.CreatedAt.Truncate(time.Hour), NodeID: row.NodeID}
@@ -524,7 +545,7 @@ func (r Repository) FlushStagedUsageHistory(ctx context.Context, limit int, opti
 	}
 	nodeUsage := map[usageHistoryKey]OutboundUsageDelta{}
 	for _, row := range outboundRows {
-		if options.SkipNodeUsageHistory {
+		if options.SkipNodeUsageHistory || !liveNodes[row.NodeID] {
 			continue
 		}
 		key := usageHistoryKey{Bucket: row.CreatedAt.Truncate(time.Hour), NodeID: row.NodeID}
@@ -1915,6 +1936,32 @@ func int64Args(values []int64) []any {
 		result = append(result, value)
 	}
 	return result
+}
+
+// existingRowIDsTx reports which of ids are still present in table. table is
+// always a constant from this package, never user input.
+func existingRowIDsTx(ctx context.Context, tx *sql.Tx, table string, ids []int64) (map[int64]bool, error) {
+	found := make(map[int64]bool, len(ids))
+	err := forEachInt64Chunk(uniqueInt64s(ids), usagePersistBatchSize, func(chunk []int64) error {
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM `+table+` WHERE id IN (`+placeholders(len(chunk))+`)`, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			found[id] = true
+		}
+		return rows.Err()
+	})
+	return found, err
 }
 
 func forEachInt64Chunk(values []int64, size int, fn func([]int64) error) error {

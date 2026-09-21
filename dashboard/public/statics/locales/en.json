@@ -2323,6 +2323,8 @@
 	"myaccount.remainingData": "Remaining",
 	"myaccount.unlimited": "Unlimited",
 	"myaccount.userLimits": "User limit",
+	"myaccount.accountExpire": "Account expires",
+	"myaccount.accountExpireOn": "{{date}} ({{days}} days left)",
 	"myaccount.createdUsers": "Created",
 	"myaccount.remainingUsers": "Remaining",
 	"myaccount.totalUsers": "Limit",

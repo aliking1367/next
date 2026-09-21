@@ -112,11 +112,11 @@ func (c Controller) collectUsageForNode(
 	persistOptions UsagePersistOptions,
 ) CollectUsageResult {
 	result := CollectUsageResult{Nodes: 1}
-	communicationFailed := false
-	recordCommunicationFailure := func(err error) {
-		communicationFailed = true
-		c.recordHealthFailure(ctx, node.ID, err)
-	}
+	// Usage collection never changes node health. A failed stats call (Xray
+	// restarting, a slow node) is not an outage, and the health sweep owns the
+	// node's status: sharing its failure counter let usage errors mark healthy
+	// nodes as disconnected and let usage successes hide real failures.
+	recordCommunicationFailure := func(error) {}
 	dialCtx, dialCancel := WithDefaultTimeout(ctx)
 	client, _, err := c.dial(dialCtx, node.ID)
 	dialCancel()
@@ -265,9 +265,6 @@ func (c Controller) collectUsageForNode(
 			recordCommunicationFailure(ackErr)
 			result.Errors = append(result.Errors, fmt.Sprintf("node %d ack outbound usage: %s", node.ID, ackErr.Error()))
 		}
-	}
-	if !communicationFailed {
-		c.clearHealthFailures(node.ID)
 	}
 	return result
 }

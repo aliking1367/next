@@ -2309,6 +2309,8 @@
 	"myaccount.remainingData": "باقیمانده",
 	"myaccount.unlimited": "نامحدود",
 	"myaccount.userLimits": "محدودیت کاربران",
+	"myaccount.accountExpire": "انقضای حساب",
+	"myaccount.accountExpireOn": "{{date}} ({{days}} روز مانده)",
 	"myaccount.createdUsers": "ساخته شده",
 	"myaccount.remainingUsers": "باقیمانده",
 	"myaccount.totalUsers": "سقف",

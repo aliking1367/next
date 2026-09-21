@@ -11,7 +11,8 @@ import (
 
 const defaultNodeOperationsPollInterval = 15 * time.Second
 const defaultNodeOperationsBatchSize = 5000
-const retainedFinishedNodeOperations = 100000
+// Enough recent history to diagnose a node; more only grew the database.
+const retainedFinishedNodeOperations = 20000
 const nodeOperationsPruneBatchSize = 1000
 
 func (s *Server) runNodeOperationsWorker(ctx context.Context) {

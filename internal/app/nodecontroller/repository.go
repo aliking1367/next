@@ -1012,8 +1012,10 @@ func (r Repository) PruneFinishedOperations(ctx context.Context, retain, limit i
 		limit = 1000
 	}
 	var cutoff int64
+	// Failed operations are final too (nothing retries them) and include every
+	// pending operation of a deleted node; pruning only 'done' let them pile up.
 	err := r.db.QueryRowContext(ctx, `SELECT id FROM node_operations
-WHERE status = 'done' ORDER BY id DESC LIMIT 1 OFFSET ?`, retain-1).Scan(&cutoff)
+WHERE status IN ('done', 'failed') ORDER BY id DESC LIMIT 1 OFFSET ?`, retain-1).Scan(&cutoff)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}
@@ -1021,7 +1023,7 @@ WHERE status = 'done' ORDER BY id DESC LIMIT 1 OFFSET ?`, retain-1).Scan(&cutoff
 		return 0, err
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT id FROM node_operations
-WHERE status = 'done' AND id < ? ORDER BY id LIMIT ?`, cutoff, limit)
+WHERE status IN ('done', 'failed') AND id < ? ORDER BY id LIMIT ?`, cutoff, limit)
 	if err != nil {
 		return 0, err
 	}
@@ -1038,7 +1040,7 @@ WHERE status = 'done' AND id < ? ORDER BY id LIMIT ?`, cutoff, limit)
 		return 0, err
 	}
 	args := int64Args(ids)
-	res, err := r.db.ExecContext(ctx, `DELETE FROM node_operations WHERE status = 'done' AND id IN (`+placeholders(len(ids))+`)`, args...)
+	res, err := r.db.ExecContext(ctx, `DELETE FROM node_operations WHERE status IN ('done', 'failed') AND id IN (`+placeholders(len(ids))+`)`, args...)
 	if err != nil {
 		return 0, err
 	}

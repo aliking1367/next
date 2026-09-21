@@ -357,13 +357,14 @@ func (c Controller) userOperationConfigSyncDecision(ctx context.Context, node No
 	return false, inbounds, nil
 }
 
+// protocolRequiresFullUserSync reports whether a user change on this protocol
+// needs the node config rebuilt: tunnel servers (WireGuard, AmneziaWG, SSTP,
+// GRE, ...) and SSH read their user lists from the config instead of taking
+// Xray's hot user updates. A hand-written list here once missed SSTP,
+// AmneziaWG and GRE, so new users on them only worked after a restart.
 func protocolRequiresFullUserSync(protocol string) bool {
-	switch strings.ToLower(strings.TrimSpace(protocol)) {
-	case xrayconfig.OVProtocol, xrayconfig.L2TPProtocol, xrayconfig.PPTPProtocol, xrayconfig.WGProtocol, xrayconfig.IKEv2Protocol, xrayconfig.AnyConnectProtocol, "ssh":
-		return true
-	default:
-		return false
-	}
+	cleaned := strings.ToLower(strings.TrimSpace(protocol))
+	return cleaned == "ssh" || xrayconfig.IsVirtualTunnelInboundProtocol(cleaned)
 }
 
 func (c Controller) loadRuntimeConfigData(ctx context.Context) (*runtimeConfigData, error) {
@@ -404,12 +405,18 @@ func applyRuntimeAPI(raw map[string]any, apiPort int) {
 		"statsUserOnline":   true,
 	})
 	policy["levels"] = levels
-	policy["system"] = mergeMaps(mapValue(policy["system"]), map[string]any{
-		"statsInboundDownlink":  false,
-		"statsInboundUplink":    false,
+	system := mergeMaps(mapValue(policy["system"]), map[string]any{
 		"statsOutboundDownlink": true,
 		"statsOutboundUplink":   true,
 	})
+	// The panel stores per-inbound traffic, so inbound counters default to on;
+	// an explicit choice in the core settings is kept as is.
+	for _, key := range []string{"statsInboundDownlink", "statsInboundUplink"} {
+		if _, set := system[key]; !set {
+			system[key] = true
+		}
+	}
+	policy["system"] = system
 	raw["policy"] = policy
 
 	inbounds := listOfMaps(raw["inbounds"])

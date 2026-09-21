@@ -321,6 +321,7 @@ func (s *Server) myAccountSummary(ctx context.Context, dbadmin adminapp.Admin) (
 		"users_limit":                dbadmin.UsersLimit,
 		"current_users_count":        currentUsers,
 		"remaining_users":            remainingLimit(dbadmin.UsersLimit, int64(currentUsers)),
+		"expire":                     dbadmin.Expire,
 		"daily_usage":                []any{},
 		"node_usages":                []any{},
 		"service_limits":             serviceLimitSummary(dbadmin.ServiceLimits),

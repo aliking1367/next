@@ -12,6 +12,17 @@ NEXT_NODE_SCRIPT_FLAVOR="${NEXT_NODE_SCRIPT_FLAVOR:-binary}"
 NEXT_NODE_SCRIPT_SOURCE_FILE="${NEXT_NODE_SCRIPT_SOURCE_FILE:-next-node-binary.sh}"
 
 SCRIPT_DEFAULT_APP_NAME="${NEXT_NODE_DEFAULT_APP_NAME:-next-node}"
+# An installed node is managed through /usr/local/bin/<node name>, so a copy
+# run from there (for example `mynode update`) manages that node, custom names
+# included. Anything else - curl | bash, a downloaded or temporary copy - keeps
+# the default, so a temp file name never becomes a node name.
+if [ -z "${NEXT_NODE_DEFAULT_APP_NAME:-}" ]; then
+    case "$0" in
+        /usr/local/bin/*)
+            SCRIPT_DEFAULT_APP_NAME="$(basename "$0")"
+            ;;
+    esac
+fi
 
 declare -a DISCOVERED_NODE_PATHS=()
 declare -a DISCOVERED_NODE_NAMES=()
@@ -972,47 +983,54 @@ get_node_binary_release_asset_metadata() {
     local node_version="$1"
     local binary_arch="$2"
     local release_api
-    local release_payload
-    local resolved_tag
-    local node_asset_name
-    local node_asset_url
+    local release_payload=""
+    local resolved=""
+    local attempt
+    # Prints "<tag>|<url>" for a release that carries the node binary for this
+    # architecture. The file is matched by pattern rather than rebuilt from the
+    # tag, and the anchored end skips the .sha256 companion files.
+    local selector='
+        select(.draft | not)
+        | .tag_name as $tag
+        | ([.assets[]? | select(.name | test("^" + $prefix + "-.+-linux-" + $arch + "$")) | .browser_download_url][0]) as $url
+        | select($url != null)
+        | "\($tag)|\($url)"'
 
     if [ "$node_version" = "latest" ]; then
-        release_api="https://api.github.com/repos/${NEXT_NODE_RELEASE_REPO}/releases/latest"
+        # The newest release can be missing the node binary (assets still
+        # uploading, or a release without one); walk back to the newest release
+        # that has it instead of failing.
+        release_api="https://api.github.com/repos/${NEXT_NODE_RELEASE_REPO}/releases?per_page=30"
+        for attempt in 1 2 3; do
+            release_payload=$(curl -fsSL "$release_api" 2>/dev/null) || release_payload=""
+            resolved=$(printf '%s' "$release_payload" | jq -r --arg prefix "$NEXT_NODE_ASSET_PREFIX" --arg arch "$binary_arch" \
+                ".[]? | select(.prerelease | not) | $selector" 2>/dev/null | head -n 1)
+            if [ -n "$resolved" ]; then
+                printf '%s\n' "$resolved"
+                return 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+                sleep 2
+            fi
+        done
     else
         release_api="https://api.github.com/repos/${NEXT_NODE_RELEASE_REPO}/releases/tags/${node_version}"
-    fi
-
-    local attempts=1
-    if [ "$node_version" = "latest" ]; then
-        # GitHub can expose a release before its workflow assets finish uploading.
-        attempts=5
-    fi
-    for attempt in $(seq 1 "$attempts"); do
         release_payload=$(curl -fsSL "$release_api" 2>/dev/null) || release_payload=""
-        resolved_tag=$(echo "$release_payload" | jq -r '.tag_name // empty')
-        node_asset_name="${NEXT_NODE_ASSET_PREFIX}-${resolved_tag}-linux-${binary_arch}"
-        node_asset_url=$(echo "$release_payload" | jq -r --arg name "$node_asset_name" '
-            .assets[]?
-            | select(.name == $name)
-            | .browser_download_url
-        ' | head -n 1)
-        if [ -n "$node_asset_url" ] && [ "$node_asset_url" != "null" ]; then
-            printf '%s|%s\n' "${resolved_tag:-$node_version}" "$node_asset_url"
+        resolved=$(printf '%s' "$release_payload" | jq -r --arg prefix "$NEXT_NODE_ASSET_PREFIX" --arg arch "$binary_arch" \
+            ". | $selector" 2>/dev/null | head -n 1)
+        if [ -n "$resolved" ]; then
+            printf '%s\n' "$resolved"
             return 0
         fi
-        if [ "$attempt" -lt "$attempts" ]; then
-            sleep 2
-        fi
-    done
+    fi
 
     if [ -z "$release_payload" ]; then
         colorized_echo red "Unable to read Next-node release metadata: $release_api" >&2
     else
-        colorized_echo red "No Next-node binary release assets found for linux-${binary_arch}." >&2
+        colorized_echo red "No Next-node binary for linux-${binary_arch} was found in ${NEXT_NODE_RELEASE_REPO} ${node_version} releases." >&2
         colorized_echo yellow "Use --dev after the dev binary workflow succeeds, or use Dockerized install." >&2
     fi
-    exit 1
+    return 1
 }
 
 get_node_binary_dev_artifact_metadata() {
@@ -1336,7 +1354,14 @@ install_binary_next_node() {
             chmod +x "$tmp_dir/next-node"
         fi
     else
-        IFS='|' read -r resolved_version node_asset_url < <(get_node_binary_release_asset_metadata "$node_version" "$binary_arch")
+        # Not a process substitution: an error inside one cannot stop the
+        # installer, which then carried on with an empty download URL.
+        local node_release_metadata
+        if ! node_release_metadata=$(get_node_binary_release_asset_metadata "$node_version" "$binary_arch"); then
+            rm -rf "$tmp_dir"
+            exit 1
+        fi
+        IFS='|' read -r resolved_version node_asset_url <<<"$node_release_metadata"
         ui_spinner_run "Downloading Next-node binary" curl -fL "$node_asset_url" -o "$tmp_dir/next-node"
     fi
 

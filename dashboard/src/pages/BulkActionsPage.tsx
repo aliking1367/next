@@ -105,6 +105,7 @@ const errorDetail = (error: unknown) => {
 const runLimited = async (
 	usernames: string[],
 	worker: (username: string) => Promise<void>,
+	concurrency = 4,
 ) => {
 	const results = new Array<BatchResult>(usernames.length);
 	let cursor = 0;
@@ -121,7 +122,10 @@ const runLimited = async (
 		}
 	};
 	await Promise.all(
-		Array.from({ length: Math.min(4, usernames.length) }, () => runner()),
+		Array.from(
+			{ length: Math.max(1, Math.min(concurrency, usernames.length)) },
+			() => runner(),
+		),
 	);
 	return results;
 };
@@ -292,7 +296,9 @@ const BulkCreatePanel = ({
 					normalizedAutoDelete > 0 ? normalizedAutoDelete : null,
 			};
 			await fetch("/v2/users", { method: "POST", body });
-		});
+			// One at a time: parallel creates finish in random order, so the new
+			// users got interleaved ids and listed as user_1, user_4, user_2...
+		}, 1);
 		setResults(batchResults);
 		setIsRunning(false);
 		void refetchUsers(true);

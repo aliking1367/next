@@ -238,7 +238,7 @@ func newNodeTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE tls (id INTEGER PRIMARY KEY, key TEXT NOT NULL, certificate TEXT NOT NULL)`,
 		`CREATE TABLE nodes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT UNIQUE,
+			name TEXT COLLATE NOCASE UNIQUE,
 			note TEXT NULL,
 			address TEXT NOT NULL,
 			port INTEGER NOT NULL,
@@ -328,5 +328,45 @@ func assertNodeRepositoryString(t *testing.T, db *sql.DB, query string, want str
 	}
 	if got != want {
 		t.Fatalf("string query %q got %q want %q", query, got, want)
+	}
+}
+
+func TestNodeNameOfDeletedNodeCanBeReused(t *testing.T) {
+	db := newNodeTestDB(t)
+	repo := NewRepository(db, "sqlite").WithNow(fixedNow())
+	ctx := context.Background()
+
+	old, err := repo.CreateNode(ctx, baseNodeCreate("germany"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteNode(ctx, old.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Re-adding a node under the deleted node's name must work.
+	fresh, err := repo.CreateNode(ctx, baseNodeCreate("Germany"))
+	if err != nil {
+		t.Fatalf("re-creating a deleted node's name failed: %v", err)
+	}
+	assertNodeRepositoryString(t, db, `SELECT name FROM nodes WHERE id = ?`, "germany [deleted #1]", old.ID)
+	assertNodeRepositoryString(t, db, `SELECT status FROM nodes WHERE id = ?`, "deleted", old.ID)
+
+	// Renaming a live node to the name of a deleted one must work too.
+	other, err := repo.CreateNode(ctx, baseNodeCreate("france"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteNode(ctx, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	name := "france"
+	if _, err := repo.UpdateNode(ctx, fresh.ID, NodeModify{Name: &name}); err != nil {
+		t.Fatalf("renaming to a deleted node's name failed: %v", err)
+	}
+
+	// A live node still protects its name.
+	if _, err := repo.CreateNode(ctx, baseNodeCreate("FRANCE")); !IsKind(err, ErrorConflict) {
+		t.Fatalf("expected conflict for a live node's name, got %v", err)
 	}
 }

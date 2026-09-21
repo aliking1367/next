@@ -159,7 +159,7 @@ func TestApplyRuntimeAPIEnablesOnlineUserStats(t *testing.T) {
 }
 
 func TestRemoteAccessProtocolsRequireFullUserSync(t *testing.T) {
-	for _, protocol := range []string{"openvpn", "l2tp", "pptp", "wireguard", "ikev2", "anyconnect"} {
+	for _, protocol := range []string{"openvpn", "l2tp", "pptp", "wireguard", "ikev2", "anyconnect", "sstp", "amneziawg", "gre", "ssh", " WireGuard "} {
 		if !protocolRequiresFullUserSync(protocol) {
 			t.Fatalf("%s user changes must trigger a full runtime sync", protocol)
 		}
@@ -339,4 +339,29 @@ func firstRuntimeCertificate(t *testing.T, raw map[string]any) map[string]any {
 		t.Fatalf("expected one certificate, got %#v", certificates)
 	}
 	return certificates[0]
+}
+
+func TestApplyRuntimeAPICountsInboundTrafficUnlessDisabled(t *testing.T) {
+	system := func(raw map[string]any) map[string]any {
+		return mapValue(mapValue(raw["policy"])["system"])
+	}
+
+	raw := map[string]any{}
+	applyRuntimeAPI(raw, 62051)
+	if got := system(raw); got["statsInboundUplink"] != true || got["statsInboundDownlink"] != true {
+		t.Fatalf("inbound traffic must be counted by default, got %#v", got)
+	}
+
+	raw = map[string]any{"policy": map[string]any{"system": map[string]any{
+		"statsInboundUplink":   false,
+		"statsInboundDownlink": false,
+	}}}
+	applyRuntimeAPI(raw, 62051)
+	got := system(raw)
+	if got["statsInboundUplink"] != false || got["statsInboundDownlink"] != false {
+		t.Fatalf("an explicit choice in the core settings must be kept, got %#v", got)
+	}
+	if got["statsOutboundUplink"] != true || got["statsOutboundDownlink"] != true {
+		t.Fatalf("outbound traffic must always be counted, got %#v", got)
+	}
 }

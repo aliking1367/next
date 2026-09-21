@@ -1442,6 +1442,21 @@ VALUES ('reboot_host', '{}', 'failed', 'failed-retained', CURRENT_TIMESTAMP, CUR
 	}
 	assertRepositoryInt64(t, db, `SELECT COUNT(*) FROM node_operations WHERE status = 'done'`, 6)
 	assertRepositoryInt64(t, db, `SELECT COUNT(*) FROM node_operations WHERE status = 'failed'`, 1)
+
+	// Old failed operations (for example those of a deleted node) are pruned
+	// like done ones; pending work is never touched.
+	if _, err := db.ExecContext(ctx, `UPDATE node_operations SET status = 'failed' WHERE idempotency_key IN ('done-2', 'done-3')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE node_operations SET status = 'pending' WHERE idempotency_key = 'done-4'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.PruneFinishedOperations(ctx, 3, 100); err != nil {
+		t.Fatal(err)
+	}
+	assertRepositoryInt64(t, db, `SELECT COUNT(*) FROM node_operations WHERE idempotency_key IN ('done-2', 'done-3')`, 0)
+	assertRepositoryInt64(t, db, `SELECT COUNT(*) FROM node_operations WHERE idempotency_key = 'done-4' AND status = 'pending'`, 1)
+	assertRepositoryInt64(t, db, `SELECT COUNT(*) FROM node_operations WHERE status IN ('done', 'failed')`, 3)
 }
 
 func TestRepositoryQueueCommandPersistsBeforeExecution(t *testing.T) {

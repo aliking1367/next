@@ -252,6 +252,11 @@ func TestPhase9AdminGlobalAndPerServiceLimitsRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected service limit payload: %#v", limit)
 	}
 
+	// A reseller must see their own expiry on the My Account page.
+	accountExpire := time.Now().Add(30 * 24 * time.Hour).Unix()
+	if _, err := db.Exec(`UPDATE admins SET expire = ? WHERE username = 'serviceadmin'`, accountExpire); err != nil {
+		t.Fatal(err)
+	}
 	serviceToken := adminBearerToken(t, server, "serviceadmin", "pass123")
 	rec = adminJSONRequest(t, server, http.MethodGet, "/api/myaccount", serviceToken, ``)
 	if rec.Code != http.StatusOK {
@@ -263,6 +268,9 @@ func TestPhase9AdminGlobalAndPerServiceLimitsRoundTrip(t *testing.T) {
 	}
 	if account["use_service_traffic_limits"] != true || len(account["service_limits"].([]any)) != 1 {
 		t.Fatalf("unexpected myaccount limits: %#v", account)
+	}
+	if got, ok := account["expire"].(float64); !ok || int64(got) != accountExpire {
+		t.Fatalf("myaccount expire = %#v, want %d", account["expire"], accountExpire)
 	}
 }
 

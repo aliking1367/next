@@ -1093,6 +1093,24 @@ export const MyAccountPage: React.FC = () => {
 												}
 											/>
 										</SimpleGrid>
+										<HStack spacing={2} mt={3} fontSize="sm" flexWrap="wrap">
+											<Text color="panel.textSecondary">
+												{t("myaccount.accountExpire")}:
+											</Text>
+											<Text fontWeight="semibold">
+												{data.expire && data.expire > 0
+													? t("myaccount.accountExpireOn", {
+															date: dayjs.unix(data.expire).format("YYYY-MM-DD"),
+															days: Math.max(
+																0,
+																Math.ceil(
+																	(data.expire - Date.now() / 1000) / 86400,
+																),
+															),
+														})
+													: t("myaccount.unlimited")}
+											</Text>
+										</HStack>
 									</Box>
 								</SimpleGrid>
 							</ChartBox>

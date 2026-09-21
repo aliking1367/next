@@ -240,7 +240,10 @@ export const DashboardBackupControls = ({
 							<FormControl isRequired>
 								<FormLabel fontSize="13px" fontWeight="600" color="panel.textSecondary">{t("dashboard.backup.file")}</FormLabel>
 								<FileDropzone
-									accept=".rbbackup"
+									// Phone file pickers grey out unknown extensions such as
+									// .rbbackup unless a generic type is allowed too; the
+									// server detects the format from the file contents.
+									accept=".rbbackup,application/gzip,application/x-gzip,application/octet-stream"
 									isDisabled={
 										!backupActionsAvailable || importMutation.isLoading
 									}

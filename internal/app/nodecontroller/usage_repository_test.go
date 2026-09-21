@@ -761,3 +761,55 @@ func assertString(t *testing.T, db *sql.DB, query string, expected string) {
 		t.Fatalf("%s: expected %q, got %q", query, expected, actual)
 	}
 }
+
+func TestRepositoryUsageHistorySkipsRowsOfRemovedUsersAndNodes(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "usage-orphans.db")+"?_pragma=busy_timeout(30000)&_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	createUsageTables(t, ctx, db)
+	// Production history tables reference users and nodes.
+	_, err = db.ExecContext(ctx, `
+DROP TABLE node_user_usages;
+DROP TABLE node_usages;
+CREATE TABLE node_user_usages (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME NOT NULL, user_id INTEGER NULL REFERENCES users(id), node_id INTEGER NULL REFERENCES nodes(id), used_traffic INTEGER NOT NULL DEFAULT 0, UNIQUE(created_at, user_id, node_id));
+CREATE TABLE node_usages (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME NOT NULL, node_id INTEGER NULL REFERENCES nodes(id), uplink INTEGER NOT NULL DEFAULT 0, downlink INTEGER NOT NULL DEFAULT 0, UNIQUE(created_at, node_id));
+INSERT INTO admins (id, users_usage, lifetime_usage) VALUES (1, 0, 0);
+INSERT INTO services (id, used_traffic, lifetime_used_traffic, users_usage, updated_at) VALUES (2, 0, 0, 0, CURRENT_TIMESTAMP);
+INSERT INTO admins_services (admin_id, service_id, used_traffic, lifetime_used_traffic, updated_at) VALUES (1, 2, 0, 0, CURRENT_TIMESTAMP);
+INSERT INTO users (id, status, used_traffic, data_limit, admin_id, service_id) VALUES (10, 'active', 0, NULL, 1, 2), (11, 'active', 0, NULL, 1, 2);
+INSERT INTO nodes (id, status, uplink, downlink, data_limit, usage_coefficient) VALUES (7, 'connected', 0, 0, NULL, 1), (8, 'connected', 0, 0, NULL, 1);
+INSERT INTO inbounds (tag) VALUES ('direct');
+INSERT INTO system (id, uplink, downlink) VALUES (1, 0, 0);`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewRepository(db, "sqlite")
+	for _, node := range []int64{7, 8} {
+		if err := repo.StoreCollectedUsageWithInbounds(ctx, NodeRow{ID: node, UsageCoefficient: 1},
+			"users-batch", []UserUsageDelta{{UserID: 10, Value: 100, Online: true}, {UserID: 11, Value: 50, Online: true}},
+			"out-batch", []OutboundUsageDelta{{Tag: "direct", Up: 1, Down: 2}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repo.FlushStagedUsage(ctx, 100); err != nil {
+		t.Fatal(err)
+	}
+	// User 11 and node 8 are removed by hand before the history is written.
+	if _, err := db.ExecContext(ctx, `DELETE FROM users WHERE id = 11; DELETE FROM nodes WHERE id = 8;`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := repo.FlushStagedUsageHistory(ctx, 100, UsagePersistOptions{}); err != nil {
+		t.Fatalf("orphaned rows must not block the history flush: %v", err)
+	}
+	assertInt64(t, db, `SELECT used_traffic FROM node_user_usages WHERE user_id = 10 AND node_id = 7`, 100)
+	assertInt64(t, db, `SELECT COUNT(*) FROM node_user_usages WHERE user_id = 11 OR node_id = 8`, 0)
+	assertInt64(t, db, `SELECT COUNT(*) FROM node_usages WHERE node_id = 7`, 1)
+	// Orphans are marked processed so they are pruned instead of piling up.
+	assertInt64(t, db, `SELECT COUNT(*) FROM node_usage_user_queue WHERE history_processed_at IS NULL`, 0)
+	assertInt64(t, db, `SELECT COUNT(*) FROM node_usage_outbound_queue WHERE history_processed_at IS NULL`, 0)
+}
