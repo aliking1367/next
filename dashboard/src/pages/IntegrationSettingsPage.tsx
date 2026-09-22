@@ -61,6 +61,7 @@ import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { Link as RouterLink } from "react-router-dom";
 import { fetch as apiFetch } from "service/http";
+import { SubscriptionTemplateGallery } from "components/SubscriptionTemplateGallery";
 import {
 	type AdminSubscriptionUpdatePayload,
 	type AdminSubscriptionSettings,
@@ -2866,6 +2867,22 @@ export const IntegrationSettingsPage = () => {
 												{...subscriptionRegister("subscription_page_template")}
 											/>
 										</HStack>
+									</FormControl>
+									<FormControl gridColumn="1 / -1">
+										<FormLabel>
+											{t("settings.subscriptions.templateGallery.title")}
+										</FormLabel>
+										<FormHelperText mt={0} mb={3}>
+											{t("settings.subscriptions.templateGallery.hint")}
+										</FormHelperText>
+										<SubscriptionTemplateGallery
+											value={watchSubscription("subscription_page_template")}
+											onSelect={(name) =>
+												setSubscriptionValue("subscription_page_template", name, {
+													shouldDirty: true,
+												})
+											}
+										/>
 									</FormControl>
 									<FormControl>
 										<FormLabel>

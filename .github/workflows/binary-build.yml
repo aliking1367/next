@@ -85,9 +85,15 @@ jobs:
           bash scripts/next/test-node-installer.sh
           bash scripts/next/test-initial-admin.sh
           bash scripts/next/test-dev-channel.sh
+          bash scripts/next/test-templates-install.sh
 
       - name: Test node wire compatibility
         run: go test ./internal/proto/node/v1
+
+      - name: Test subscription page templates
+        run: |
+          go test ./internal/app/user -run 'TestSubscriptionPageTemplatesRender|TestSubscriptionProfileTitle'
+          go test ./internal/app/api -run 'TestSubscriptionPageTemplateGallery'
 
       - name: Upload dashboard
         uses: actions/upload-artifact@v4

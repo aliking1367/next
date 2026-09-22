@@ -3516,6 +3516,23 @@ EOF
     systemctl daemon-reload
 }
 
+# Installs the release's page and subscription templates (subscription page,
+# home page, Clash, sing-box, v2ray JSON). The server looks for them in
+# $APP_DIR/templates (its working directory); without this every binary
+# install silently used the plain built-in fallback pages. Only the bundled
+# set is replaced - custom templates live in their own directory.
+install_binary_templates() {
+    local source_dir="$1"
+    local target_dir="$APP_DIR/templates"
+    if [ ! -d "$source_dir" ]; then
+        return 0
+    fi
+    rm -rf "$target_dir.new"
+    cp -R "$source_dir" "$target_dir.new"
+    rm -rf "$target_dir"
+    mv "$target_dir.new" "$target_dir"
+}
+
 install_binary_next() {
     local next_version="$1"
     local database_type="$2"
@@ -3609,6 +3626,7 @@ install_binary_next() {
     install -m 755 "$tmp_dir/next-server" "$BINARY_SERVER"
     install -m 755 "$tmp_dir/next-cli" "$BINARY_CLI"
     install_binary_cli_launcher
+    install_binary_templates "$tmp_dir/templates"
 
     if [ ! -f "$ENV_FILE" ]; then
         ui_spinner_run "Fetching default .env file" curl -fsSL "$NEXT_RAW_BASE/.env.example" -o "$ENV_FILE"

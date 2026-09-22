@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="midnight">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <meta name="theme-color" content="#080b16">
+    <title>{{ user.username }}</title>
+    <!-- Next Pass subscription page, theme "midnight" (subscription/midnight.html).
+         All Next Pass themes share this markup; only the theme variables differ.
+         Built to stay light on low-end phones: no backdrop blur, no animated
+         filters, and the QR library only loads when a code is first shown. -->
+    <style>
+        @font-face { font-family: "Arad"; src: url("/statics/fonts/Arad-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+        @font-face { font-family: "Arad"; src: url("/statics/fonts/Arad-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+
+        /* ---------- themes ---------- */
+        :root[data-theme="midnight"] {
+            color-scheme: dark;
+            --page: radial-gradient(1200px 600px at 50% -10%, #1b2345 0%, #080b16 60%) fixed, #080b16;
+            --text: #eef1fb; --muted: #97a0bd; --faint: rgba(255,255,255,.06); --line: rgba(255,255,255,.09);
+            --surface: #0f1426; --surface-2: #151b31;
+            --accent: #e3b95f; --accent-ink: #1a1405; --accent-soft: rgba(227,185,95,.14);
+            --card-bg: linear-gradient(135deg, #111a36 0%, #232055 52%, #0d1430 100%);
+            --card-pattern: repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 2px, transparent 2px 14px);
+            --card-text: #f5f1e6; --card-muted: rgba(245,241,230,.62); --card-edge: rgba(227,185,95,.35);
+            --chip: linear-gradient(135deg, #f4dc9b, #b8893a);
+            --ok: #4ade80; --warn: #fbbf24; --bad: #fb7185; --idle: #94a3b8;
+        }
+        :root[data-theme="pearl"] {
+            color-scheme: light;
+            --page: radial-gradient(1000px 520px at 50% -12%, #e9ecff 0%, #f6f7fb 62%) fixed, #f6f7fb;
+            --text: #141a2e; --muted: #667089; --faint: #eef0f6; --line: #e3e6ef;
+            --surface: #ffffff; --surface-2: #f8f9fc;
+            --accent: #4f46e5; --accent-ink: #ffffff; --accent-soft: rgba(79,70,229,.10);
+            --card-bg: linear-gradient(135deg, #ffffff 0%, #eef0ff 38%, #fbeff7 70%, #eafaff 100%);
+            --card-pattern: radial-gradient(circle at 85% 20%, rgba(79,70,229,.10) 0 90px, transparent 91px), radial-gradient(circle at 10% 110%, rgba(236,72,153,.08) 0 120px, transparent 121px);
+            --card-text: #141a2e; --card-muted: #6b7390; --card-edge: rgba(79,70,229,.18);
+            --chip: linear-gradient(135deg, #e7e9f2, #b9bfd3);
+            --ok: #16a34a; --warn: #d97706; --bad: #e11d48; --idle: #64748b;
+        }
+        :root[data-theme="ember"] {
+            color-scheme: dark;
+            --page: radial-gradient(1100px 560px at 50% -12%, #3a1606 0%, #0d0806 60%) fixed, #0d0806;
+            --text: #fbefe6; --muted: #bba08e; --faint: rgba(255,255,255,.06); --line: rgba(255,255,255,.09);
+            --surface: #171009; --surface-2: #1e150d;
+            --accent: #fb8a3c; --accent-ink: #1d0b00; --accent-soft: rgba(251,138,60,.14);
+            --card-bg: linear-gradient(135deg, #2a0e02 0%, #8a2c0c 55%, #3b1204 100%);
+            --card-pattern: repeating-radial-gradient(circle at 110% -10%, rgba(255,200,150,.05) 0 2px, transparent 2px 18px);
+            --card-text: #fff4ea; --card-muted: rgba(255,244,234,.65); --card-edge: rgba(251,138,60,.4);
+            --chip: linear-gradient(135deg, #ffd9a8, #c47a2c);
+            --ok: #86efac; --warn: #fcd34d; --bad: #fda4af; --idle: #a8a29e;
+        }
+
+        /* ---------- base ---------- */
+        * { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+        html, body { margin: 0; }
+        body {
+            min-height: 100vh; background: var(--page); color: var(--text);
+            font: 15px/1.6 "Arad", Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased; overflow-x: hidden;
+        }
+        :root[dir="ltr"] body { font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif; }
+        button { font: inherit; color: inherit; }
+        a { color: inherit; }
+        .mono { font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; }
+        .wrap { width: min(720px, 100%); margin: 0 auto; padding: 22px 16px 44px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+        .section { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; }
+        .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .section-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+        .section-head small { color: var(--muted); font-size: 12px; }
+        .hint { margin: -4px 0 12px; color: var(--muted); font-size: 13px; }
+
+        /* ---------- top bar ---------- */
+        .topbar { display: flex; align-items: center; justify-content: space-between; }
+        .brand { font-weight: 700; letter-spacing: .18em; font-size: 12px; color: var(--muted); }
+        .brand b { color: var(--accent); }
+        .lang { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+        /* ---------- the pass card (tap to flip) ---------- */
+        .pass-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+        .pass { display: block; width: 100%; max-width: 420px; aspect-ratio: 1.586; perspective: 1400px; cursor: pointer; border: 0; padding: 0; background: none; -webkit-tap-highlight-color: transparent; }
+        .pass-inner { display: block; position: relative; width: 100%; height: 100%; transition: transform .6s cubic-bezier(.2,.7,.2,1); transform-style: preserve-3d; }
+        .pass.flipped .pass-inner { transform: rotateY(180deg); }
+        .face {
+            position: absolute; inset: 0; border-radius: 22px; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+            background: var(--card-pattern), var(--card-bg); color: var(--card-text);
+            border: 1px solid var(--card-edge); box-shadow: 0 18px 40px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.12);
+            padding: 20px 22px; display: flex; flex-direction: column; text-align: start;
+        }
+        .face.back { transform: rotateY(180deg); align-items: center; justify-content: center; gap: 10px; text-align: center; }
+        .pass-top { display: flex; justify-content: space-between; align-items: center; }
+        .pass-brand { font-size: 12px; font-weight: 700; letter-spacing: .22em; color: var(--accent); direction: ltr; }
+        .chip { display: block; width: 42px; height: 32px; border-radius: 7px; background: var(--chip); margin-top: 14px; position: relative; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+        .chip::before, .chip::after { content: ""; position: absolute; inset: 7px 0; border-top: 1px solid rgba(0,0,0,.22); border-bottom: 1px solid rgba(0,0,0,.22); }
+        .chip::after { inset: 0 13px; border: 0; border-left: 1px solid rgba(0,0,0,.22); border-right: 1px solid rgba(0,0,0,.22); }
+        .pass-name { display: block; margin-top: auto; font-size: clamp(20px, 5.4vw, 26px); font-weight: 700; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pass-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: 6px; }
+        .pass-field small { display: block; font-size: 10px; letter-spacing: .12em; color: var(--card-muted); }
+        .pass-field strong { display: block; font-size: 14px; }
+        .pass-field.end { text-align: end; }
+        .qr-mini { display: grid; place-items: center; width: 56%; aspect-ratio: 1; background: #fff; border-radius: 12px; padding: 8px; color: #333; font-size: 12px; }
+        .qr-mini img, .qr-mini canvas { width: 100% !important; height: auto !important; }
+        .back small { color: var(--card-muted); font-size: 12px; }
+        .flip-hint { margin: 0; color: var(--muted); font-size: 12px; }
+
+        .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(0,0,0,.25); }
+        :root[data-theme="pearl"] .pill { background: rgba(20,26,46,.06); }
+        .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        .pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); } .pill.idle { color: var(--idle); }
+
+        .banner { border-radius: 14px; padding: 11px 14px; font-size: 14px; border: 1px solid currentColor; background: var(--surface); }
+        .banner.bad { color: var(--bad); } .banner.warn { color: var(--warn); }
+
+        /* ---------- usage cells ---------- */
+        .cells { display: grid; grid-template-columns: repeat(20, 1fr); gap: 4px; direction: ltr; }
+        :root[dir="rtl"] .cells { direction: rtl; }
+        .cells i { display: block; height: 26px; border-radius: 5px; background: var(--faint); }
+        .cells i.on { background: var(--accent); }
+        .cells i.hot { background: var(--bad); }
+        .usage-line { display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; gap: 8px; }
+        .usage-line strong { font-size: 22px; }
+        .usage-line span { color: var(--muted); font-size: 13px; }
+        .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+        .stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+        .stat span { display: block; color: var(--muted); font-size: 12px; }
+        .stat strong { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .reset { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+
+        /* ---------- buttons ---------- */
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; text-decoration: none;
+            padding: 10px 15px; border-radius: 12px; font-weight: 700; font-size: 14px;
+            background: var(--surface-2); border: 1px solid var(--line); transition: transform .12s ease;
+        }
+        .btn:active { transform: scale(.97); }
+        .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+        .btn.small { padding: 6px 11px; font-size: 12px; }
+        .btn svg, .icon svg { width: 18px; height: 18px; flex: none; }
+        .sub-url { display: block; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px dashed var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); direction: ltr; text-align: left; word-break: break-all; max-height: 4.8em; overflow: hidden; }
+
+        /* ---------- apps ---------- */
+        .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 12px; scrollbar-width: none; }
+        .tab { flex: none; cursor: pointer; border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 13px; font-size: 13px; color: var(--muted); }
+        .tab[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 700; }
+        .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+        .app { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); text-decoration: none; font-weight: 700; font-size: 14px; }
+        .app:active { transform: scale(.98); }
+        .app-mark { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; font-size: 12px; font-weight: 700; color: #fff; direction: ltr; }
+
+        /* ---------- configs ---------- */
+        .cfg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+        .cfg { display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+        .proto { flex: none; min-width: 52px; text-align: center; font-size: 10.5px; font-weight: 700; padding: 3px 6px; border-radius: 7px; color: #fff; letter-spacing: .03em; direction: ltr; }
+        .cfg-main { flex: 1; min-width: 0; display: grid; }
+        .cfg-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cfg-host { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; text-align: left; }
+        :root[dir="rtl"] .cfg-host { text-align: right; }
+        .cfg-actions { display: flex; gap: 6px; flex: none; }
+        .icon { width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+        .icon:active { transform: scale(.94); }
+
+        /* ---------- VPN accounts ---------- */
+        .vpn-group + .vpn-group { margin-top: 14px; }
+        .vpn-group h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+        .row-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+        .row-item + .row-item { margin-top: 8px; }
+        .cred { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+        .cred + .cred { margin-top: 8px; }
+        .cred-title { font-weight: 700; font-size: 14px; }
+        .cred-line { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: 13px; }
+        .cred-line span { color: var(--muted); }
+        .cred-line code { font-family: ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; direction: ltr; text-align: end; }
+        .cred-line .icon { width: 30px; height: 30px; }
+
+        .notice { text-align: center; color: var(--muted); }
+        .foot { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+
+        /* ---------- overlays ---------- */
+        .modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.62); }
+        .modal-box { width: min(340px, 100%); text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; }
+        .qr-box { background: #fff; border-radius: 14px; padding: 14px; display: grid; place-items: center; margin-bottom: 10px; min-height: 120px; color: #333; }
+        .qr-box img, .qr-box canvas { max-width: 100%; height: auto !important; }
+        .qr-label { margin: 0 0 12px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+        .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 16px); opacity: 0; z-index: 60; padding: 9px 18px; border-radius: 999px; background: var(--text); color: var(--surface); font-weight: 700; font-size: 14px; transition: opacity .2s ease, transform .2s ease; pointer-events: none; }
+        .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+        @media (max-width: 520px) {
+            .stat strong { font-size: 14px; }
+            .cells { gap: 3px; } .cells i { height: 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <div class="topbar">
+            <span class="brand" dir="ltr"><b>NEXT</b> PASS</span>
+            <button class="lang" id="lang" type="button" aria-label="Language">EN</button>
+        </div>
+
+        <div class="pass-wrap">
+            <button class="pass" id="pass" type="button" aria-pressed="false">
+                <span class="pass-inner">
+                    <span class="face front">
+                        <span class="pass-top">
+                            <span class="pass-brand">NEXT PASS</span>
+                            <span class="pill" id="status"></span>
+                        </span>
+                        <span class="chip" aria-hidden="true"></span>
+                        <span class="pass-name"><bdi>{{ user.username }}</bdi></span>
+                        <span class="pass-bottom">
+                            <span class="pass-field"><small data-i="validThru"></small><strong id="validThru">&ndash;</strong></span>
+                            <span class="pass-field end"><small data-i="plan"></small><strong>{% if user.service_name %}{{ user.service_name }}{% else %}<span data-i="standard"></span>{% endif %}</strong></span>
+                        </span>
+                    </span>
+                    <span class="face back">
+                        <span class="qr-mini" id="passQr"></span>
+                        <small data-i="scanToImport"></small>
+                    </span>
+                </span>
+            </button>
+            <p class="flip-hint" data-i="flipHint"></p>
+        </div>
+
+        <div class="banner" id="banner" hidden></div>
+
+        <section class="section">
+            <div class="section-head"><h2 data-i="usage"></h2><small id="percentText"></small></div>
+            <div class="cells" id="cells" aria-hidden="true"></div>
+            <div class="usage-line"><strong id="used">&ndash;</strong><span id="ofTotal"></span></div>
+            <div class="stats">
+                <div class="stat"><span data-i="remaining"></span><strong id="remaining">&ndash;</strong></div>
+                <div class="stat"><span data-i="daysLeftLabel"></span><strong id="daysLeft">&ndash;</strong></div>
+                <div class="stat"><span data-i="expires"></span><strong id="expires">&ndash;</strong></div>
+            </div>
+            <p class="reset" id="reset" hidden></p>
+        </section>
+
+        <section class="section">
+            <div class="section-head"><h2 data-i="subscription"></h2></div>
+            <p class="hint" data-i="subHint"></p>
+            <code class="sub-url mono" id="subUrl"></code>
+            <div class="actions">
+                <button class="btn primary" type="button" id="copySub">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>
+                    <span data-i="copyLink"></span>
+                </button>
+                <button class="btn" type="button" id="qrSub">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"></path></svg>
+                    <span data-i="showQr"></span>
+                </button>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head"><h2 data-i="addToApp"></h2></div>
+            <p class="hint" data-i="appHint"></p>
+            <div class="tabs" id="osTabs" role="tablist"></div>
+            <div class="apps" id="appGrid"></div>
+        </section>
+
+        {% if user.status == "active" or user.status == "on_hold" or user.placeholder %}
+        <section class="section">
+            <div class="section-head">
+                <h2 data-i="configs"></h2>
+                <button class="btn small" type="button" id="copyAll"><span data-i="copyAll"></span></button>
+            </div>
+            <ul class="cfg-list" id="configList">
+                {% for link in user.links %}
+                <li class="cfg" data-link="{{ link }}">
+                    <span class="proto"></span>
+                    <span class="cfg-main"><strong class="cfg-name" dir="auto"></strong><small class="cfg-host"></small></span>
+                    <span class="cfg-actions">
+                        <button class="icon" type="button" data-action="copy" data-i-label="copy">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>
+                        </button>
+                        <button class="icon" type="button" data-action="qr" data-i-label="showQr">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"></path></svg>
+                        </button>
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        {% if openvpn.profiles or wireguard.profiles or amneziawg.profiles or l2tp or pptp or ikev2 or anyconnect or sstp %}
+        <section class="section">
+            <div class="section-head"><h2 data-i="vpnAccounts"></h2></div>
+            {% if wireguard.profiles %}
+            <div class="vpn-group">
+                <h3>WIREGUARD</h3>
+                {% for item in wireguard.profiles %}
+                <div class="row-item">
+                    <strong dir="auto">{% if item.Remark %}{{ item.Remark }}{% else %}{{ item.Filename }}{% endif %}</strong>
+                    <span class="cfg-actions">
+                        {% if item.Link %}<button class="icon" type="button" data-copy="{{ item.Link }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button>{% endif %}
+                        {% if item.DownloadURL %}<a class="btn" href="{{ item.DownloadURL }}" data-i="download"></a>{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if amneziawg.profiles %}
+            <div class="vpn-group">
+                <h3>AMNEZIAWG</h3>
+                {% for item in amneziawg.profiles %}
+                <div class="row-item">
+                    <strong dir="auto">{% if item.Remark %}{{ item.Remark }}{% else %}{{ item.Filename }}{% endif %}</strong>
+                    {% if item.DownloadURL %}<a class="btn" href="{{ item.DownloadURL }}" data-i="download"></a>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if openvpn.profiles %}
+            <div class="vpn-group">
+                <h3>OPENVPN</h3>
+                {% for item in openvpn.profiles %}
+                <div class="row-item">
+                    <strong dir="auto">{% if item.Remark %}{{ item.Remark }}{% else %}{{ item.Filename }}{% endif %}</strong>
+                    {% if item.DownloadURL %}<a class="btn" href="{{ item.DownloadURL }}" data-i="download"></a>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if l2tp %}
+            <div class="vpn-group">
+                <h3>L2TP / IPSec</h3>
+                {% for item in l2tp %}
+                <div class="cred">
+                    <div class="cred-title" dir="auto">{% if item.HostName %}{{ item.HostName }}{% else %}{{ item.Server }}{% endif %}</div>
+                    <div class="cred-line"><span data-i="server"></span><code dir="ltr">{{ item.Server }}</code><button class="icon" type="button" data-copy="{{ item.Server }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>
+                    {% if item.Username %}<div class="cred-line"><span data-i="username"></span><code dir="ltr">{{ item.Username }}</code><button class="icon" type="button" data-copy="{{ item.Username }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                    {% if item.Password %}<div class="cred-line"><span data-i="password"></span><code dir="ltr">{{ item.Password }}</code><button class="icon" type="button" data-copy="{{ item.Password }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                    {% if item.IPSecPSK %}<div class="cred-line"><span data-i="psk"></span><code dir="ltr">{{ item.IPSecPSK }}</code><button class="icon" type="button" data-copy="{{ item.IPSecPSK }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if ikev2 %}
+            <div class="vpn-group">
+                <h3>IKEv2</h3>
+                {% for item in ikev2 %}
+                <div class="cred">
+                    <div class="cred-title" dir="auto">{% if item.HostName %}{{ item.HostName }}{% else %}{{ item.Server }}{% endif %}</div>
+                    <div class="cred-line"><span data-i="server"></span><code dir="ltr">{{ item.Server }}{% if item.Port %}:{{ item.Port }}{% endif %}</code><button class="icon" type="button" data-copy="{{ item.Server }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>
+                    {% if item.Username %}<div class="cred-line"><span data-i="username"></span><code dir="ltr">{{ item.Username }}</code><button class="icon" type="button" data-copy="{{ item.Username }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                    {% if item.Password %}<div class="cred-line"><span data-i="password"></span><code dir="ltr">{{ item.Password }}</code><button class="icon" type="button" data-copy="{{ item.Password }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if anyconnect %}
+            <div class="vpn-group">
+                <h3>AnyConnect</h3>
+                {% for item in anyconnect %}
+                <div class="cred">
+                    <div class="cred-title" dir="auto">{% if item.HostName %}{{ item.HostName }}{% else %}{{ item.Server }}{% endif %}</div>
+                    <div class="cred-line"><span data-i="server"></span><code dir="ltr">{{ item.Server }}{% if item.Port %}:{{ item.Port }}{% endif %}</code><button class="icon" type="button" data-copy="{{ item.Server }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>
+                    {% if item.Username %}<div class="cred-line"><span data-i="username"></span><code dir="ltr">{{ item.Username }}</code><button class="icon" type="button" data-copy="{{ item.Username }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                    {% if item.Password %}<div class="cred-line"><span data-i="password"></span><code dir="ltr">{{ item.Password }}</code><button class="icon" type="button" data-copy="{{ item.Password }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if sstp %}
+            <div class="vpn-group">
+                <h3>SSTP</h3>
+                {% for item in sstp %}
+                <div class="cred">
+                    <div class="cred-title" dir="auto">{% if item.HostName %}{{ item.HostName }}{% else %}{{ item.Server }}{% endif %}</div>
+                    <div class="cred-line"><span data-i="server"></span><code dir="ltr">{{ item.Server }}{% if item.Port %}:{{ item.Port }}{% endif %}</code><button class="icon" type="button" data-copy="{{ item.Server }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>
+                    {% if item.Username %}<div class="cred-line"><span data-i="username"></span><code dir="ltr">{{ item.Username }}</code><button class="icon" type="button" data-copy="{{ item.Username }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                    {% if item.Password %}<div class="cred-line"><span data-i="password"></span><code dir="ltr">{{ item.Password }}</code><button class="icon" type="button" data-copy="{{ item.Password }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if pptp %}
+            <div class="vpn-group">
+                <h3>PPTP</h3>
+                {% for item in pptp %}
+                <div class="cred">
+                    <div class="cred-title" dir="auto">{% if item.HostName %}{{ item.HostName }}{% else %}{{ item.Server }}{% endif %}</div>
+                    <div class="cred-line"><span data-i="server"></span><code dir="ltr">{{ item.Server }}{% if item.Port %}:{{ item.Port }}{% endif %}</code><button class="icon" type="button" data-copy="{{ item.Server }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>
+                    {% if item.Username %}<div class="cred-line"><span data-i="username"></span><code dir="ltr">{{ item.Username }}</code><button class="icon" type="button" data-copy="{{ item.Username }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                    {% if item.Password %}<div class="cred-line"><span data-i="password"></span><code dir="ltr">{{ item.Password }}</code><button class="icon" type="button" data-copy="{{ item.Password }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button></div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+        {% endif %}
+        {% else %}
+        <section class="section notice"><p data-i="inactive"></p></section>
+        {% endif %}
+
+        <footer class="foot">
+            <a class="btn" href="{{ usage_url }}" data-i="usageLink"></a>
+            {% if support_url %}<a class="btn" href="{{ support_url }}" target="_blank" rel="noopener noreferrer" data-i="support"></a>{% endif %}
+        </footer>
+    </main>
+
+    <div class="modal" id="qrModal" hidden role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <div class="qr-box" id="qrBox"></div>
+            <p class="qr-label" id="qrLabel"></p>
+            <button class="btn primary" type="button" id="qrClose" data-i="close"></button>
+        </div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div id="subData" hidden
+        data-username="{{ user.username }}"
+        data-status="{{ user.status }}"
+        data-limit="{{ user.data_limit|default:'' }}"
+        data-used="{{ user.used_traffic|default:'0' }}"
+        data-expire="{{ user.expire|default:'' }}"
+        data-reset="{{ user.data_limit_reset_strategy|default:'' }}"
+        data-sub-url="{{ user.subscription_url|default:'' }}"
+        data-now="{{ current_timestamp }}"></div>
+
+    <script>
+    (function () {
+        "use strict";
+        var TEXT = {
+            fa: {
+                usage: "مصرف", remaining: "باقی‌مانده", expires: "تاریخ انقضا", daysLeftLabel: "روز مانده",
+                unlimited: "نامحدود", never: "همیشگی", expired: "تمام شده", ofTotal: "از {n}", usedOnly: "مصرف شده",
+                validThru: "معتبر تا", plan: "سرویس", standard: "استاندارد",
+                flipHint: "برای دیدن کد QR روی کارت بزنید", scanToImport: "با برنامه اسکن کنید",
+                subscription: "لینک اشتراک", subHint: "این لینک را یک‌بار در برنامه وارد کنید؛ کانفیگ‌ها خودکار به‌روز می‌شوند.",
+                copyLink: "کپی لینک", showQr: "کد QR", copy: "کپی", copyAll: "کپی همه", copied: "کپی شد", copyFailed: "کپی نشد؛ دستی انتخاب کنید",
+                addToApp: "افزودن به برنامه", appHint: "برنامه را نصب کنید، بعد روی آن بزنید تا اشتراک اضافه شود.",
+                configs: "کانفیگ‌ها", vpnAccounts: "حساب‌های VPN", download: "دانلود",
+                server: "سرور", username: "نام کاربری", password: "رمز", psk: "کلید مشترک",
+                inactive: "اشتراک شما فعال نیست. برای تمدید با پشتیبانی تماس بگیرید.",
+                usageLink: "جزئیات مصرف", support: "پشتیبانی", close: "بستن", qrUnavailable: "کد QR بارگذاری نشد؛ لینک را کپی کنید.",
+                reset: { day: "حجم هر روز صفر می‌شود", week: "حجم هر هفته صفر می‌شود", month: "حجم هر ماه صفر می‌شود", year: "حجم هر سال صفر می‌شود" },
+                status: { active: "فعال", on_hold: "در انتظار", limited: "حجم تمام", expired: "منقضی", disabled: "غیرفعال" },
+                banner: { limited: "حجم اشتراک شما تمام شده است.", expired: "اشتراک شما منقضی شده است.", disabled: "اشتراک شما غیرفعال شده است.", soon: "فقط {n} روز از اشتراک شما مانده است." },
+                os: { android: "اندروید", ios: "آیفون", windows: "ویندوز", mac: "مک", linux: "لینوکس" }
+            },
+            en: {
+                usage: "Usage", remaining: "Remaining", expires: "Expires on", daysLeftLabel: "Days left",
+                unlimited: "Unlimited", never: "Never", expired: "Ended", ofTotal: "of {n}", usedOnly: "used",
+                validThru: "VALID THRU", plan: "PLAN", standard: "Standard",
+                flipHint: "Tap the card to show its QR code", scanToImport: "Scan with your app",
+                subscription: "Subscription link", subHint: "Add this link to your app once; configs then update on their own.",
+                copyLink: "Copy link", showQr: "QR code", copy: "Copy", copyAll: "Copy all", copied: "Copied", copyFailed: "Copy failed; select it manually",
+                addToApp: "Add to app", appHint: "Install an app, then tap it here to import the subscription.",
+                configs: "Configs", vpnAccounts: "VPN accounts", download: "Download",
+                server: "Server", username: "Username", password: "Password", psk: "Pre-shared key",
+                inactive: "Your subscription is not active. Contact support to renew it.",
+                usageLink: "Usage details", support: "Support", close: "Close", qrUnavailable: "QR code could not load; copy the link instead.",
+                reset: { day: "Data resets every day", week: "Data resets every week", month: "Data resets every month", year: "Data resets every year" },
+                status: { active: "Active", on_hold: "On hold", limited: "Limited", expired: "Expired", disabled: "Disabled" },
+                banner: { limited: "Your data limit has been reached.", expired: "Your subscription has expired.", disabled: "Your subscription is disabled.", soon: "Only {n} days left on your subscription." },
+                os: { android: "Android", ios: "iPhone", windows: "Windows", mac: "macOS", linux: "Linux" }
+            }
+        };
+        var STATUS_TONE = { active: "ok", on_hold: "warn", limited: "bad", expired: "bad", disabled: "idle" };
+        var PROTOCOLS = {
+            vless: ["VLESS", "#6d28d9"], vmess: ["VMESS", "#1d4ed8"], trojan: ["TROJAN", "#be185d"],
+            ss: ["SS", "#0e7490"], hysteria2: ["HY2", "#c2410c"], hy2: ["HY2", "#c2410c"], hysteria: ["HY", "#c2410c"],
+            tuic: ["TUIC", "#15803d"], wireguard: ["WG", "#475569"], ssh: ["SSH", "#334155"]
+        };
+        var APPS = [
+            { name: "v2rayNG", color: "#1565c0", os: ["android"], link: function (u, n) { return "v2rayng://install-sub?url=" + enc(u) + "&name=" + enc(n); } },
+            { name: "Hiddify", color: "#0f766e", os: ["android", "ios", "windows", "mac", "linux"], link: function (u, n) { return "hiddify://import/" + u + "#" + enc(n); } },
+            { name: "Happ", color: "#6d28d9", os: ["android", "ios", "windows", "mac"], link: function (u) { return "happ://add/" + u; } },
+            { name: "Streisand", color: "#111827", os: ["ios", "mac"], link: function (u, n) { return "streisand://import/" + u + "#" + enc(n); } },
+            { name: "V2Box", color: "#1d4ed8", os: ["ios", "mac"], link: function (u, n) { return "v2box://install-sub?url=" + enc(u) + "&name=" + enc(n); } },
+            { name: "Karing", color: "#be185d", os: ["android", "ios", "windows", "mac", "linux"], link: function (u, n) { return "karing://install-config?url=" + enc(u) + "&name=" + enc(n); } },
+            { name: "Clash Verge", color: "#4338ca", os: ["windows", "mac", "linux"], link: function (u, n) { return "clash://install-config?url=" + enc(u) + "&name=" + enc(n); } },
+            { name: "sing-box", color: "#374151", os: ["android", "ios", "mac"], link: function (u, n) { return "sing-box://import-remote-profile?url=" + enc(u) + "#" + enc(n); } }
+        ];
+        var OS_ORDER = ["android", "ios", "windows", "mac", "linux"];
+        var QR_SOURCES = ["https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js", "https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"];
+
+        var data = document.getElementById("subData").dataset;
+        var lang = storedLang() || defaultLang();
+        var osSelected = detectOS();
+        var passQrDrawn = false;
+
+        function $(id) { return document.getElementById(id); }
+        function enc(value) { return encodeURIComponent(value); }
+        function num(value) { var n = Number(value); return isFinite(n) ? n : 0; }
+        function t(key) { var parts = key.split("."), value = TEXT[lang]; for (var i = 0; i < parts.length && value != null; i++) value = value[parts[i]]; return value == null ? key : value; }
+        function fill(template, n) { return String(template).replace("{n}", n); }
+        function storedLang() { try { return localStorage.getItem("next-sub-lang"); } catch (e) { return null; } }
+        function saveLang(value) { try { localStorage.setItem("next-sub-lang", value); } catch (e) { } }
+        function defaultLang() {
+            var languages = navigator.languages || [navigator.language || ""];
+            for (var i = 0; i < languages.length; i++) if (/^fa\b|^fa-/i.test(languages[i])) return "fa";
+            try { if (/Tehran/.test(Intl.DateTimeFormat().resolvedOptions().timeZone)) return "fa"; } catch (e) { }
+            return "en";
+        }
+        function detectOS() {
+            var ua = navigator.userAgent || "";
+            if (/android/i.test(ua)) return "android";
+            if (/iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+            if (/windows/i.test(ua)) return "windows";
+            if (/macintosh|mac os x/i.test(ua)) return "mac";
+            if (/linux/i.test(ua)) return "linux";
+            return "android";
+        }
+        function locale() { return lang === "fa" ? "fa-IR" : "en-US"; }
+        function formatNumber(value, digits) { return new Intl.NumberFormat(locale(), { maximumFractionDigits: digits == null ? 2 : digits }).format(value); }
+        function formatBytes(bytes) {
+            var units = lang === "fa" ? ["بایت", "کیلوبایت", "مگابایت", "گیگ", "ترابایت"] : ["B", "KB", "MB", "GB", "TB"];
+            var value = Math.max(0, bytes), unit = 0;
+            while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+            return formatNumber(value, value >= 100 || unit === 0 ? 0 : 1) + " " + units[unit];
+        }
+        function formatDate(unix, short) {
+            // On the card: 1405/07/20 in Persian, MM/YY like a bank card in English.
+            var options = !short ? { year: lang === "fa" ? "numeric" : "2-digit", month: "short", day: "numeric" }
+                : lang === "fa" ? { year: "numeric", month: "2-digit", day: "2-digit" } : { year: "2-digit", month: "2-digit" };
+            try { return new Intl.DateTimeFormat(lang === "fa" ? "fa-IR-u-ca-persian" : "en-GB", options).format(new Date(unix * 1000)); }
+            catch (e) { return new Date(unix * 1000).toISOString().slice(0, 10); }
+        }
+        function subscriptionURL() {
+            var raw = data.subUrl || "";
+            try { return new URL(raw || (location.origin + location.pathname), location.href).href; }
+            catch (e) { return location.origin + location.pathname; }
+        }
+        function parseLink(link) {
+            var scheme = (link.split("://")[0] || "").toLowerCase(), name = "", host = "";
+            try {
+                if (scheme === "vmess") {
+                    var body = link.slice(8).split("#")[0].replace(/-/g, "+").replace(/_/g, "/");
+                    while (body.length % 4) body += "=";
+                    var json = JSON.parse(decodeURIComponent(escape(atob(body))));
+                    name = json.ps || ""; host = (json.add || "") + (json.port ? ":" + json.port : "");
+                } else {
+                    var hash = link.indexOf("#");
+                    if (hash >= 0) name = decodeURIComponent(link.slice(hash + 1));
+                    host = new URL(link.replace(/^[a-z0-9+.-]+:\/\//i, "http://")).host;
+                }
+            } catch (e) { }
+            return { scheme: scheme, name: name, host: host };
+        }
+        function configLinks() {
+            return Array.prototype.map.call(document.querySelectorAll("#configList .cfg:not([hidden])"), function (item) { return item.getAttribute("data-link"); });
+        }
+
+        function toast(message) {
+            var el = $("toast");
+            el.textContent = message; el.classList.add("show");
+            clearTimeout(toast.timer); toast.timer = setTimeout(function () { el.classList.remove("show"); }, 1600);
+        }
+        function copy(text) {
+            function fallback() {
+                var area = document.createElement("textarea");
+                area.value = text; area.setAttribute("readonly", ""); area.style.position = "fixed"; area.style.opacity = "0";
+                document.body.appendChild(area); area.select();
+                var ok = false; try { ok = document.execCommand("copy"); } catch (e) { }
+                document.body.removeChild(area);
+                toast(ok ? t("copied") : t("copyFailed"));
+            }
+            if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { toast(t("copied")); }, fallback);
+            else fallback();
+        }
+
+        // The QR library is only fetched the first time a code is needed.
+        var qrWaiters = null;
+        function withQR(done) {
+            if (window.QRCode) { done(true); return; }
+            if (qrWaiters) { qrWaiters.push(done); return; }
+            qrWaiters = [done];
+            (function load(index) {
+                if (index >= QR_SOURCES.length) { finish(false); return; }
+                var script = document.createElement("script");
+                script.src = QR_SOURCES[index]; script.async = true;
+                script.onload = function () { finish(!!window.QRCode); };
+                script.onerror = function () { load(index + 1); };
+                document.head.appendChild(script);
+            })(0);
+            function finish(ok) { var list = qrWaiters; qrWaiters = null; list.forEach(function (fn) { fn(ok); }); }
+        }
+        function drawQR(target, text, size) {
+            target.textContent = "…";
+            withQR(function (ok) {
+                target.innerHTML = "";
+                if (!ok) { target.textContent = t("qrUnavailable"); return; }
+                try {
+                    new window.QRCode(target, { text: text, width: size, height: size, correctLevel: text.length > 900 ? window.QRCode.CorrectLevel.L : window.QRCode.CorrectLevel.M });
+                } catch (e) { target.textContent = t("qrUnavailable"); }
+            });
+        }
+        function showQR(text, label) {
+            $("qrLabel").textContent = label || "";
+            drawQR($("qrBox"), text, 260);
+            $("qrModal").hidden = false;
+            $("qrClose").focus();
+        }
+        function closeQR() { $("qrModal").hidden = true; }
+
+        function renderUsage() {
+            var used = num(data.used), limit = num(data.limit), expire = num(data.expire), now = num(data.now) || Math.floor(Date.now() / 1000);
+            var percent = limit > 0 ? Math.min(100, used / limit * 100) : 0;
+            var cells = $("cells");
+            if (!cells.children.length) for (var i = 0; i < 20; i++) cells.appendChild(document.createElement("i"));
+            var lit = limit > 0 ? Math.round(percent / 5) : 0;
+            Array.prototype.forEach.call(cells.children, function (cell, index) {
+                cell.className = index < lit ? (percent >= 90 ? "on hot" : "on") : "";
+            });
+            $("used").textContent = formatBytes(used);
+            $("ofTotal").textContent = limit > 0 ? fill(t("ofTotal"), formatBytes(limit)) : t("unlimited");
+            $("percentText").textContent = limit > 0 ? formatNumber(Math.round(percent), 0) + "%" : "∞";
+            $("remaining").textContent = limit > 0 ? formatBytes(Math.max(0, limit - used)) : "∞";
+            var days = expire > 0 ? Math.ceil((expire - now) / 86400) : null;
+            $("daysLeft").textContent = days === null ? "∞" : days > 0 ? formatNumber(days, 0) : t("expired");
+            $("expires").textContent = expire > 0 ? formatDate(expire) : t("never");
+            $("validThru").textContent = expire > 0 ? formatDate(expire, true) : "∞";
+            var reset = TEXT[lang].reset[data.reset];
+            $("reset").hidden = !reset; $("reset").textContent = reset || "";
+
+            var status = data.status || "active";
+            $("status").className = "pill " + (STATUS_TONE[status] || "idle");
+            $("status").textContent = t("status." + status);
+            var banner = $("banner"), message = TEXT[lang].banner[status], tone = "bad";
+            if (!message && days !== null && days > 0 && days <= 3) { message = fill(t("banner.soon"), formatNumber(days, 0)); tone = "warn"; }
+            banner.hidden = !message; banner.className = "banner " + tone; banner.textContent = message || "";
+        }
+
+        function renderApps() {
+            var tabs = $("osTabs"), grid = $("appGrid"), url = subscriptionURL(), name = data.username || "Next";
+            tabs.innerHTML = ""; grid.innerHTML = "";
+            OS_ORDER.forEach(function (os) {
+                var tab = document.createElement("button");
+                tab.type = "button"; tab.className = "tab"; tab.setAttribute("role", "tab");
+                tab.setAttribute("aria-selected", String(os === osSelected));
+                tab.textContent = t("os." + os);
+                tab.addEventListener("click", function () { osSelected = os; renderApps(); });
+                tabs.appendChild(tab);
+            });
+            APPS.filter(function (app) { return app.os.indexOf(osSelected) >= 0; }).forEach(function (app) {
+                var a = document.createElement("a");
+                a.className = "app"; a.href = app.link(url, name); a.rel = "noopener";
+                var mark = document.createElement("span");
+                mark.className = "app-mark"; mark.style.background = app.color; mark.textContent = app.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 2);
+                var label = document.createElement("span");
+                label.textContent = app.name;
+                a.appendChild(mark); a.appendChild(label);
+                grid.appendChild(a);
+            });
+        }
+
+        function renderConfigs() {
+            Array.prototype.forEach.call(document.querySelectorAll("#configList .cfg"), function (item, index) {
+                var info = parseLink(item.getAttribute("data-link") || "");
+                if (info.scheme === "http" || info.scheme === "https") { item.hidden = true; return; }
+                var proto = PROTOCOLS[info.scheme] || [info.scheme.toUpperCase().slice(0, 6), "#64748b"];
+                var badge = item.querySelector(".proto");
+                badge.textContent = proto[0]; badge.style.background = proto[1];
+                item.querySelector(".cfg-name").textContent = info.name || (proto[0] + " " + formatNumber(index + 1, 0));
+                item.querySelector(".cfg-host").textContent = info.host || "";
+            });
+        }
+
+        function applyLanguage() {
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+            $("lang").textContent = lang === "fa" ? "EN" : "فا";
+            Array.prototype.forEach.call(document.querySelectorAll("[data-i]"), function (el) { el.textContent = t(el.getAttribute("data-i")); });
+            Array.prototype.forEach.call(document.querySelectorAll("[data-i-label]"), function (el) { el.setAttribute("aria-label", t(el.getAttribute("data-i-label"))); el.title = t(el.getAttribute("data-i-label")); });
+            $("subUrl").textContent = subscriptionURL();
+            renderUsage(); renderApps(); renderConfigs();
+        }
+
+        $("lang").addEventListener("click", function () { lang = lang === "fa" ? "en" : "fa"; saveLang(lang); applyLanguage(); });
+        $("pass").addEventListener("click", function () {
+            var flipped = this.classList.toggle("flipped");
+            this.setAttribute("aria-pressed", String(flipped));
+            if (flipped && !passQrDrawn) { passQrDrawn = true; drawQR($("passQr"), subscriptionURL(), 220); }
+        });
+        $("copySub").addEventListener("click", function () { copy(subscriptionURL()); });
+        $("qrSub").addEventListener("click", function () { showQR(subscriptionURL(), t("subscription")); });
+        if ($("copyAll")) $("copyAll").addEventListener("click", function () { copy(configLinks().join("\n")); });
+        $("qrClose").addEventListener("click", closeQR);
+        $("qrModal").addEventListener("click", function (event) { if (event.target === this) closeQR(); });
+        document.addEventListener("keydown", function (event) { if (event.key === "Escape") closeQR(); });
+        document.addEventListener("click", function (event) {
+            var button = event.target.closest ? event.target.closest("button") : null;
+            if (!button) return;
+            if (button.hasAttribute("data-copy")) { copy(button.getAttribute("data-copy")); return; }
+            var item = button.closest(".cfg");
+            if (!item) return;
+            var link = item.getAttribute("data-link") || "";
+            if (button.getAttribute("data-action") === "copy") copy(link);
+            if (button.getAttribute("data-action") === "qr") showQR(link, item.querySelector(".cfg-name").textContent);
+        });
+        applyLanguage();
+    })();
+    </script>
+</body>
+</html>
