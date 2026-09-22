@@ -112,6 +112,7 @@ func (r Repository) UserGet(ctx context.Context, req UserGetRequest) (UserDetail
 		Inbounds:             row.Inbounds,
 		ServiceHostOrders:    int64Orders(row.ServiceHostOrders),
 		ServerIP:             r.configServerIP(ctx),
+		Locations:            r.configLocations(ctx),
 	}
 	serviceFlowConfigured := false
 	if serviceFlows, err := r.serviceFlows(ctx); err != nil {

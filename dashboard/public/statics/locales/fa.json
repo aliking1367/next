@@ -1101,6 +1101,7 @@
 	"nodes.agentHealth": "عامل نود",
 	"nodes.xrayHealth": "هسته Xray",
 	"nodes.nodeAddress": "آدرس",
+	"nodes.nodeNameLocationHint": "اسم هر نود را کشورش بگذارید (مثلاً Germany یا آلمان). با چند نود، هر کاربر هر کانفیگ را برای هر نود جدا می‌گیرد، با پرچم و اسم همان نود.",
 	"nodes.nodeName": "نام",
 	"nodes.nodeServiceVersionTag": "نسخه نود {{version}}",
 	"nodes.nodeServiceVersionUnknown": "نسخه نود نامشخص است",

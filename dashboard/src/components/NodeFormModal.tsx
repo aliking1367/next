@@ -742,11 +742,14 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 									{t("nodes.certInfoOption")}
 								</Checkbox>
 							)}
+							<Text fontSize="xs" color="panel.textMuted">
+								{t("nodes.nodeNameLocationHint")}
+							</Text>
 							<SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
 								<Input
 									label={t("nodes.nodeName")}
 									size="sm"
-									placeholder="Next-S2"
+									placeholder="Germany"
 									maxLength={120}
 									{...form.register("name")}
 									error={getInputError(form.formState?.errors?.name)}

@@ -79,7 +79,10 @@ type ConfigLinkUser struct {
 	XrayInboundOrder     []string                   `json:"xray_inbound_order,omitempty"`
 	Hosts                []Host                     `json:"hosts,omitempty"`
 	ServerIP             string                     `json:"server_ip,omitempty"`
-	WireGuardAddresses   map[string]string          `json:"wireguard_addresses,omitempty"`
+	// Locations are the nodes serving the shared config; with two or more,
+	// {SERVER_IP} hosts are repeated once per node (multi-location).
+	Locations          []ConfigLocation  `json:"-"`
+	WireGuardAddresses map[string]string `json:"wireguard_addresses,omitempty"`
 }
 
 type UserListItem struct {

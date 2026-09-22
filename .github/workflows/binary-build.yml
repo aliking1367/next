@@ -93,7 +93,7 @@ jobs:
 
       - name: Test subscription page templates
         run: |
-          go test ./internal/app/user -run 'TestSubscriptionPageTemplatesRender|TestSubscriptionProfileTitle'
+          go test ./internal/app/user -run 'TestSubscriptionPageTemplatesRender|TestSubscriptionProfileTitle|TestMultiLocation|TestLocationLabel|TestConfigLocations'
           go test ./internal/app/api -run 'TestSubscriptionPageTemplateGallery|TestSubscriptionUsage'
 
       - name: Upload dashboard

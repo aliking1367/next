@@ -184,17 +184,22 @@ func BuildConfigLinks(
 		inboundVariables["protocol"] = binding.protocol
 		inboundVariables["TRANSPORT"] = configTransportName(inbound)
 		inboundVariables["transport"] = strings.ToLower(inboundVariables["TRANSPORT"])
-		remark, address, effective, ok := effectiveInboundForHost(wildcardSalt, inboundVariables, inbound, host)
-		if !ok {
-			continue
-		}
-		link, err := buildShareLink(remark, address, effective, binding.settings)
-		if err != nil {
-			return ConfigLinksResponse{}, err
-		}
-		if link != "" {
-			links = append(links, link)
-			metadata = append(metadata, configLinkMetadata(effective))
+		for _, variant := range hostLocationVariants(item.Locations, host, inboundVariables) {
+			remark, address, effective, ok := effectiveInboundForHost(wildcardSalt, variant.variables, inbound, host)
+			if !ok {
+				continue
+			}
+			if variant.prefix != "" {
+				remark = variant.prefix + " · " + remark
+			}
+			link, err := buildShareLink(remark, address, effective, binding.settings)
+			if err != nil {
+				return ConfigLinksResponse{}, err
+			}
+			if link != "" {
+				links = append(links, link)
+				metadata = append(metadata, configLinkMetadata(effective))
+			}
 		}
 	}
 
@@ -205,6 +210,37 @@ func BuildConfigLinks(
 		}
 	}
 	return ConfigLinksResponse{Links: links, Metadata: metadata}, nil
+}
+
+type hostLocationVariant struct {
+	variables map[string]string
+	prefix    string
+}
+
+// hostLocationVariants returns the variable sets one host is rendered with:
+// once per node when several nodes serve the shared config and the host
+// points at {SERVER_IP}, otherwise once as before. The location name goes in
+// front of the remark unless the remark places {LOCATION} itself.
+func hostLocationVariants(locations []ConfigLocation, host Host, variables map[string]string) []hostLocationVariant {
+	if len(locations) < 2 || !hostUsesServerIP(host) {
+		single := cloneFormatVariables(variables)
+		if len(locations) == 1 {
+			single["LOCATION"], single["NODE_NAME"] = locations[0].Name, locations[0].Name
+		}
+		return []hostLocationVariant{{variables: single}}
+	}
+	variants := make([]hostLocationVariant, 0, len(locations))
+	for _, location := range locations {
+		values := cloneFormatVariables(variables)
+		values["SERVER_IP"], values["server_ip"] = location.Address, location.Address
+		values["LOCATION"], values["NODE_NAME"] = location.Name, location.Name
+		prefix := location.Name
+		if hostRemarkNamesLocation(host) {
+			prefix = ""
+		}
+		variants = append(variants, hostLocationVariant{variables: values, prefix: prefix})
+	}
+	return variants
 }
 
 func configLinkMetadata(inbound ResolvedInbound) ConfigLinkMetadata {
@@ -657,6 +693,8 @@ func configFormatVariables(item ConfigLinkUser) map[string]string {
 		"STATUS_EMOJI":       statusEmoji,
 		"STATUS_TEXT":        statusText,
 		"SERVER_IPV6":        "",
+		"LOCATION":           "",
+		"NODE_NAME":          "",
 	}
 	if strings.TrimSpace(item.ServerIP) != "" {
 		values["server_ip"] = strings.TrimSpace(item.ServerIP)

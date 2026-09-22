@@ -1108,6 +1108,7 @@
 	"nodes.agentHealth": "Agent",
 	"nodes.xrayHealth": "Xray",
 	"nodes.nodeAddress": "Address",
+	"nodes.nodeNameLocationHint": "Name each node after its country (for example Germany or Netherlands). With several nodes, every user gets each config once per node, labelled with the node's flag and name.",
 	"nodes.nodeName": "Name",
 	"nodes.nodeServiceVersionTag": "Node {{version}}",
 	"nodes.nodeServiceVersionUnknown": "Node version unknown",

@@ -94,6 +94,7 @@ func (r Repository) UsersList(ctx context.Context, req UsersListRequest) (UsersR
 	var serviceOrders map[int64]map[int64]int64
 	var masks map[string][]byte
 	var serverIP string
+	var locations []ConfigLocation
 	if req.IncludeLinks {
 		proxiesByUser, err = r.proxiesByUser(ctx, userIDs)
 		if err != nil {
@@ -116,6 +117,7 @@ func (r Repository) UsersList(ctx context.Context, req UsersListRequest) (UsersR
 			return UsersResponse{}, err
 		}
 		serverIP = r.configServerIP(ctx)
+		locations = r.configLocations(ctx)
 	}
 
 	items := make([]UserListItem, 0, len(rows))
@@ -159,6 +161,7 @@ func (r Repository) UsersList(ctx context.Context, req UsersListRequest) (UsersR
 				Proxies:              proxiesByUser[row.id],
 				ServiceHostOrders:    map[int64]int64{},
 				ServerIP:             serverIP,
+				Locations:            locations,
 			}
 			if item.ServiceID != nil {
 				configUser.ServiceHostOrders = serviceOrders[*item.ServiceID]
