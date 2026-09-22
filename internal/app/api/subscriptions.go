@@ -53,6 +53,10 @@ func (s *Server) handleResolvedSubscription(w http.ResponseWriter, r *http.Reque
 			writeSubscriptionError(w, err)
 			return
 		}
+		if wantsSubscriptionUsagePage(r) {
+			writeSubscriptionUsagePage(w, payload)
+			return
+		}
 		writeJSON(w, http.StatusOK, payload)
 	default:
 		response, err := s.userService.RenderSubscription(r.Context(), req)
