@@ -3824,6 +3824,56 @@ mysql_root_command() {
     fi
 }
 
+# MySQL and MariaDB defaults assume a large server: on a 1 GB VPS MySQL
+# alone took about half the RAM. The memory settings are sized by the
+# server's RAM. NEXT_MEMINFO_FILE only exists for tests.
+host_database_memory_settings() {
+    local mem_mb
+    mem_mb=$(awk '/^MemTotal:/ {print int($2 / 1024)}' "${NEXT_MEMINFO_FILE:-/proc/meminfo}" 2>/dev/null)
+    mem_mb=${mem_mb:-0}
+    if [ "$mem_mb" -gt 0 ] && [ "$mem_mb" -le 2048 ]; then
+        cat <<'EOF'
+# low-memory profile (server RAM <= 2 GB)
+performance_schema=OFF
+innodb_buffer_pool_size=64M
+innodb_log_buffer_size=8M
+key_buffer_size=8M
+tmp_table_size=16M
+max_heap_table_size=16M
+table_open_cache=400
+table_definition_cache=400
+thread_cache_size=8
+max_connections=100
+EOF
+    elif [ "$mem_mb" -gt 0 ] && [ "$mem_mb" -le 4096 ]; then
+        cat <<'EOF'
+# medium-memory profile (server RAM <= 4 GB)
+performance_schema=OFF
+innodb_buffer_pool_size=256M
+max_connections=150
+EOF
+    else
+        echo "max_connections=200"
+    fi
+}
+
+write_host_database_config() {
+    local config_file="$1"
+    mkdir -p "$(dirname "$config_file")"
+    {
+        cat <<'EOF'
+[mysqld]
+bind-address=127.0.0.1
+skip-name-resolve=ON
+local-infile=0
+symbolic-links=0
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+EOF
+        host_database_memory_settings
+    } > "$config_file"
+}
+
 install_host_database() {
     local database_type="$1"
     local package_name
@@ -3859,17 +3909,7 @@ install_host_database() {
 
     systemctl enable --now "$service_name" >/dev/null 2>&1 || systemctl enable --now mysql >/dev/null 2>&1 || true
 
-    mkdir -p "$(dirname "$config_file")"
-    cat > "$config_file" <<EOF
-[mysqld]
-bind-address=127.0.0.1
-skip-name-resolve=ON
-local-infile=0
-symbolic-links=0
-character-set-server=utf8mb4
-collation-server=utf8mb4_unicode_ci
-max_connections=200
-EOF
+    write_host_database_config "$config_file"
     systemctl restart "$service_name" >/dev/null 2>&1 || systemctl restart mysql >/dev/null 2>&1 || true
 
     if [ -z "${MYSQL_PASSWORD:-}" ]; then

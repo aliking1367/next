@@ -86,6 +86,7 @@ jobs:
           bash scripts/next/test-initial-admin.sh
           bash scripts/next/test-dev-channel.sh
           bash scripts/next/test-templates-install.sh
+          bash scripts/next/test-database-tuning.sh
 
       - name: Test node wire compatibility
         run: go test ./internal/proto/node/v1

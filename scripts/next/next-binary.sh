@@ -4007,6 +4007,105 @@ database_maintenance_command() {
     disable_managed_database_binary_log
 }
 
+# MySQL and MariaDB defaults assume a large server: on a 1 GB VPS MySQL
+# alone took about half the RAM. The memory settings are sized by the
+# server's RAM. NEXT_MEMINFO_FILE only exists for tests.
+host_database_memory_settings() {
+    local mem_mb
+    mem_mb=$(awk '/^MemTotal:/ {print int($2 / 1024)}' "${NEXT_MEMINFO_FILE:-/proc/meminfo}" 2>/dev/null)
+    mem_mb=${mem_mb:-0}
+    if [ "$mem_mb" -gt 0 ] && [ "$mem_mb" -le 2048 ]; then
+        cat <<'EOF'
+# low-memory profile (server RAM <= 2 GB)
+performance_schema=OFF
+innodb_buffer_pool_size=64M
+innodb_log_buffer_size=8M
+key_buffer_size=8M
+tmp_table_size=16M
+max_heap_table_size=16M
+table_open_cache=400
+table_definition_cache=400
+thread_cache_size=8
+max_connections=100
+EOF
+    elif [ "$mem_mb" -gt 0 ] && [ "$mem_mb" -le 4096 ]; then
+        cat <<'EOF'
+# medium-memory profile (server RAM <= 4 GB)
+performance_schema=OFF
+innodb_buffer_pool_size=256M
+max_connections=150
+EOF
+    else
+        echo "max_connections=200"
+    fi
+}
+
+write_host_database_config() {
+    local config_file="$1"
+    mkdir -p "$(dirname "$config_file")"
+    {
+        cat <<'EOF'
+[mysqld]
+bind-address=127.0.0.1
+skip-name-resolve=ON
+local-infile=0
+symbolic-links=0
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+EOF
+        host_database_memory_settings
+    } > "$config_file"
+}
+
+# Re-applies the RAM-sized MySQL/MariaDB settings on an existing install
+# (installs made before this existed kept MySQL's large-server defaults).
+# The previous config is restored if the database does not come back.
+tune_database_command() {
+    check_running_as_root
+    local database_type service_name config_file backup_file
+    database_type=$(get_configured_database_type)
+    case "$database_type" in
+        mysql)
+            service_name="mysql"
+            config_file="$NEXT_MYSQL_CONFIG_ROOT/mysql.conf.d/next.cnf"
+        ;;
+        mariadb)
+            service_name="mariadb"
+            config_file="$NEXT_MYSQL_CONFIG_ROOT/mariadb.conf.d/60-next.cnf"
+        ;;
+        *)
+            colorized_echo yellow "Database-e Next ${database_type:-sqlite} ast; server-e database-i baraye tanzim nist."
+            return 0
+        ;;
+    esac
+    if [ ! -d "$(dirname "$config_file")" ]; then
+        colorized_echo red "Tanzimat-e $database_type dar $(dirname "$config_file") peyda nashod."
+        colorized_echo yellow "tune-database faghat baraye database-i ast ke roye hamin server nasb shode."
+        return 1
+    fi
+
+    backup_file=""
+    if [ -f "$config_file" ]; then
+        backup_file="$config_file.bak"
+        cp -p "$config_file" "$backup_file"
+    fi
+    write_host_database_config "$config_file"
+    colorized_echo blue "$service_name ba tanzimat-e jadid-e hafeze restart mishavad..."
+    if ! systemctl restart "$service_name"; then
+        colorized_echo red "$service_name restart nashod; tanzimat-e ghabli bargardande mishavad."
+        if [ -n "$backup_file" ]; then
+            mv -f "$backup_file" "$config_file"
+        else
+            rm -f "$config_file"
+        fi
+        systemctl restart "$service_name" || true
+        return 1
+    fi
+    [ -n "$backup_file" ] && rm -f "$backup_file"
+    colorized_echo green "Tamam. $service_name hala in tanzimat ra estefade mikonad ($config_file):"
+    grep -v '^\[' "$config_file" | sed 's/^/  /'
+}
+
 install_host_database() {
     local database_type="$1"
     local package_name
@@ -4042,17 +4141,7 @@ install_host_database() {
 
     systemctl enable --now "$service_name" >/dev/null 2>&1 || systemctl enable --now mysql >/dev/null 2>&1 || true
 
-    mkdir -p "$(dirname "$config_file")"
-    cat > "$config_file" <<EOF
-[mysqld]
-bind-address=127.0.0.1
-skip-name-resolve=ON
-local-infile=0
-symbolic-links=0
-character-set-server=utf8mb4
-collation-server=utf8mb4_unicode_ci
-max_connections=200
-EOF
+    write_host_database_config "$config_file"
     systemctl restart "$service_name" >/dev/null 2>&1 || systemctl restart mysql >/dev/null 2>&1 || true
 
     if [ -z "${MYSQL_PASSWORD:-}" ]; then
@@ -6083,6 +6172,7 @@ usage() {
     colorized_echo yellow "  prepare-external-app-node-hosting - Install an isolated Node.js LTS runtime"
     colorized_echo yellow "  edit            - Edit docker-compose.yml (via nano or vi editor)"
     colorized_echo yellow "  edit-env        - Edit environment file (via nano or vi editor)"
+    colorized_echo yellow "  tune-database   - Kam kardan-e masraf-e hafeze-ye MySQL/MariaDB motabegh ba RAM-e server"
     colorized_echo yellow "  ssl             - Issue or renew SSL certificates"
     colorized_echo yellow "  menu            - Menu-ye rahnama (Finglish); hamintor: sudo next"
     colorized_echo yellow "  menu-en         - Classic English menu"
@@ -6133,6 +6223,7 @@ dispatch_command() {
         backup) backup_command "$@" ;;
         backup-service) backup_service "$@" ;;
         database-maintenance) database_maintenance_command "$@" ;;
+        tune-database|db-tune) tune_database_command "$@" ;;
         install) install_command "$@" ;;
         update) update_command "$@" ;;
         uninstall) uninstall_command "$@" ;;
