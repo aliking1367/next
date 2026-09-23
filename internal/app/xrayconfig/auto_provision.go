@@ -26,6 +26,7 @@ const (
 	RecipeRealityXHTTP  = "reality-xhttp"
 	RecipeHysteria2     = "hysteria2-obfs"
 	RecipeCDNXHTTP      = "cdn-xhttp"
+	RecipeGamingKCP     = "gaming-kcp"
 )
 
 // autoProvisionLegacyTags are inbounds created by earlier releases of this
@@ -51,6 +52,11 @@ type AutoProvisionOptions struct {
 	// origin IP, which keeps working when that IP is filtered. The domain
 	// must already be proxied ("orange cloud") through Cloudflare.
 	CDNDomain string
+	// Gaming adds a latency-oriented inbound next to the default set: VLESS
+	// over mKCP, which carries the game's UDP natively and resends a lost
+	// packet on its own short timer instead of waiting for TCP. Hysteria2,
+	// always part of the default set, is the other UDP option.
+	Gaming bool
 	// PortBusy reports whether a port is already taken on this machine by a
 	// process outside Xray's config (e.g. the panel itself). Optional.
 	PortBusy func(port int) bool
@@ -89,6 +95,7 @@ type autoProvisionSpec struct {
 	tag            string
 	preferredPorts []int
 	cdn            bool
+	gaming         bool
 	build          func(in autoProvisionBuild) (map[string]any, error)
 }
 
@@ -98,6 +105,7 @@ func autoProvisionSpecs() []autoProvisionSpec {
 		{protocol: "vless", recipe: RecipeRealityXHTTP, tag: "auto-reality-xhttp", preferredPorts: []int{8443}, build: buildAutoRealityXHTTP},
 		{protocol: "hysteria", recipe: RecipeHysteria2, tag: "auto-hysteria2-obfs", build: buildAutoHysteria2},
 		{protocol: "vless", recipe: RecipeCDNXHTTP, tag: "auto-cdn-xhttp", preferredPorts: cdnPreferredPorts, cdn: true, build: buildAutoCDNXHTTP},
+		{protocol: "vless", recipe: RecipeGamingKCP, tag: "auto-gaming-kcp", gaming: true, build: buildAutoGamingKCP},
 	}
 }
 
@@ -168,6 +176,9 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 
 	for _, spec := range autoProvisionSpecs() {
 		if spec.cdn && cdnDomain == "" {
+			continue
+		}
+		if spec.gaming && !opts.Gaming {
 			continue
 		}
 		existing, err := r.GetInbound(ctx, spec.tag)
@@ -414,6 +425,56 @@ func buildAutoRealityXHTTP(in autoProvisionBuild) (map[string]any, error) {
 
 // buildAutoHysteria2 is Hysteria2 (QUIC/UDP) with salamander obfuscation,
 // which hides QUIC's recognizable packet structure.
+// buildAutoGamingKCP is VLESS over mKCP, the lowest-latency transport Xray
+// offers. mKCP retransmits a lost packet on its own short timer (tti) instead
+// of waiting for TCP's, which is what makes a game feel stable on a lossy
+// link; it pays for that with extra bandwidth. There is no TLS here, so the
+// stream is obfuscated with mkcp-aes128gcm, whose key both sides derive from
+// the same seed. Xray 26 moved mKCP's seed and header into finalmask, so the
+// older "seed"/"header" fields are gone.
+func buildAutoGamingKCP(in autoProvisionBuild) (map[string]any, error) {
+	seed, err := randomToken(16)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"tag":      in.tag,
+		"listen":   "::",
+		"port":     in.port,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"clients":    []any{},
+			"decryption": "none",
+		},
+		"streamSettings": map[string]any{
+			"network":  "kcp",
+			"security": "none",
+			"kcpSettings": map[string]any{
+				"mtu": 1350,
+				// 10ms retransmit timer: the lowest Xray accepts, and the
+				// setting that decides how quickly a lost packet is resent.
+				"tti":              10,
+				"uplinkCapacity":   50,
+				"downlinkCapacity": 100,
+				// Off on purpose: mKCP's congestion control smooths bursts at
+				// the cost of the latency this inbound exists to protect.
+				"congestion":      false,
+				"readBufferSize":  2,
+				"writeBufferSize": 2,
+			},
+			"finalmask": map[string]any{
+				"udp": []any{
+					map[string]any{
+						"type":     "mkcp-aes128gcm",
+						"settings": map[string]any{"key": seed},
+					},
+				},
+			},
+		},
+		"sniffing": autoProvisionSniffing(),
+	}, nil
+}
+
 func buildAutoHysteria2(in autoProvisionBuild) (map[string]any, error) {
 	certLines, keyLines, err := generateSelfSignedCertLines("next-hysteria2")
 	if err != nil {

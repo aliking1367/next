@@ -1574,6 +1574,8 @@
 	"services.autoConfigure.confirmBody": "بهترین مجموعه‌ی روز روی کانفیگ مشترک ساخته می‌شود: VLESS+REALITY با Vision روی پورت ۴۴۳، VLESS+REALITY روی XHTTP، و Hysteria2 با پوشش‌دهی. همه در یک سرویس ({{name}}) با Vision فعال بسته‌بندی می‌شوند. اینباندهای خودکار قدیمی (Trojan، Shadowsocks و نسخه‌های قبلی) جایگزین می‌شوند. اجرای دوباره امن است. Xray فقط روی نود اجرا می‌شود، پس حداقل یک نود متصل لازم است.",
 	"services.autoConfigure.success": "بهترین پروتکل‌ها پیکربندی شدند. یک کاربر بسازید و سرویس «{{name}}» را به او اختصاص دهید.",
 	"services.autoConfigure.failed": "پیکربندی خودکار پروتکل‌ها ناموفق بود",
+	"services.autoConfigure.gamingLabel": "افزودن کانفیگ گیمینگ (پینگ کمتر)",
+	"services.autoConfigure.gamingHint": "یک کانفیگ mKCP اضافه می‌کند که ترافیک بازی را روی UDP می‌برد و بسته‌های گم‌شده را سریع‌تر از TCP دوباره می‌فرستد. به برنامه‌ی مبتنی بر Xray نیاز دارد (v2rayNG، v2rayN، Karing)؛ برنامه‌های sing-box مثل هیدیفای mKCP را پشتیبانی نمی‌کنند. Hysteria2 که از قبل ساخته می‌شود، گزینه‌ای است که همه‌جا کار می‌کند. پینگ همچنان بیشتر به نزدیکی سرور بستگی دارد.",
 	"services.autoConfigure.cdnLabel": "دامنه‌ی Cloudflare (اختیاری، برای IP فیلترشده)",
 	"services.autoConfigure.cdnPlaceholder": "cdn.example.com",
 	"services.autoConfigure.cdnHelp": "اگر IP سرور فیلتر است، دامنه‌ای وارد کنید که از قبل از طریق Cloudflare پراکسی شده باشد (ابر نارنجی، حالت SSL روی Full). آن‌وقت کاربرها به‌جای IP شما به Cloudflare وصل می‌شوند. برای رد کردن، خالی بگذارید.",
