@@ -8,6 +8,7 @@ func flattenNodeItem(node nodecontroller.NodeListItem) map[string]any {
 		"name":                     node.Name,
 		"note":                     node.Note,
 		"address":                  node.Address,
+		"public_address":           node.PublicAddress,
 		"port":                     node.Port,
 		"control_port":             node.Port,
 		"api_port":                 node.APIPort,

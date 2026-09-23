@@ -19,7 +19,7 @@ type ConfigLocation struct {
 // (for example an older schema) yields no locations, which keeps the classic
 // single-address links.
 func (r Repository) configLocations(ctx context.Context) []ConfigLocation {
-	rows, err := r.db.QueryContext(ctx, `SELECT COALESCE(name, ''), address FROM nodes
+	rows, err := r.db.QueryContext(ctx, `SELECT COALESCE(name, ''), COALESCE(NULLIF(TRIM(COALESCE(public_address, '')), ''), address) FROM nodes
 WHERE TRIM(COALESCE(address, '')) != ''
   AND LOWER(COALESCE(status, '')) NOT IN ('deleted', 'disabled', 'limited')
   AND LOWER(COALESCE(xray_config_mode, 'default')) <> 'custom'

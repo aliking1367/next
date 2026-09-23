@@ -25,6 +25,7 @@ func (r Repository) ListNodeItems(ctx context.Context, nodeID int64) ([]NodeList
 	COALESCE(name, ''),
 	note,
 	address,
+	public_address,
 	port,
 	api_port,
 	usage_coefficient,
@@ -68,13 +69,14 @@ WHERE LOWER(COALESCE(status, '')) <> 'deleted'`
 	for rows.Next() {
 		var item NodeListItem
 		var dataLimit, proxyPort sql.NullInt64
-		var note, proxyType, proxyHost, proxyUsername, proxyPassword, capabilities, message, xrayVersion, certificate, certificateKey sql.NullString
+		var note, publicAddress, proxyType, proxyHost, proxyUsername, proxyPassword, capabilities, message, xrayVersion, certificate, certificateKey sql.NullString
 		var proxyEnabled bool
 		if err := rows.Scan(
 			&item.ID,
 			&item.Name,
 			&note,
 			&item.Address,
+			&publicAddress,
 			&item.Port,
 			&item.APIPort,
 			&item.UsageCoefficient,
@@ -104,6 +106,7 @@ WHERE LOWER(COALESCE(status, '')) <> 'deleted'`
 		}
 		item.DataLimit = int64PtrFromNull(dataLimit)
 		item.Note = stringPtrFromNull(note)
+		item.PublicAddress = stringPtrFromNull(publicAddress)
 		item.ProxyEnabled = proxyEnabled
 		item.ProxyType = stringPtrFromNull(proxyType)
 		item.ProxyHost = stringPtrFromNull(proxyHost)

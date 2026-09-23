@@ -14,8 +14,9 @@ import (
 
 const DefaultPendingCertificateTTL = 30 * time.Minute
 const (
-	MaxNodeNameLength = 120
-	MaxNodeNoteLength = 500
+	MaxNodeNameLength    = 120
+	MaxNodeNoteLength    = 500
+	MaxNodeAddressLength = 256
 )
 
 type Repository struct {
@@ -99,14 +100,15 @@ func (r Repository) CreateNode(ctx context.Context, payload NodeCreate) (NodeRes
 	now := r.now().UTC()
 	res, err := tx.ExecContext(ctx, `
 INSERT INTO nodes (
-	name, note, address, port, api_port, status, last_status_change, created_at,
+	name, note, address, public_address, port, api_port, status, last_status_change, created_at,
 	uplink, downlink, usage_coefficient, geo_mode, data_limit,
 	proxy_enabled, proxy_type, proxy_host, proxy_port,
 	proxy_username, proxy_password, xray_config_mode, xray_config
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		strings.TrimSpace(payload.Name),
 		nullableStringPtr(payload.Note, true),
 		strings.TrimSpace(payload.Address),
+		nullableStringPtr(payload.PublicAddress, true),
 		defaultInt(payload.Port, 62050),
 		defaultInt(payload.APIPort, 62051),
 		StatusConnecting,
@@ -221,6 +223,13 @@ func (r Repository) UpdateNode(ctx context.Context, nodeID int64, payload NodeMo
 		if address != current.Address {
 			markConnectionChanged()
 		}
+	}
+	if payload.PublicAddress != nil {
+		publicAddress := strings.TrimSpace(*payload.PublicAddress)
+		if len([]rune(publicAddress)) > MaxNodeAddressLength {
+			return NodeResponse{}, wrapInvalid("public address can be a maximum of %d characters", MaxNodeAddressLength)
+		}
+		add("public_address", emptyStringAsNil(publicAddress))
 	}
 	if payload.Port != nil {
 		add("port", *payload.Port)
@@ -636,16 +645,16 @@ func (r Repository) nodeStoredXrayConfigExistsTx(ctx context.Context, tx *sql.Tx
 func (r Repository) getNode(ctx context.Context, q queryer, nodeID int64, defaultCert string) (NodeResponse, error) {
 	var row NodeResponse
 	var dataLimit, proxyPort sql.NullInt64
-	var note, proxyType, proxyHost, proxyUsername, proxyPassword, message, xrayVersion, cert sql.NullString
+	var note, publicAddress, proxyType, proxyHost, proxyUsername, proxyPassword, message, xrayVersion, cert sql.NullString
 	var proxyEnabled bool
 	err := q.QueryRowContext(ctx, `SELECT
-	id, COALESCE(name, ''), note, address, port, api_port, usage_coefficient, data_limit,
+	id, COALESCE(name, ''), note, address, public_address, port, api_port, usage_coefficient, data_limit,
 	proxy_enabled, proxy_type, proxy_host, proxy_port,
 	proxy_username, proxy_password, status, message, xray_version,
 	COALESCE(geo_mode, 'default'), COALESCE(xray_config_mode, 'default'),
 	COALESCE(uplink, 0), COALESCE(downlink, 0), certificate
 FROM nodes WHERE id = ? AND LOWER(COALESCE(status, '')) <> ? LIMIT 1`, nodeID, StatusDeleted).Scan(
-		&row.ID, &row.Name, &note, &row.Address, &row.Port, &row.APIPort, &row.UsageCoefficient, &dataLimit,
+		&row.ID, &row.Name, &note, &row.Address, &publicAddress, &row.Port, &row.APIPort, &row.UsageCoefficient, &dataLimit,
 		&proxyEnabled, &proxyType, &proxyHost, &proxyPort,
 		&proxyUsername, &proxyPassword, &row.Status, &message, &xrayVersion,
 		&row.GeoMode, &row.XrayConfigMode, &row.Uplink, &row.Downlink, &cert,
@@ -661,6 +670,7 @@ FROM nodes WHERE id = ? AND LOWER(COALESCE(status, '')) <> ? LIMIT 1`, nodeID, S
 	}
 	row.ControlPort = row.Port
 	row.Note = stringPtrFromNull(note)
+	row.PublicAddress = stringPtrFromNull(publicAddress)
 	row.DataLimit = int64PtrFromNull(dataLimit)
 	row.ProxyEnabled = proxyEnabled
 	row.ProxyType = stringPtrFromNull(proxyType)

@@ -52,8 +52,8 @@ func (r Repository) serviceFlows(ctx context.Context) (map[int64]string, error) 
 
 func (r Repository) configServerIP(ctx context.Context) string {
 	for _, query := range []string{
-		`SELECT address FROM nodes WHERE TRIM(COALESCE(address, '')) != '' AND LOWER(COALESCE(status, '')) = 'connected' ORDER BY id LIMIT 1`,
-		`SELECT address FROM nodes WHERE TRIM(COALESCE(address, '')) != '' AND LOWER(COALESCE(status, '')) <> 'deleted' ORDER BY id LIMIT 1`,
+		`SELECT COALESCE(NULLIF(TRIM(COALESCE(public_address, '')), ''), address) FROM nodes WHERE TRIM(COALESCE(address, '')) != '' AND LOWER(COALESCE(status, '')) = 'connected' ORDER BY id LIMIT 1`,
+		`SELECT COALESCE(NULLIF(TRIM(COALESCE(public_address, '')), ''), address) FROM nodes WHERE TRIM(COALESCE(address, '')) != '' AND LOWER(COALESCE(status, '')) <> 'deleted' ORDER BY id LIMIT 1`,
 	} {
 		var address sql.NullString
 		if err := r.db.QueryRowContext(ctx, query).Scan(&address); err == nil && address.Valid {

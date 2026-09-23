@@ -48,6 +48,9 @@ export const NodeSchema = z
 					ipv4Regex.test(val) || ipv6Regex.test(val) || domainRegex.test(val)
 				);
 			}, "Invalid IP address or domain"),
+		// Optional address users see in their configs; the panel keeps using
+		// `address` to reach the node.
+		public_address: z.string().max(256).nullable().optional(),
 		port: z
 			.number()
 			.min(1)
@@ -186,6 +189,7 @@ export const getNodeDefaultValues = (): NodeType => ({
 	name: "",
 	note: "",
 	address: "",
+	public_address: "",
 	port: 62050,
 	api_port: 62051,
 	xray_version: "",

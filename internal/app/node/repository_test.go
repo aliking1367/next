@@ -239,6 +239,7 @@ func newNodeTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE nodes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT COLLATE NOCASE UNIQUE,
+			public_address TEXT NULL,
 			note TEXT NULL,
 			address TEXT NOT NULL,
 			port INTEGER NOT NULL,
@@ -368,5 +369,48 @@ func TestNodeNameOfDeletedNodeCanBeReused(t *testing.T) {
 	// A live node still protects its name.
 	if _, err := repo.CreateNode(ctx, baseNodeCreate("FRANCE")); !IsKind(err, ErrorConflict) {
 		t.Fatalf("expected conflict for a live node's name, got %v", err)
+	}
+}
+
+func TestNodePublicAddressIsStoredAndEditable(t *testing.T) {
+	db := newNodeTestDB(t)
+	repo := NewRepository(db, "sqlite").WithNow(fixedNow())
+	ctx := context.Background()
+
+	payload := baseNodeCreate("turkey")
+	public := "tr.example.com"
+	payload.PublicAddress = &public
+	created, err := repo.CreateNode(ctx, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.PublicAddress == nil || *created.PublicAddress != public {
+		t.Fatalf("public address = %v", created.PublicAddress)
+	}
+	// The panel still reaches the node on its own address.
+	assertNodeRepositoryString(t, db, `SELECT address FROM nodes WHERE id = ?`, payload.Address, created.ID)
+
+	changed := "tr2.example.com"
+	updated, err := repo.UpdateNode(ctx, created.ID, NodeModify{PublicAddress: &changed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PublicAddress == nil || *updated.PublicAddress != changed {
+		t.Fatalf("updated public address = %v", updated.PublicAddress)
+	}
+
+	// Clearing it falls back to the node address for user configs.
+	empty := "   "
+	cleared, err := repo.UpdateNode(ctx, created.ID, NodeModify{PublicAddress: &empty})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.PublicAddress != nil {
+		t.Fatalf("cleared public address = %v", *cleared.PublicAddress)
+	}
+
+	long := strings.Repeat("a", MaxNodeAddressLength+1)
+	if _, err := repo.UpdateNode(ctx, created.ID, NodeModify{PublicAddress: &long}); !IsKind(err, ErrorInvalid) {
+		t.Fatalf("expected an invalid-length error, got %v", err)
 	}
 }

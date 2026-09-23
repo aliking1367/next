@@ -223,6 +223,7 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 		name: data.name,
 		note: data.note ?? "",
 		address: data.address,
+		public_address: (data.public_address ?? "").trim(),
 		control_port: Number(data.port),
 		api_port: Number(data.api_port),
 		usage_coefficient: Number(data.usage_coefficient),
@@ -760,6 +761,14 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 									placeholder="192.168.1.1 or 2001:db8::1"
 									{...form.register("address")}
 									error={getInputError(form.formState?.errors?.address)}
+								/>
+								<Input
+									label={t("nodes.nodePublicAddress")}
+									size="sm"
+									placeholder="tr.example.com"
+									maxLength={256}
+									{...form.register("public_address")}
+									error={getInputError(form.formState?.errors?.public_address)}
 								/>
 							</SimpleGrid>
 							<FormControl isInvalid={Boolean(form.formState?.errors?.note)}>

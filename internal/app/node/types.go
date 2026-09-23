@@ -28,9 +28,12 @@ const (
 )
 
 type NodeCreate struct {
-	Name             string          `json:"name"`
-	Note             *string         `json:"note"`
+	Name string  `json:"name"`
+	Note *string `json:"note"`
+	// Address is where the panel reaches the node. PublicAddress, when set,
+	// is what user configs advertise instead (usually a domain).
 	Address          string          `json:"address"`
+	PublicAddress    *string         `json:"public_address"`
 	Port             int             `json:"port"`
 	ControlPort      int             `json:"control_port"`
 	APIPort          int             `json:"api_port"`
@@ -57,6 +60,7 @@ type NodeModify struct {
 	Name             *string         `json:"name"`
 	Note             *string         `json:"note"`
 	Address          *string         `json:"address"`
+	PublicAddress    *string         `json:"public_address"`
 	Port             *int64          `json:"port"`
 	ControlPort      *int64          `json:"control_port"`
 	APIPort          *int64          `json:"api_port"`
@@ -79,6 +83,7 @@ type NodeResponse struct {
 	Name                   string   `json:"name"`
 	Note                   *string  `json:"note"`
 	Address                string   `json:"address"`
+	PublicAddress          *string  `json:"public_address"`
 	Port                   int64    `json:"port"`
 	ControlPort            int64    `json:"control_port"`
 	APIPort                int64    `json:"api_port"`

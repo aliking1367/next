@@ -95,6 +95,7 @@ jobs:
         run: |
           go test ./internal/app/user -run 'TestSubscriptionPageTemplatesRender|TestSubscriptionProfileTitle|TestMultiLocation|TestLocationLabel|TestConfigLocations'
           go test ./internal/app/api -run 'TestSubscriptionPageTemplateGallery|TestSubscriptionUsage'
+          go test ./internal/app/node -run 'TestNodePublicAddress|TestNodeNameOfDeletedNode'
 
       - name: Upload dashboard
         uses: actions/upload-artifact@v4

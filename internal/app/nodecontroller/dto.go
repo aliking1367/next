@@ -203,6 +203,7 @@ type NodeListItem struct {
 	Name                   string           `json:"name"`
 	Note                   *string          `json:"note"`
 	Address                string           `json:"address"`
+	PublicAddress          *string          `json:"public_address"`
 	Port                   int              `json:"port"`
 	APIPort                int              `json:"api_port"`
 	UsageCoefficient       float64          `json:"usage_coefficient"`
