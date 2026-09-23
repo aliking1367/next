@@ -147,6 +147,7 @@ type AutoConfigureResponse = {
 	warning?: ProvisionNodeWarning;
 	retired?: string[];
 	cdn_requested?: boolean;
+	wireguard_requested?: boolean;
 };
 
 type ProvisionNodeWarning =
@@ -872,6 +873,7 @@ const ServicesPage: FC = () => {
 	const autoConfigureDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
+	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
 	const navigate = useNavigate();
 	const [isVerifying, setIsVerifying] = useState(false);
 	const [verifyResults, setVerifyResults] = useState<ProtocolCheckResult[] | null>(
@@ -998,11 +1000,15 @@ const ServicesPage: FC = () => {
 		setIsAutoConfiguring(true);
 		try {
 			const domain = cdnDomain.trim();
+			const body =
+				domain || wireGuardTunnel
+					? { cdn_domain: domain, wireguard: wireGuardTunnel }
+					: undefined;
 			const response = await fetch<AutoConfigureResponse>(
 				"/core/auto-configure",
 				{
 					method: "POST",
-					body: domain ? { cdn_domain: domain } : undefined,
+					body,
 				},
 			);
 			await Promise.all([fetchServices(), fetchInbounds()]);
@@ -2300,6 +2306,17 @@ const ServicesPage: FC = () => {
 							{cdnDomainInvalid
 								? t("services.autoConfigure.cdnInvalid")
 								: t("services.autoConfigure.cdnHelp")}
+						</FormHelperText>
+					</FormControl>
+					<FormControl>
+						<Checkbox
+							isChecked={wireGuardTunnel}
+							onChange={(event) => setWireGuardTunnel(event.target.checked)}
+						>
+							{t("services.autoConfigure.wireGuardLabel")}
+						</Checkbox>
+						<FormHelperText>
+							{t("services.autoConfigure.wireGuardHelp")}
 						</FormHelperText>
 					</FormControl>
 				</Stack>

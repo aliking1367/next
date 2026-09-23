@@ -57,18 +57,22 @@ type autoProvisionRequest struct {
 	// CDNDomain optionally adds a Cloudflare-fronted inbound so users can
 	// still connect when the server's own IP is filtered.
 	CDNDomain string `json:"cdn_domain"`
+	// WireGuard optionally adds an AmneziaWG tunnel for latency-sensitive
+	// traffic such as games and calls.
+	WireGuard bool `json:"wireguard"`
 }
 
 type autoProvisionResponse struct {
-	ServiceID    int64                `json:"service_id"`
-	ServiceName  string               `json:"service_name"`
-	Flow         string               `json:"flow,omitempty"`
-	Protocols    []any                `json:"protocols"`
-	Retired      []string             `json:"retired,omitempty"`
-	CDNRequested bool                 `json:"cdn_requested"`
-	Nodes        provisionNodeSummary `json:"nodes"`
-	Warning      string               `json:"warning,omitempty"`
-	Detail       string               `json:"detail"`
+	ServiceID          int64                `json:"service_id"`
+	ServiceName        string               `json:"service_name"`
+	Flow               string               `json:"flow,omitempty"`
+	Protocols          []any                `json:"protocols"`
+	Retired            []string             `json:"retired,omitempty"`
+	CDNRequested       bool                 `json:"cdn_requested"`
+	WireGuardRequested bool                 `json:"wireguard_requested"`
+	Nodes              provisionNodeSummary `json:"nodes"`
+	Warning            string               `json:"warning,omitempty"`
+	Detail             string               `json:"detail"`
 }
 
 // localPortBusy reports whether something on this machine already listens on
@@ -161,6 +165,7 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 
 	result, err := s.configRepo.AutoProvisionBestProtocols(r.Context(), xrayconfig.AutoProvisionOptions{
 		CDNDomain: request.CDNDomain,
+		WireGuard: request.WireGuard,
 		PortBusy:  localPortBusy,
 	})
 	if err != nil {
@@ -231,15 +236,16 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 	summary, warning := summarizeProvisionNodes(nodes)
 
 	writeJSON(w, http.StatusOK, autoProvisionResponse{
-		ServiceID:    serviceID,
-		ServiceName:  autoProvisionServiceName,
-		Flow:         flow,
-		Protocols:    protocols,
-		Retired:      result.Retired,
-		CDNRequested: result.CDNRequested,
-		Nodes:        summary,
-		Warning:      warning,
-		Detail:       "Best protocols configured",
+		ServiceID:          serviceID,
+		ServiceName:        autoProvisionServiceName,
+		Flow:               flow,
+		Protocols:          protocols,
+		Retired:            result.Retired,
+		CDNRequested:       result.CDNRequested,
+		WireGuardRequested: result.WireGuardRequested,
+		Nodes:              summary,
+		Warning:            warning,
+		Detail:             "Best protocols configured",
 	})
 }
 

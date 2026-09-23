@@ -296,3 +296,69 @@ func TestBuildConfigLinksEmitsWireGuardURI(t *testing.T) {
 		}
 	}
 }
+
+// The AmneziaWG inbound the auto-configure action creates must produce a
+// profile a real client accepts: the junk parameters have to reach the
+// [Interface] section, because a client that sends unpadded handshakes is
+// exactly the WireGuard signature the tunnel exists to avoid.
+func TestBuildAWGProfileMaterialCarriesTheJunkParameters(t *testing.T) {
+	material, err := buildWGProfileMaterialForProtocol(
+		ConfigLinkUser{ID: 42, Username: "alice", CredentialKey: "0123456789abcdef0123456789abcdef"},
+		"Gaming",
+		"203.0.113.10",
+		ResolvedInbound{
+			"protocol": "amneziawg",
+			"port":     51820,
+			"settings": map[string]any{
+				"private_key":          testWGPrivateKey(),
+				"server_address":       "10.73.0.1/16",
+				"address_pool":         "10.73.0.0/16",
+				"tunnel_port":          31820,
+				"mtu":                  1380,
+				"persistent_keepalive": 25,
+				"jc":                   4,
+				"jmin":                 8,
+				"jmax":                 80,
+				"s1":                   77,
+				"s2":                   90,
+				"h1":                   123456789,
+				"h2":                   234567891,
+				"h3":                   345678912,
+				"h4":                   456789123,
+			},
+		},
+		Host{},
+		true,
+		"amneziawg",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"[Interface]\n",
+		"MTU = 1380\n",
+		"Jc = 4\n",
+		"Jmin = 8\n",
+		"Jmax = 80\n",
+		"S1 = 77\n",
+		"S2 = 90\n",
+		"H1 = 123456789\n",
+		"H4 = 456789123\n",
+		"[Peer]\n",
+		"Endpoint = 203.0.113.10:51820\n",
+		"PersistentKeepalive = 25\n",
+	} {
+		if !strings.Contains(material.Body, expected) {
+			t.Errorf("profile is missing %q:\n%s", expected, material.Body)
+		}
+	}
+	if strings.Contains(material.Body, " = 0\n") {
+		t.Errorf("a zeroed parameter makes the profile unusable:\n%s", material.Body)
+	}
+	if !strings.HasPrefix(material.ClientAddress, "10.73.") {
+		t.Errorf("client address %q must come from the inbound's pool", material.ClientAddress)
+	}
+	if material.ClientAddress == "10.73.0.1/32" {
+		t.Error("the client must not be handed the server's own tunnel address")
+	}
+}

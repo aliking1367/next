@@ -6,16 +6,20 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/curve25519"
 )
 
 // useEmbeddedCatalogForTest forces loadCatalog to skip the network and use
@@ -512,5 +516,128 @@ func TestAutoProvisionedConfigIsAcceptedByRealXray(t *testing.T) {
 		if strings.Contains(line, "Choosing") && strings.Contains(line, "as the target") {
 			t.Errorf("Xray warns about a REALITY target: %s", line)
 		}
+	}
+}
+
+func TestAutoProvisionSkipsTheTunnelUnlessAsked(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+
+	result, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.WireGuardRequested {
+		t.Error("the tunnel was not asked for")
+	}
+	if protocolsByRecipe(result)[RecipeAmneziaWG].Tag != "" {
+		t.Errorf("the tunnel must be opt-in, got %+v", result.Protocols)
+	}
+	if _, err := repo.GetInbound(ctx, "auto-amneziawg"); !errors.Is(err, ErrInboundNotFound) {
+		t.Errorf("no tunnel inbound should exist, got %v", err)
+	}
+}
+
+func TestAutoProvisionAmneziaWGTunnel(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+
+	result, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{WireGuard: true})
+	if err != nil {
+		t.Fatalf("AutoProvisionBestProtocols: %v", err)
+	}
+	if !result.WireGuardRequested {
+		t.Error("the tunnel was asked for")
+	}
+	tunnel := protocolsByRecipe(result)[RecipeAmneziaWG]
+	if tunnel.Tag != "auto-amneziawg" || tunnel.Protocol != AWGProtocol || tunnel.Port != 51820 || !tunnel.Created {
+		t.Fatalf("unexpected tunnel entry %+v", tunnel)
+	}
+	if n := countRows(t, db, `SELECT COUNT(*) FROM hosts WHERE inbound_tag = ?`, tunnel.Tag); n != 1 {
+		t.Errorf("the tunnel needs its own host row, got %d", n)
+	}
+
+	inbound, err := repo.GetInbound(ctx, "auto-amneziawg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := mapValue(inbound["settings"])
+
+	// The client profile is built from these settings, so a key the client
+	// cannot decode or a server address outside the pool would hand users a
+	// tunnel that never completes a handshake.
+	privateKey, err := base64.StdEncoding.DecodeString(stringValue(settings["private_key"]))
+	if err != nil || len(privateKey) != 32 {
+		t.Fatalf("private_key must be a 32-byte standard-base64 key: %v", err)
+	}
+	if _, err := curve25519.X25519(privateKey, curve25519.Basepoint); err != nil {
+		t.Fatalf("private_key must derive a public key: %v", err)
+	}
+	pool, err := netip.ParsePrefix(stringValue(settings["address_pool"]))
+	if err != nil {
+		t.Fatalf("address_pool: %v", err)
+	}
+	server, err := netip.ParsePrefix(stringValue(settings["server_address"]))
+	if err != nil {
+		t.Fatalf("server_address: %v", err)
+	}
+	if !pool.Contains(server.Addr()) || server.Addr() != pool.Masked().Addr().Next() {
+		t.Errorf("server_address %s must be the first host of %s", server, pool)
+	}
+	if got := intValue(settings["mtu"]); got != 1380 {
+		t.Errorf("mtu = %d, want 1380 to stay under the path MTU once Amnezia pads", got)
+	}
+	if got := intValue(settings["persistent_keepalive"]); got != 25 {
+		t.Errorf("persistent_keepalive = %d, want 25 so the NAT mapping survives idle moments", got)
+	}
+	// Server and client read the junk parameters from this one stored copy;
+	// a zero here would produce a profile no AmneziaWG client accepts.
+	for _, key := range []string{"jc", "jmin", "jmax", "s1", "s2", "h1", "h2", "h3", "h4"} {
+		if intValue(settings[key]) <= 0 {
+			t.Errorf("%s must carry a usable default, got %v", key, settings[key])
+		}
+	}
+	if intValue(settings["jmin"]) > intValue(settings["jmax"]) {
+		t.Errorf("jmin %v must not exceed jmax %v", settings["jmin"], settings["jmax"])
+	}
+}
+
+// The tunnel runs beside Xray, not inside it: the node turns it into a local
+// tproxy inbound. This is what keeps a tunnel that a node cannot start from
+// taking the proxy inbounds down with it.
+func TestAutoProvisionTunnelLeavesTheProxyInboundsIntact(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+	if _, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{WireGuard: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := repo.readMasterConfigForPlanning(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := TranslateVirtualTunnelInboundsForRuntime(config)
+
+	byTag := map[string]map[string]any{}
+	for _, inbound := range listOfMaps(runtime["inbounds"]) {
+		byTag[stringValue(inbound["tag"])] = inbound
+	}
+	for _, tag := range []string{"auto-reality-vision", "auto-reality-xhttp", "auto-hysteria2-obfs"} {
+		if byTag[tag] == nil {
+			t.Errorf("%s is missing from the runtime config: %v", tag, byTag)
+		}
+	}
+	if byTag["auto-amneziawg"] != nil {
+		t.Error("the tunnel itself must not be handed to Xray as an amneziawg inbound")
+	}
+	tunnel := byTag[RuntimeTunnelTagForProtocol(AWGProtocol, "auto-amneziawg")]
+	if tunnel == nil {
+		t.Fatalf("the tunnel needs a local runtime inbound, got %v", byTag)
+	}
+	if got := stringValue(tunnel["protocol"]); got != "tunnel" {
+		t.Errorf("runtime tunnel protocol = %q, want a plain local tunnel inbound", got)
+	}
+	if got := stringValue(tunnel["listen"]); got != "127.0.0.1" {
+		t.Errorf("runtime tunnel listen = %q, want loopback only", got)
 	}
 }

@@ -62,6 +62,11 @@ func CheckInboundReachability(ctx context.Context, host string, inbound map[stri
 		result.Detail = "UDP/QUIC inbound: a listening socket cannot be probed remotely, test it from a client"
 		return result
 	}
+	if protocol == WGProtocol || protocol == AWGProtocol {
+		result.Status = ReachabilitySkipped
+		result.Detail = "WireGuard tunnel: it only answers authenticated UDP handshakes, so it cannot be probed remotely, test it from a client"
+		return result
+	}
 	if host == "" {
 		result.Status = ReachabilityFailed
 		result.Detail = "the node has no address to probe"
