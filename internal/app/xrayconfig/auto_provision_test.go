@@ -487,7 +487,7 @@ func TestAutoProvisionedConfigIsAcceptedByRealXray(t *testing.T) {
 	}
 	repo, _ := provisionTestRepository(t)
 	ctx := context.Background()
-	if _, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{CDNDomain: "cdn.example.com", Gaming: true}); err != nil {
+	if _, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{CDNDomain: "cdn.example.com"}); err != nil {
 		t.Fatal(err)
 	}
 	config, err := repo.readMasterConfigForPlanning(ctx)
@@ -511,73 +511,6 @@ func TestAutoProvisionedConfigIsAcceptedByRealXray(t *testing.T) {
 	for _, line := range strings.Split(string(output), "\n") {
 		if strings.Contains(line, "Choosing") && strings.Contains(line, "as the target") {
 			t.Errorf("Xray warns about a REALITY target: %s", line)
-		}
-	}
-}
-
-func TestGamingRecipesAreOptionalAndUDPBased(t *testing.T) {
-	repo, _ := provisionTestRepository(t)
-	ctx := context.Background()
-
-	result, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, protocol := range result.Protocols {
-		if protocol.Recipe == RecipeGamingKCP {
-			t.Fatalf("gaming inbounds must only appear when asked for: %#v", protocol)
-		}
-	}
-
-	result, err = repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{Gaming: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ports := map[int]string{}
-	found := map[string]AutoProvisionProtocol{}
-	for _, protocol := range result.Protocols {
-		if previous, clash := ports[protocol.Port]; clash {
-			t.Fatalf("port %d used by both %s and %s", protocol.Port, previous, protocol.Recipe)
-		}
-		ports[protocol.Port] = protocol.Recipe
-		found[protocol.Recipe] = protocol
-	}
-	kcp, ok := found[RecipeGamingKCP]
-	if !ok || !kcp.Created {
-		t.Fatalf("mKCP inbound missing: %#v", result.Protocols)
-	}
-	inbound, err := repo.GetInbound(ctx, kcp.Tag)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stream := mapValue(inbound["streamSettings"])
-	if stringValue(stream["network"]) != "kcp" {
-		t.Fatalf("gaming inbound must be mKCP, got %q", stream["network"])
-	}
-	kcpSettings := mapValue(stream["kcpSettings"])
-	if intValue(kcpSettings["tti"]) != 10 || boolValue(kcpSettings["congestion"]) {
-		t.Fatalf("latency settings lost: %#v", kcpSettings)
-	}
-	// Xray 26 removed mKCP's own seed/header; obfuscation lives in finalmask.
-	if _, legacy := kcpSettings["seed"]; legacy {
-		t.Fatal("mKCP seed was removed in Xray 26 and must not be written")
-	}
-	masks := listOfMaps(mapValue(stream["finalmask"])["udp"])
-	if len(masks) != 1 || stringValue(masks[0]["type"]) != "mkcp-aes128gcm" {
-		t.Fatalf("mKCP obfuscation missing: %#v", masks)
-	}
-	if key := stringValue(mapValue(masks[0]["settings"])["key"]); len(key) < 16 {
-		t.Fatalf("obfuscation key looks weak: %q", key)
-	}
-
-	// Re-running keeps them instead of creating duplicates.
-	again, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{Gaming: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, protocol := range again.Protocols {
-		if protocol.Created {
-			t.Fatalf("re-run recreated %s", protocol.Tag)
 		}
 	}
 }

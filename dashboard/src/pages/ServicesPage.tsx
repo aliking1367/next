@@ -872,7 +872,6 @@ const ServicesPage: FC = () => {
 	const autoConfigureDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
-	const [gamingConfigs, setGamingConfigs] = useState(false);
 	const navigate = useNavigate();
 	const [isVerifying, setIsVerifying] = useState(false);
 	const [verifyResults, setVerifyResults] = useState<ProtocolCheckResult[] | null>(
@@ -1003,10 +1002,7 @@ const ServicesPage: FC = () => {
 				"/core/auto-configure",
 				{
 					method: "POST",
-					body: {
-						...(domain ? { cdn_domain: domain } : {}),
-						...(gamingConfigs ? { gaming: true } : {}),
-					},
+					body: domain ? { cdn_domain: domain } : undefined,
 				},
 			);
 			await Promise.all([fetchServices(), fetchInbounds()]);
@@ -2290,17 +2286,6 @@ const ServicesPage: FC = () => {
 							name: AUTO_CONFIGURE_SERVICE_NAME,
 						})}
 					</Text>
-					<FormControl>
-						<Checkbox
-							isChecked={gamingConfigs}
-							onChange={(event) => setGamingConfigs(event.target.checked)}
-						>
-							{t("services.autoConfigure.gamingLabel")}
-						</Checkbox>
-						<FormHelperText>
-							{t("services.autoConfigure.gamingHint")}
-						</FormHelperText>
-					</FormControl>
 					<FormControl isInvalid={cdnDomainInvalid}>
 						<FormLabel>{t("services.autoConfigure.cdnLabel")}</FormLabel>
 						<Input

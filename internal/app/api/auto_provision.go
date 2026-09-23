@@ -57,9 +57,6 @@ type autoProvisionRequest struct {
 	// CDNDomain optionally adds a Cloudflare-fronted inbound so users can
 	// still connect when the server's own IP is filtered.
 	CDNDomain string `json:"cdn_domain"`
-	// Gaming adds the latency-oriented UDP inbounds (mKCP and a second
-	// Hysteria2) alongside the default set.
-	Gaming bool `json:"gaming"`
 }
 
 type autoProvisionResponse struct {
@@ -164,7 +161,6 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 
 	result, err := s.configRepo.AutoProvisionBestProtocols(r.Context(), xrayconfig.AutoProvisionOptions{
 		CDNDomain: request.CDNDomain,
-		Gaming:    request.Gaming,
 		PortBusy:  localPortBusy,
 	})
 	if err != nil {

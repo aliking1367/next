@@ -1584,8 +1584,6 @@
 	"services.autoConfigure.confirmBody": "This creates the current best set on the shared config — VLESS+REALITY with Vision on port 443, VLESS+REALITY over XHTTP, and Hysteria2 with obfuscation — and bundles them into one service ({{name}}) with Vision enabled. Older auto-configured inbounds (Trojan, Shadowsocks, previous versions) are replaced. Running it again is safe. Xray only runs on nodes, so at least one connected node is required.",
 	"services.autoConfigure.success": "Best protocols configured. Create a user and assign the \"{{name}}\" service to give them access.",
 	"services.autoConfigure.failed": "Failed to auto-configure protocols",
-	"services.autoConfigure.gamingLabel": "Add a gaming config (lower latency)",
-	"services.autoConfigure.gamingHint": "Adds an mKCP config that carries game traffic over UDP and resends lost packets faster than TCP. It needs an Xray-based app (v2rayNG, v2rayN, Karing); sing-box apps such as Hiddify cannot use mKCP. Hysteria2, already in the set, is the option that works everywhere. Ping still depends mostly on how close the server is.",
 	"services.autoConfigure.cdnLabel": "Cloudflare domain (optional, for filtered IPs)",
 	"services.autoConfigure.cdnPlaceholder": "cdn.example.com",
 	"services.autoConfigure.cdnHelp": "If your server's IP is filtered, enter a domain that is already proxied through Cloudflare (orange cloud, SSL mode Full). Users then connect to Cloudflare instead of your IP. Leave empty to skip.",
