@@ -2509,7 +2509,14 @@ backup_service() {
 
     local backup_command
     backup_command="$(backup_cron_command)"
-    add_cron_job "$cron_schedule" "$backup_command"
+    if ! add_cron_job "$cron_schedule" "$backup_command"; then
+        # The settings are saved, but without a cron job nothing would ever
+        # run, so this must not be reported as a working backup service.
+        colorized_echo red "Backup settings were saved, but the schedule could not be installed."
+        colorized_echo magenta "  Fix cron and run this again: next backup-service"
+        colorized_echo magenta "  A one-off backup still works with: next backup"
+        return 1
+    fi
 
     colorized_echo green "Backup service successfully configured."
     if [[ "$interval_hours" -eq 24 ]]; then
@@ -2521,21 +2528,58 @@ backup_service() {
 }
 
 
+# ensure_cron_daemon makes sure a scheduled backup can actually fire. Cron is
+# not part of every server image, and a cron package that is installed but not
+# running is worse than a missing one: the job is stored, the setup reports
+# success and no backup ever arrives.
+ensure_cron_daemon() {
+    local unit
+    if ! command -v crontab >/dev/null 2>&1; then
+        colorized_echo yellow "cron is not installed; installing it"
+        detect_os
+        install_package cron >/dev/null 2>&1 || install_package cronie >/dev/null 2>&1 || true
+    fi
+    if ! command -v crontab >/dev/null 2>&1; then
+        colorized_echo red "cron could not be installed, so a scheduled backup cannot run."
+        return 1
+    fi
+    for unit in cron crond cronie; do
+        if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\.service"; then
+            systemctl enable "$unit" >/dev/null 2>&1 || true
+            systemctl start "$unit" >/dev/null 2>&1 || true
+            if systemctl is-active "$unit" >/dev/null 2>&1; then
+                return 0
+            fi
+        fi
+    done
+    if pgrep -x cron >/dev/null 2>&1 || pgrep -x crond >/dev/null 2>&1; then
+        return 0
+    fi
+    colorized_echo red "The cron service is not running, so a scheduled backup would never fire."
+    colorized_echo magenta "  Start it with: systemctl enable --now cron"
+    return 1
+}
+
 add_cron_job() {
     local schedule="$1"
     local command="$2"
-    local temp_cron=$(mktemp)
+    local temp_cron
 
+    ensure_cron_daemon || return 1
+
+    temp_cron=$(mktemp)
     crontab -l 2>/dev/null > "$temp_cron" || true
     sed -i '/# next-backup-service/d' "$temp_cron"
     echo "$schedule $command # next-backup-service" >> "$temp_cron"
-    
+
     if crontab "$temp_cron"; then
         colorized_echo green "Cron job successfully added."
-    else
-        colorized_echo red "Failed to add cron job. Please check manually."
+        rm -f "$temp_cron"
+        return 0
     fi
+    colorized_echo red "Failed to add cron job. Please check manually."
     rm -f "$temp_cron"
+    return 1
 }
 
 remove_backup_service() {
