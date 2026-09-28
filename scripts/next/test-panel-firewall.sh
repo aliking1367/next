@@ -39,7 +39,7 @@ for SCRIPT in next.sh next-binary.sh; do
         install_package() { :; }
         for fn in valid_cidr_list cloudflare_ip_ranges panel_firewall_port panel_firewall_ssh_port \
                   panel_listen_ports panel_firewall_ports listening_tcp_ports panel_firewall_require_ufw panel_firewall_clear_rules \
-                  panel_firewall_status panel_firewall_enable panel_firewall_disable secure_panel_command; do
+                  panel_firewall_status panel_firewall_enable panel_firewall_disable secure_panel_command                   prompt_panel_hardening apply_panel_hardening_if_requested panel_hardening_checklist; do
             eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$ROOT/$SCRIPT")"
         done
         for constant in PANEL_FIREWALL_COMMENT CLOUDFLARE_IPV4_URL CLOUDFLARE_IPV6_URL; do
@@ -135,6 +135,27 @@ for SCRIPT in next.sh next-binary.sh; do
 2053
 62050
 '''; }
+
+        # The install-time prompt: unattended installs must never firewall
+        # themselves, and it must be opt-in, because restricting the origin
+        # before Cloudflare proxies the domain locks the admin out.
+        ui_section() { :; }
+        ui_read_yes_no() { return 1; }
+        unset NEXT_SECURE_PANEL
+        prompt_panel_hardening </dev/null
+        check "$SCRIPT non-tty install does not firewall" "0" "$PANEL_HARDENING_REQUESTED"
+        NEXT_SECURE_PANEL=1 prompt_panel_hardening </dev/null
+        check "$SCRIPT env override opts in" "1" "$PANEL_HARDENING_REQUESTED"
+        NEXT_SECURE_PANEL=0 prompt_panel_hardening </dev/null
+        check "$SCRIPT env override can opt out" "0" "$PANEL_HARDENING_REQUESTED"
+
+        # Nothing is applied unless the admin asked for it.
+        ufw_calls=""
+        ufw() { ufw_calls="$ufw_calls|$*"; }
+        PANEL_HARDENING_REQUESTED=0 apply_panel_hardening_if_requested >/dev/null 2>&1
+        check "$SCRIPT install applies nothing by default" "" "$ufw_calls"
+        PANEL_HARDENING_REQUESTED=1 apply_panel_hardening_if_requested >/dev/null 2>&1
+        contains "$SCRIPT install applies when asked" "$ufw_calls" "--force enable"
 
         # Cancelling at the prompt changes nothing.
         ufw_calls=""

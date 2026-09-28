@@ -4130,10 +4130,12 @@ install_command() {
         exit 1
     fi
     prompt_ssl_setup
+    prompt_panel_hardening
     if [ "$install_mode" = "binary" ]; then
         create_initial_admin_if_requested
     fi
     up_next
+    apply_panel_hardening_if_requested
     follow_next_logs
 }
 
@@ -5386,6 +5388,58 @@ panel_firewall_disable() {
         ufw allow "$port/tcp" >/dev/null 2>&1 || true
     done
     colorized_echo green "The panel ports are open again from any address."
+}
+
+# prompt_panel_hardening is asked during installation because that is when an
+# admin decides how the panel is exposed, and because a panel whose origin is
+# reachable is the one that ends up scanned and blocked. It defaults to no:
+# restricting the origin before Cloudflare proxies the domain would shut the
+# admin out of their own panel.
+prompt_panel_hardening() {
+    PANEL_HARDENING_REQUESTED=0
+    if [ -n "${NEXT_SECURE_PANEL:-}" ]; then
+        case "${NEXT_SECURE_PANEL}" in
+            1|true|TRUE|yes|YES) PANEL_HARDENING_REQUESTED=1 ;;
+        esac
+        return
+    fi
+    if [ ! -t 0 ]; then
+        return
+    fi
+    ui_section "Panel exposure"
+    colorized_echo magenta "  Behind Cloudflare a blocked origin IP stops mattering: Cloudflare reaches"
+    colorized_echo magenta "  this server from outside the filtering country, so the panel and every"
+    colorized_echo magenta "  subscription link keep working. The origin then only has to stay"
+    colorized_echo magenta "  unreachable directly, which is what this step does."
+    colorized_echo yellow "  Say yes ONLY if the panel's domain is already proxied through Cloudflare"
+    colorized_echo yellow "  (orange cloud). Otherwise you would shut yourself out of your own panel."
+    colorized_echo magenta "  You can always do it later with: next secure-panel enable"
+    if ui_read_yes_no "Restrict the panel to Cloudflare now?" "n"; then
+        PANEL_HARDENING_REQUESTED=1
+    fi
+}
+
+apply_panel_hardening_if_requested() {
+    if [ "${PANEL_HARDENING_REQUESTED:-0}" = "1" ]; then
+        panel_firewall_enable --yes
+    fi
+    panel_hardening_checklist
+}
+
+# panel_hardening_checklist is printed on every install, so an admin who
+# skipped the step still leaves with the three things that keep a panel
+# reachable once its IP is filtered.
+panel_hardening_checklist() {
+    ui_section "Keeping this panel reachable"
+    colorized_echo magenta "  1. Put the panel behind Cloudflare: proxy its domain (orange cloud) and"
+    colorized_echo magenta "     set SSL/TLS to Full (strict). Users then never touch this server's IP."
+    colorized_echo magenta "  2. Close the origin afterwards:  next secure-panel enable"
+    colorized_echo magenta "  3. Add backup subscription domains in Settings -> Subscriptions, so one"
+    colorized_echo magenta "     blocked domain cannot cut every user off at once."
+    if systemctl is-enabled next-node >/dev/null 2>&1 || [ -x /usr/local/bin/next-node ]; then
+        colorized_echo yellow "  A node also runs on this server. Proxy traffic is what gets an IP"
+        colorized_echo yellow "  blocked, so the panel is safest on a server that runs no node at all."
+    fi
 }
 
 secure_panel_command() {
