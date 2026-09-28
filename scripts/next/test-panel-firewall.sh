@@ -38,7 +38,7 @@ for SCRIPT in next.sh next-binary.sh; do
         detect_os() { :; }
         install_package() { :; }
         for fn in valid_cidr_list cloudflare_ip_ranges panel_firewall_port panel_firewall_ssh_port \
-                  listening_tcp_ports panel_firewall_require_ufw panel_firewall_clear_rules \
+                  panel_listen_ports panel_firewall_ports listening_tcp_ports panel_firewall_require_ufw panel_firewall_clear_rules \
                   panel_firewall_status panel_firewall_enable panel_firewall_disable secure_panel_command; do
             eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$ROOT/$SCRIPT")"
         done
@@ -96,6 +96,45 @@ for SCRIPT in next.sh next-binary.sh; do
         contains "$SCRIPT allows a Cloudflare IPv6-style range" "$ufw_calls" "allow from 162.158.0.0/15 to any port 2053"
         contains "$SCRIPT denies everyone else" "$ufw_calls" "deny 2053/tcp comment $PANEL_FIREWALL_COMMENT"
         contains "$SCRIPT enables the firewall" "$ufw_calls" "--force enable"
+
+        # The real shape of a panel server: the panel serves two ports while
+        # Xray serves the rest. Both panel ports must be restricted and no
+        # proxy port may be touched, or user configs break.
+        panel_listen_ports() { printf '''2053
+8000
+'''; }
+        listening_tcp_ports() { printf '''22
+443
+2053
+2096
+8000
+8443
+'''; }
+        ufw_calls=""
+        ufw() { ufw_calls="$ufw_calls|$*"; }
+        panel_firewall_enable --yes >/dev/null 2>&1
+        contains "$SCRIPT restricts the configured panel port" "$ufw_calls" "allow from 104.16.0.0/13 to any port 8000"
+        contains "$SCRIPT restricts the subscription port" "$ufw_calls" "allow from 104.16.0.0/13 to any port 2053"
+        contains "$SCRIPT denies the configured panel port" "$ufw_calls" "deny 8000/tcp"
+        contains "$SCRIPT denies the subscription port" "$ufw_calls" "deny 2053/tcp"
+        lacks "$SCRIPT never blanket-allows a panel port" "$ufw_calls" "allow 2053/tcp"
+        lacks "$SCRIPT never blanket-allows the other panel port" "$ufw_calls" "allow 8000/tcp"
+        contains "$SCRIPT leaves the REALITY port alone" "$ufw_calls" "allow 443/tcp"
+        contains "$SCRIPT leaves the XHTTP port alone" "$ufw_calls" "allow 8443/tcp"
+        contains "$SCRIPT leaves the CDN port alone" "$ufw_calls" "allow 2096/tcp"
+        lacks "$SCRIPT never denies a proxy port" "$ufw_calls" "deny 443/tcp"
+
+        # An explicit --port wins over what is detected.
+        ufw_calls=""
+        panel_firewall_enable --yes --port 9000 >/dev/null 2>&1
+        contains "$SCRIPT honours an explicit --port" "$ufw_calls" "deny 9000/tcp"
+        lacks "$SCRIPT ignores detection when --port is given" "$ufw_calls" "deny 2053/tcp"
+
+        panel_listen_ports() { printf ''''''; }
+        listening_tcp_ports() { printf '''22
+2053
+62050
+'''; }
 
         # Cancelling at the prompt changes nothing.
         ufw_calls=""

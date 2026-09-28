@@ -6255,6 +6255,28 @@ panel_firewall_port() {
     printf '8000'
 }
 
+# panel_listen_ports asks the running panel which ports it serves. The
+# configured port is not the whole story: the panel also binds the
+# subscription ports, and restricting only the one from the environment
+# leaves the port users actually connect to wide open.
+panel_listen_ports() {
+    command -v ss >/dev/null 2>&1 || return 0
+    ss -tlnp 2>/dev/null | grep -F 'next-server' | awk '{print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' | sort -un
+}
+
+# panel_firewall_ports lists every port to restrict: what the panel is
+# actually serving, or the configured one when the panel is not running or
+# its listeners cannot be seen (a container, for instance).
+panel_firewall_ports() {
+    local detected
+    detected="$(panel_listen_ports)"
+    if [ -n "$detected" ]; then
+        printf '%s\n' "$detected"
+        return 0
+    fi
+    panel_firewall_port
+}
+
 # panel_firewall_ssh_port reads sshd's own configuration, so turning the
 # firewall on never closes the door the admin is standing in.
 panel_firewall_ssh_port() {
@@ -6299,21 +6321,21 @@ panel_firewall_clear_rules() {
 }
 
 panel_firewall_status() {
-    local port active rules
-    port="$(panel_firewall_port)"
+    local ports active rules
+    ports="$(panel_firewall_ports | tr '\n' ' ')"
     if ! command -v ufw >/dev/null 2>&1; then
-        colorized_echo yellow "ufw is not installed, so the panel port is open to the whole internet."
+        colorized_echo yellow "ufw is not installed, so the panel is open to the whole internet."
         return 0
     fi
     active="$(ufw status 2>/dev/null | head -1)"
     rules="$(ufw status 2>/dev/null | grep -cF "$PANEL_FIREWALL_COMMENT" || true)"
     colorized_echo blue "Firewall: ${active:-unknown}"
-    colorized_echo blue "Panel port: $port"
+    colorized_echo blue "Panel ports: ${ports:-unknown}"
     if [ "${rules:-0}" -gt 0 ]; then
-        colorized_echo green "Panel port is restricted to Cloudflare ($rules rules)."
+        colorized_echo green "Panel ports are restricted to Cloudflare ($rules rules)."
     else
-        colorized_echo yellow "Panel port is NOT restricted; anyone can reach this server directly."
-        colorized_echo magenta "  Restrict it with: next secure-panel enable"
+        colorized_echo yellow "Panel ports are NOT restricted; anyone can reach this server directly."
+        colorized_echo magenta "  Restrict them with: next secure-panel enable"
     fi
     # A node on the panel server is the usual reason a panel IP gets filtered:
     # it is the proxy traffic that draws attention, not the panel.
@@ -6324,11 +6346,11 @@ panel_firewall_status() {
 }
 
 panel_firewall_enable() {
-    local assume_yes=0 port ssh_port ranges count keep_ports extra_ports="" extra keep range answer
+    local assume_yes=0 ports ssh_port ranges count keep_ports port_overrides="" extra_ports="" extra keep range answer port
     while [ $# -gt 0 ]; do
         case "$1" in
             --yes|-y) assume_yes=1 ;;
-            --port) shift; PANEL_FIREWALL_PORT_OVERRIDE="${1:-}" ;;
+            --port) shift; port_overrides="$port_overrides ${1:-}" ;;
             --ssh-port) shift; PANEL_FIREWALL_SSH_OVERRIDE="${1:-}" ;;
             --keep-port) shift; extra_ports="$extra_ports ${1:-}" ;;
             *) colorized_echo red "Unknown option: $1"; return 1 ;;
@@ -6336,7 +6358,16 @@ panel_firewall_enable() {
         shift || true
     done
     check_running_as_root
-    port="${PANEL_FIREWALL_PORT_OVERRIDE:-$(panel_firewall_port)}"
+    if [ -n "$(printf '%s' "$port_overrides" | tr -d '[:space:]')" ]; then
+        ports="$port_overrides"
+    else
+        ports="$(panel_firewall_ports | tr '\n' ' ')"
+    fi
+    ports="$(printf '%s\n' $ports | grep -E '^[0-9]+$' | sort -un | tr '\n' ' ')"
+    if [ -z "$(printf '%s' "$ports" | tr -d '[:space:]')" ]; then
+        colorized_echo red "Could not work out which port the panel serves; pass it with --port."
+        return 1
+    fi
     ssh_port="${PANEL_FIREWALL_SSH_OVERRIDE:-$(panel_firewall_ssh_port)}"
 
     colorized_echo blue "Fetching Cloudflare's published IP ranges"
@@ -6346,7 +6377,11 @@ panel_firewall_enable() {
     fi
     count=$(printf '%s' "$ranges" | grep -c .)
 
-    keep_ports="$(listening_tcp_ports | grep -v "^${port}$" | tr '\n' ' ')"
+    keep_ports="$(listening_tcp_ports)"
+    for port in $ports; do
+        keep_ports="$(printf '%s\n' $keep_ports | grep -v "^${port}$" || true)"
+    done
+    keep_ports="$(printf '%s\n' $keep_ports | tr '\n' ' ')"
     for extra in $extra_ports; do
         if printf '%s' "$extra" | grep -Eq '^[0-9]+$'; then
             keep_ports="$keep_ports $extra"
@@ -6354,11 +6389,12 @@ panel_firewall_enable() {
     done
 
     colorized_echo blue "================================"
-    colorized_echo magenta "  Panel port $port: only Cloudflare ($count ranges) may reach it"
+    colorized_echo magenta "  Panel ports $ports: only Cloudflare ($count ranges) may reach them"
     colorized_echo magenta "  SSH port $ssh_port: kept open"
     colorized_echo magenta "  Also kept open: ${keep_ports:-none}"
     colorized_echo blue "================================"
     colorized_echo yellow "After this the panel answers only through your Cloudflare domain."
+    colorized_echo yellow "Ports serving proxy traffic are left alone, so user configs keep working."
     colorized_echo yellow "Keep a way in that does not depend on this server IP (another server, or a VPN)."
     if [ "$assume_yes" -ne 1 ]; then
         printf 'Apply these firewall rules? [y/N]: '
@@ -6377,13 +6413,15 @@ panel_firewall_enable() {
     done
 
     panel_firewall_clear_rules
-    for range in $ranges; do
-        ufw allow from "$range" to any port "$port" proto tcp comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
+    for port in $ports; do
+        for range in $ranges; do
+            ufw allow from "$range" to any port "$port" proto tcp comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
+        done
+        ufw deny "$port/tcp" comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
     done
-    ufw deny "$port/tcp" comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
 
     ufw --force enable >/dev/null 2>&1 || true
-    colorized_echo green "Panel port $port is now reachable only through Cloudflare."
+    colorized_echo green "Panel ports $ports are now reachable only through Cloudflare."
     panel_firewall_status
 }
 
@@ -6394,10 +6432,11 @@ panel_firewall_disable() {
         colorized_echo yellow "ufw is not installed; there is nothing to undo."
         return 0
     fi
-    port="$(panel_firewall_port)"
     panel_firewall_clear_rules
-    ufw allow "$port/tcp" >/dev/null 2>&1 || true
-    colorized_echo green "Panel port $port is open again from any address."
+    for port in $(panel_firewall_ports); do
+        ufw allow "$port/tcp" >/dev/null 2>&1 || true
+    done
+    colorized_echo green "The panel ports are open again from any address."
 }
 
 secure_panel_command() {
