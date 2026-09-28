@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-ca7be31",
-  "updated_at": "2026-09-28T15:16:26Z",
+  "latest": "dev-ea995b0",
+  "updated_at": "2026-09-28T15:36:54Z",
   "builds": [
+    {
+      "tag": "dev-ea995b0",
+      "sha": "ea995b008c8daa353ca8c6b8581afa797b0a9d1c",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "36444309676",
+      "run_number": "62",
+      "created_at": "2026-09-28T15:36:54Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-ea995b0.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-ea995b0.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-ea995b0.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ea995b0.zip"
+        }
+      }
+    },
     {
       "tag": "dev-ca7be31",
       "sha": "ca7be31a32c8474b9bc59645d5d80538d51fc9f2",
