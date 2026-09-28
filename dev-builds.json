@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-a91ce4d",
-  "updated_at": "2026-09-23T16:55:43Z",
+  "latest": "dev-bb10aea",
+  "updated_at": "2026-09-28T14:19:51Z",
   "builds": [
+    {
+      "tag": "dev-bb10aea",
+      "sha": "bb10aeaa98c1b8a858e6b529b4a29f0289b15619",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "36434596069",
+      "run_number": "58",
+      "created_at": "2026-09-28T14:19:51Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-bb10aea.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-bb10aea.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-bb10aea.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-bb10aea.zip"
+        }
+      }
+    },
     {
       "tag": "dev-a91ce4d",
       "sha": "a91ce4d1da78b0cf894e2fa6398c1720113471dc",
