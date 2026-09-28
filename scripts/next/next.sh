@@ -4916,7 +4916,7 @@ edit_env_command() {
 }
 
 menu_commands() {
-    echo "up down restart status logs cli migrate backup backup-service install update uninstall script-install script-update script-uninstall core-update enable-phpmyadmin disable-phpmyadmin edit edit-env ssl help"
+    echo "up down restart status logs cli migrate backup backup-service install update uninstall script-install script-update script-uninstall core-update enable-phpmyadmin disable-phpmyadmin edit edit-env ssl secure-panel help"
 }
 
 menu_category_for() {
@@ -4925,7 +4925,7 @@ menu_category_for() {
         cli|migrate|backup|backup-service) echo "Administration and data" ;;
         install|update|uninstall) echo "Install and update" ;;
         script-install|script-update|script-uninstall) echo "Script management" ;;
-        core-update|enable-phpmyadmin|disable-phpmyadmin|edit|edit-env|ssl) echo "Tools and legacy" ;;
+        core-update|enable-phpmyadmin|disable-phpmyadmin|edit|edit-env|ssl|secure-panel) echo "Tools and legacy" ;;
         *) echo "Help" ;;
     esac
 }
@@ -4953,6 +4953,7 @@ menu_description_for() {
         edit) echo "Edit docker-compose.yml" ;;
         edit-env) echo "Edit environment file" ;;
         ssl) echo "Issue or renew SSL certificates" ;;
+        secure-panel) echo "Restrict the panel port to Cloudflare only" ;;
         help) echo "Show this help message" ;;
         *) echo "" ;;
     esac
@@ -5151,6 +5152,219 @@ usage() {
     echo
 }
 
+# --- Panel firewall (secure-panel) -----------------------------------------
+# Once the panel sits behind Cloudflare, nothing inside a filtering country
+# needs to reach the origin: Cloudflare connects from outside, so a filtered
+# origin IP stops mattering. What still matters is that the origin stays
+# unreachable directly, because an exposed origin is what gets scanned,
+# fingerprinted and then blocked in the first place. These helpers restrict
+# the panel's port to Cloudflare's published ranges.
+CLOUDFLARE_IPV4_URL="${CLOUDFLARE_IPV4_URL:-https://www.cloudflare.com/ips-v4}"
+CLOUDFLARE_IPV6_URL="${CLOUDFLARE_IPV6_URL:-https://www.cloudflare.com/ips-v6}"
+PANEL_FIREWALL_COMMENT="next-panel-cloudflare"
+
+# valid_cidr_list keeps only well-formed CIDRs. A truncated or tampered
+# download must never become firewall rules, so anything else is dropped and
+# the caller checks how many survived.
+valid_cidr_list() {
+    local line
+    while IFS= read -r line; do
+        line="${line%%#*}"
+        line="$(printf '%s' "$line" | tr -d '[:space:]')"
+        [ -n "$line" ] || continue
+        if printf '%s' "$line" | grep -Eq '^[0-9]{1,3}([.][0-9]{1,3}){3}/[0-9]{1,2}$'; then
+            printf '%s\n' "$line"
+        elif printf '%s' "$line" | grep -Eq '^[0-9a-fA-F:]+/[0-9]{1,3}$'; then
+            printf '%s\n' "$line"
+        fi
+    done
+}
+
+# cloudflare_ip_ranges prints Cloudflare's ranges, or fails when the lists
+# look wrong. Fewer than ten entries means the download broke; applying that
+# would lock Cloudflare itself out of the panel.
+cloudflare_ip_ranges() {
+    local raw count
+    raw="$( { curl -fsSL --max-time 20 "$CLOUDFLARE_IPV4_URL"; echo; curl -fsSL --max-time 20 "$CLOUDFLARE_IPV6_URL"; } 2>/dev/null | valid_cidr_list | sort -u)"
+    count=$(printf '%s' "$raw" | grep -c . || true)
+    if [ "${count:-0}" -lt 10 ]; then
+        return 1
+    fi
+    printf '%s\n' "$raw"
+}
+
+panel_firewall_port() {
+    local port
+    port="$(get_env_value "UVICORN_PORT" 2>/dev/null || true)"
+    port="$(printf '%s' "$port" | tr -d '[:space:]')"
+    if printf '%s' "$port" | grep -Eq '^[0-9]+$' && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; then
+        printf '%s' "$port"
+        return 0
+    fi
+    printf '8000'
+}
+
+# panel_firewall_ssh_port reads sshd's own configuration, so turning the
+# firewall on never closes the door the admin is standing in.
+panel_firewall_ssh_port() {
+    local port=""
+    if [ -r /etc/ssh/sshd_config ]; then
+        port="$(grep -iE '^[[:space:]]*Port[[:space:]]+[0-9]+' /etc/ssh/sshd_config 2>/dev/null | head -1 | awk '{print $2}')"
+    fi
+    if printf '%s' "$port" | grep -Eq '^[0-9]+$'; then
+        printf '%s' "$port"
+        return 0
+    fi
+    printf '22'
+}
+
+# listening_tcp_ports lists what this machine already serves. Turning on a
+# default-deny firewall without them would silently break services that work
+# today, so they are allowed explicitly.
+listening_tcp_ports() {
+    if command -v ss >/dev/null 2>&1; then
+        ss -tlnH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' | sort -un
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -tln 2>/dev/null | awk '/^tcp/ {print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' | sort -un
+    fi
+}
+
+panel_firewall_require_ufw() {
+    if command -v ufw >/dev/null 2>&1; then
+        return 0
+    fi
+    colorized_echo yellow "ufw is not installed; installing it"
+    detect_os
+    install_package ufw || return 1
+    command -v ufw >/dev/null 2>&1
+}
+
+panel_firewall_clear_rules() {
+    local numbers number
+    numbers="$(ufw status numbered 2>/dev/null | grep -F "$PANEL_FIREWALL_COMMENT" | awk -F'[][]' '{print $2}' | tr -d '[:space:]' | grep -E '^[0-9]+$' | sort -rn)"
+    for number in $numbers; do
+        yes | ufw delete "$number" >/dev/null 2>&1 || true
+    done
+}
+
+panel_firewall_status() {
+    local port active rules
+    port="$(panel_firewall_port)"
+    if ! command -v ufw >/dev/null 2>&1; then
+        colorized_echo yellow "ufw is not installed, so the panel port is open to the whole internet."
+        return 0
+    fi
+    active="$(ufw status 2>/dev/null | head -1)"
+    rules="$(ufw status 2>/dev/null | grep -cF "$PANEL_FIREWALL_COMMENT" || true)"
+    colorized_echo blue "Firewall: ${active:-unknown}"
+    colorized_echo blue "Panel port: $port"
+    if [ "${rules:-0}" -gt 0 ]; then
+        colorized_echo green "Panel port is restricted to Cloudflare ($rules rules)."
+    else
+        colorized_echo yellow "Panel port is NOT restricted; anyone can reach this server directly."
+        colorized_echo magenta "  Restrict it with: next secure-panel enable"
+    fi
+    # A node on the panel server is the usual reason a panel IP gets filtered:
+    # it is the proxy traffic that draws attention, not the panel.
+    if systemctl is-enabled next-node >/dev/null 2>&1 || [ -x /usr/local/bin/next-node ]; then
+        colorized_echo yellow "A node also runs on this server. Proxy traffic is what gets an IP blocked,"
+        colorized_echo yellow "so the panel is safest on a server that runs no node at all."
+    fi
+}
+
+panel_firewall_enable() {
+    local assume_yes=0 port ssh_port ranges count keep_ports extra_ports="" extra keep range answer
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --yes|-y) assume_yes=1 ;;
+            --port) shift; PANEL_FIREWALL_PORT_OVERRIDE="${1:-}" ;;
+            --ssh-port) shift; PANEL_FIREWALL_SSH_OVERRIDE="${1:-}" ;;
+            --keep-port) shift; extra_ports="$extra_ports ${1:-}" ;;
+            *) colorized_echo red "Unknown option: $1"; return 1 ;;
+        esac
+        shift || true
+    done
+    check_running_as_root
+    port="${PANEL_FIREWALL_PORT_OVERRIDE:-$(panel_firewall_port)}"
+    ssh_port="${PANEL_FIREWALL_SSH_OVERRIDE:-$(panel_firewall_ssh_port)}"
+
+    colorized_echo blue "Fetching Cloudflare's published IP ranges"
+    if ! ranges="$(cloudflare_ip_ranges)"; then
+        colorized_echo red "Could not fetch a usable Cloudflare range list; nothing was changed."
+        return 1
+    fi
+    count=$(printf '%s' "$ranges" | grep -c .)
+
+    keep_ports="$(listening_tcp_ports | grep -v "^${port}$" | tr '\n' ' ')"
+    for extra in $extra_ports; do
+        if printf '%s' "$extra" | grep -Eq '^[0-9]+$'; then
+            keep_ports="$keep_ports $extra"
+        fi
+    done
+
+    colorized_echo blue "================================"
+    colorized_echo magenta "  Panel port $port: only Cloudflare ($count ranges) may reach it"
+    colorized_echo magenta "  SSH port $ssh_port: kept open"
+    colorized_echo magenta "  Also kept open: ${keep_ports:-none}"
+    colorized_echo blue "================================"
+    colorized_echo yellow "After this the panel answers only through your Cloudflare domain."
+    colorized_echo yellow "Keep a way in that does not depend on this server IP (another server, or a VPN)."
+    if [ "$assume_yes" -ne 1 ]; then
+        printf 'Apply these firewall rules? [y/N]: '
+        IFS= read -r answer
+        case "$answer" in
+            y|Y|yes|YES) ;;
+            *) colorized_echo yellow "Cancelled; nothing was changed."; return 0 ;;
+        esac
+    fi
+
+    panel_firewall_require_ufw || { colorized_echo red "ufw is required."; return 1; }
+
+    ufw allow "$ssh_port/tcp" >/dev/null 2>&1 || true
+    for keep in $keep_ports; do
+        ufw allow "$keep/tcp" >/dev/null 2>&1 || true
+    done
+
+    panel_firewall_clear_rules
+    for range in $ranges; do
+        ufw allow from "$range" to any port "$port" proto tcp comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
+    done
+    ufw deny "$port/tcp" comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
+
+    ufw --force enable >/dev/null 2>&1 || true
+    colorized_echo green "Panel port $port is now reachable only through Cloudflare."
+    panel_firewall_status
+}
+
+panel_firewall_disable() {
+    local port
+    check_running_as_root
+    if ! command -v ufw >/dev/null 2>&1; then
+        colorized_echo yellow "ufw is not installed; there is nothing to undo."
+        return 0
+    fi
+    port="$(panel_firewall_port)"
+    panel_firewall_clear_rules
+    ufw allow "$port/tcp" >/dev/null 2>&1 || true
+    colorized_echo green "Panel port $port is open again from any address."
+}
+
+secure_panel_command() {
+    local action="${1:-status}"
+    shift || true
+    case "$action" in
+        enable|on) panel_firewall_enable "$@" ;;
+        disable|off) panel_firewall_disable "$@" ;;
+        status|"") panel_firewall_status ;;
+        *)
+            colorized_echo blue "Usage: next secure-panel <status|enable|disable>"
+            colorized_echo magenta "  Restrict the panel port to Cloudflare: next secure-panel enable"
+            colorized_echo magenta "  Keep another port open as well:        next secure-panel enable --keep-port 8443"
+            colorized_echo magenta "  Undo it:                               next secure-panel disable"
+            ;;
+    esac
+}
+
 dispatch_command() {
     local cmd="$1"
     shift || true
@@ -5183,6 +5397,7 @@ dispatch_command() {
         prepare-external-app-hosting) prepare_external_app_hosting "$@" ;;
         prepare-external-app-node-hosting) prepare_external_app_node_hosting "$@" ;;
         ssl) ssl_command "$@" ;;
+        secure-panel) secure_panel_command "$@" ;;
         edit) edit_command "$@" ;;
         edit-env) edit_env_command "$@" ;;
         help) usage ;;
