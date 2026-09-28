@@ -91,7 +91,7 @@ for SCRIPT in next.sh next-binary.sh; do
         contains "$SCRIPT keeps SSH open" "$ufw_calls" "allow 2222/tcp"
         contains "$SCRIPT keeps other services open" "$ufw_calls" "allow 62050/tcp"
         contains "$SCRIPT honours --keep-port" "$ufw_calls" "allow 8443/tcp"
-        lacks "$SCRIPT never blanket-allows the panel port" "$ufw_calls" "allow 2053/tcp"
+        lacks "$SCRIPT never blanket-allows the panel port" "$ufw_calls" "|allow 2053/tcp"
         contains "$SCRIPT allows a Cloudflare range" "$ufw_calls" "allow from 104.16.0.0/13 to any port 2053 proto tcp comment $PANEL_FIREWALL_COMMENT"
         contains "$SCRIPT allows a Cloudflare IPv6-style range" "$ufw_calls" "allow from 162.158.0.0/15 to any port 2053"
         contains "$SCRIPT denies everyone else" "$ufw_calls" "deny 2053/tcp comment $PANEL_FIREWALL_COMMENT"
@@ -117,12 +117,27 @@ for SCRIPT in next.sh next-binary.sh; do
         contains "$SCRIPT restricts the subscription port" "$ufw_calls" "allow from 104.16.0.0/13 to any port 2053"
         contains "$SCRIPT denies the configured panel port" "$ufw_calls" "deny 8000/tcp"
         contains "$SCRIPT denies the subscription port" "$ufw_calls" "deny 2053/tcp"
-        lacks "$SCRIPT never blanket-allows a panel port" "$ufw_calls" "allow 2053/tcp"
-        lacks "$SCRIPT never blanket-allows the other panel port" "$ufw_calls" "allow 8000/tcp"
+        lacks "$SCRIPT never blanket-allows a panel port" "$ufw_calls" "|allow 2053/tcp"
+        lacks "$SCRIPT never blanket-allows the other panel port" "$ufw_calls" "|allow 8000/tcp"
         contains "$SCRIPT leaves the REALITY port alone" "$ufw_calls" "allow 443/tcp"
         contains "$SCRIPT leaves the XHTTP port alone" "$ufw_calls" "allow 8443/tcp"
         contains "$SCRIPT leaves the CDN port alone" "$ufw_calls" "allow 2096/tcp"
         lacks "$SCRIPT never denies a proxy port" "$ufw_calls" "deny 443/tcp"
+
+        # ufw updates a same-port rule in place, so a leftover blanket allow
+        # would become the deny at ITS position, ahead of the Cloudflare
+        # allows, and lock Cloudflare out too. Every existing rule for a panel
+        # port must be deleted before the Cloudflare rules go in.
+        contains "$SCRIPT clears a stale allow on a panel port" "$ufw_calls" "delete allow 2053/tcp"
+        contains "$SCRIPT clears a stale deny on a panel port" "$ufw_calls" "delete deny 2053/tcp"
+        deletes=$(printf '%s' "$ufw_calls" | tr '|' '
+' | grep -n '^delete allow 2053/tcp$' | head -1 | cut -d: -f1)
+        allows=$(printf '%s' "$ufw_calls" | tr '|' '
+' | grep -n '^allow from .* port 2053 ' | head -1 | cut -d: -f1)
+        denies=$(printf '%s' "$ufw_calls" | tr '|' '
+' | grep -n '^deny 2053/tcp' | head -1 | cut -d: -f1)
+        check "$SCRIPT deletes before it allows" "1" "$( [ "${deletes:-0}" -lt "${allows:-0}" ] && echo 1 || echo 0 )"
+        check "$SCRIPT denies after it allows" "1" "$( [ "${allows:-0}" -lt "${denies:-0}" ] && echo 1 || echo 0 )"
 
         # An explicit --port wins over what is detected.
         ufw_calls=""

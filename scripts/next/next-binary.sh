@@ -6459,6 +6459,18 @@ panel_firewall_enable() {
     done
 
     panel_firewall_clear_rules
+    # ufw treats a rule with the same port and protocol as the same rule and
+    # updates it in place, keeping its original position. A blanket allow left
+    # over from an earlier run (or from "secure-panel disable") therefore turns
+    # into the deny below at THAT position, ahead of the Cloudflare allows,
+    # and the panel becomes unreachable even for Cloudflare. Removing any
+    # existing rule for the port first keeps the deny last, where it belongs.
+    for port in $ports; do
+        ufw delete allow "$port/tcp" >/dev/null 2>&1 || true
+        ufw delete deny "$port/tcp" >/dev/null 2>&1 || true
+        ufw delete allow "$port" >/dev/null 2>&1 || true
+        ufw delete deny "$port" >/dev/null 2>&1 || true
+    done
     for port in $ports; do
         for range in $ranges; do
             ufw allow from "$range" to any port "$port" proto tcp comment "$PANEL_FIREWALL_COMMENT" >/dev/null 2>&1 || true
