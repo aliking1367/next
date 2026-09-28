@@ -1847,6 +1847,8 @@
 	"settings.subscriptions.globalTemplate": "تمپلیت پیش‌فرض پنل",
 	"settings.subscriptions.urlPrefix": "دامنه لینک ساب",
 	"settings.subscriptions.urlPrefixHint": "آدرس پایه برای لینک ساب؛ خالی یعنی لینک نسبی.",
+	"settings.subscriptions.backupPrefixes": "دامنه‌های پشتیبان اشتراک",
+	"settings.subscriptions.backupPrefixesHint": "هر خط یک آدرس، مثل https://cdn.example.net . هر دامنه‌ای که به همین پنل اشاره کند همان اشتراک را می‌دهد؛ پس به هر کاربر به‌ازای هر دامنه یک لینک داده می‌شود. اگر یک دامنه فیلتر شود، برنامه‌ی کاربر همچنان لینک سالم دارد و لازم نیست چیزی دوباره بفرستید.",
 	"settings.subscriptions.customTemplatesDir": "مسیر تمپلیت سفارشی",
 	"settings.subscriptions.customTemplatesDirHint": "در صورت نیاز مسیر جدا برای Jinja.",
 	"settings.subscriptions.templateGallery.title": "طراحی صفحه‌ی اشتراک",

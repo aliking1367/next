@@ -96,6 +96,24 @@ func normalizeAlias(alias string) string {
 	return strings.TrimSpace(cleaned)
 }
 
+// normalizeBackupPrefixes cleans the extra subscription origins: each one is
+// a bare origin like "https://cdn.example.com" (a missing scheme is filled in
+// with https), blanks and duplicates are dropped, and the order the admin
+// entered is kept because that is the order users receive the links in.
+func normalizeBackupPrefixes(values []string) []string {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, value := range values {
+		prefix := normalizePrefix(ensureScheme(strings.TrimSpace(value)))
+		if prefix == "" || seen[prefix] {
+			continue
+		}
+		seen[prefix] = true
+		result = append(result, prefix)
+	}
+	return result
+}
+
 func normalizeAliases(values []string) []string {
 	result := []string{}
 	seen := map[string]bool{}
@@ -304,6 +322,9 @@ func applySubscriptionDefaults(settings *SubscriptionSettings) {
 	}
 	if settings.SubscriptionPath == "" {
 		settings.SubscriptionPath = defaultSubscriptionPath
+	}
+	if settings.SubscriptionBackupPrefixes == nil {
+		settings.SubscriptionBackupPrefixes = []string{}
 	}
 	if settings.SubscriptionAliases == nil {
 		settings.SubscriptionAliases = []string{}

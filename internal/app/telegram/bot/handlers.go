@@ -320,6 +320,9 @@ func linksText(user UserView) string {
 	lines := []string{fmt.Sprintf("🔗 <b>Links for</b> <code>%s</code>", escape(user.Username))}
 	if strings.TrimSpace(user.SubscriptionURL) != "" {
 		lines = append(lines, "", "<b>Subscription:</b>", "<code>"+escape(user.SubscriptionURL)+"</code>")
+		for _, backup := range user.BackupSubscriptionURLs {
+			lines = append(lines, "<code>"+escape(backup)+"</code>")
+		}
 	}
 	if len(user.Links) > 0 {
 		lines = append(lines, "")

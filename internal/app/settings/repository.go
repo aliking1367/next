@@ -210,6 +210,13 @@ func (r Repository) UpdateSubscriptionSettings(ctx context.Context, raw map[stri
 			}
 			encoded, _ := json.Marshal(normalizeAliases(aliases))
 			add(key, string(encoded))
+		case "subscription_backup_prefixes":
+			prefixes, err := rawStringList(value)
+			if err != nil {
+				return SubscriptionSettings{}, fmt.Errorf("subscription_backup_prefixes must be a list")
+			}
+			encoded, _ := json.Marshal(normalizeBackupPrefixes(prefixes))
+			add(key, string(encoded))
 		case "subscription_ports":
 			ports, err := rawIntList(value)
 			if err != nil {
@@ -463,6 +470,7 @@ singbox_settings_template,
 mux_template,
 subscription_path,
 subscription_aliases,
+COALESCE(subscription_backup_prefixes, '[]'),
 subscription_ports,
 COALESCE(client_routing_rules, '[]'),
 COALESCE(subscription_placeholder_enabled, 0),
@@ -470,7 +478,7 @@ COALESCE(subscription_placeholder_remark, '')
 FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 	var result SubscriptionSettings
 	var customDir sql.NullString
-	var aliasesRaw, portsRaw, clientRoutingRulesRaw sql.NullString
+	var aliasesRaw, backupPrefixesRaw, portsRaw, clientRoutingRulesRaw sql.NullString
 	var placeholderEnabled sql.NullBool
 	var placeholderRemark sql.NullString
 	if err := row.Scan(
@@ -492,6 +500,7 @@ FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 		&result.MuxTemplate,
 		&result.SubscriptionPath,
 		&aliasesRaw,
+		&backupPrefixesRaw,
 		&portsRaw,
 		&clientRoutingRulesRaw,
 		&placeholderEnabled,
@@ -510,6 +519,7 @@ FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 	result.SubscriptionSupportURL = normalizeSupportURL(result.SubscriptionSupportURL)
 	result.SubscriptionPath = normalizePath(result.SubscriptionPath)
 	result.SubscriptionAliases = decodeStringArray(aliasesRaw.String)
+	result.SubscriptionBackupPrefixes = normalizeBackupPrefixes(decodeStringArray(backupPrefixesRaw.String))
 	result.SubscriptionPorts = decodeIntArray(portsRaw.String)
 	if clientRoutingRulesRaw.Valid && clientRoutingRulesRaw.String != "" {
 		_ = json.Unmarshal([]byte(clientRoutingRulesRaw.String), &result.ClientRoutingRules)
@@ -546,13 +556,14 @@ singbox_settings_template,
 mux_template,
 subscription_path,
 subscription_aliases,
+subscription_backup_prefixes,
 subscription_ports,
 client_routing_rules,
 subscription_placeholder_enabled,
 subscription_placeholder_remark,
 created_at,
 updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"",
 		defaultSubscriptionProfileTitle,
 		defaultSubscriptionSupportURL,
@@ -570,6 +581,7 @@ updated_at
 		defaultSingBoxSettingsTemplate,
 		defaultMuxTemplate,
 		defaultSubscriptionPath,
+		"[]",
 		"[]",
 		"[]",
 		defaultClientRoutingRules,

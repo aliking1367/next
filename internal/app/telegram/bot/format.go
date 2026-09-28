@@ -140,6 +140,9 @@ func userDetailText(user UserView) string {
 	}
 	if strings.TrimSpace(user.SubscriptionURL) != "" {
 		lines = append(lines, separator(), line("Subscription", user.SubscriptionURL))
+		for _, backup := range user.BackupSubscriptionURLs {
+			lines = append(lines, line("Backup", backup))
+		}
 	}
 	return strings.Join(lines, "\n")
 }

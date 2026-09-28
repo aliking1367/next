@@ -103,7 +103,12 @@ type UserView struct {
 	Note            string
 	OwnerAdmin      string
 	SubscriptionURL string
-	Links           []string
+	// BackupSubscriptionURLs are the same subscription on the panel's backup
+	// domains. They are listed beside the main link so an admin hands a user
+	// every one at once: a client holding them all survives one domain being
+	// blocked without the admin having to send anything again.
+	BackupSubscriptionURLs []string
+	Links                  []string
 }
 
 // UserService exposes the user operations the bot needs. Implementations must

@@ -40,7 +40,7 @@ func BuildSubscriptionLinks(req SubscriptionLinkRequest, base SubscriptionSettin
 		}
 		salt = generated
 	}
-	prefixes := buildSubscriptionBases(settings, salt, req.RequestOrigin)
+	prefixes := appendBackupBases(buildSubscriptionBases(settings, salt, req.RequestOrigin), settings, salt)
 	urlPrefix := "/sub"
 	if len(prefixes) > 0 {
 		urlPrefix = prefixes[0]
@@ -93,7 +93,8 @@ func effectiveSubscriptionSettings(base SubscriptionSettings, admin AdminLinkSet
 		SubscriptionPath:               normalizePath(base.SubscriptionPath),
 		SubscriptionPorts:              normalizePorts(base.SubscriptionPorts),
 		SubscriptionAliases:            append([]string{}, base.SubscriptionAliases...),
-		ClientRoutingRules:         	append([]ClientRoutingRule{}, base.ClientRoutingRules...), // <--- این خط حتماً باید اضافه شود
+		SubscriptionBackupPrefixes:     normalizeBackupPrefixes(base.SubscriptionBackupPrefixes),
+		ClientRoutingRules:             append([]ClientRoutingRule{}, base.ClientRoutingRules...), // <--- این خط حتماً باید اضافه شود
 		SubscriptionPlaceholderEnabled: base.SubscriptionPlaceholderEnabled,
 		SubscriptionPlaceholderRemark:  firstNonEmptyString(base.SubscriptionPlaceholderRemark, "disabled"),
 		RawPanelSettings:               base.RawPanelSettings,
@@ -133,6 +134,8 @@ func effectiveSubscriptionSettings(base SubscriptionSettings, admin AdminLinkSet
 			effective.SubscriptionPorts = normalizePorts(value)
 		case "subscription_aliases":
 			effective.SubscriptionAliases = normalizeAliases(value)
+		case "subscription_backup_prefixes":
+			effective.SubscriptionBackupPrefixes = normalizeBackupPrefixes(value)
 		case "client_routing_rules":
 			if text, ok := coerceString(value); ok {
 				var rules []ClientRoutingRule
@@ -243,6 +246,28 @@ func buildSubscriptionBases(settings SubscriptionSettings, salt string, requestO
 	return bases
 }
 
+// appendBackupBases adds one base per backup origin, after whatever the
+// primary prefix produced. The subscription route matches on path alone, so
+// each of these serves the very same subscription; a user whose client holds
+// them all keeps working when one domain is blocked.
+func appendBackupBases(bases []string, settings SubscriptionSettings, salt string) []string {
+	path := normalizePath(settings.SubscriptionPath)
+	for _, prefix := range settings.SubscriptionBackupPrefixes {
+		if salt != "" {
+			prefix = strings.ReplaceAll(prefix, "*", salt)
+		}
+		prefix = strings.TrimSpace(prefix)
+		if prefix == "" {
+			continue
+		}
+		base := strings.TrimRight(prefix, "/") + "/" + path
+		if !containsString(bases, base) {
+			bases = append(bases, base)
+		}
+	}
+	return bases
+}
+
 func createSubscriptionToken(username string, secret string, now time.Time) string {
 	timestamp := int64(math.Ceil(float64(now.UnixNano()) / 1_000_000_000))
 	data := username + "," + strconv.FormatInt(timestamp, 10)
@@ -333,6 +358,11 @@ func prefixLabel(prefix string) string {
 	}
 	if port := parsed.Port(); port != "" {
 		return port
+	}
+	// A backup origin has no port to name it by, so the host is what tells
+	// the links apart.
+	if host := parsed.Hostname(); host != "" {
+		return host
 	}
 	return prefix
 }

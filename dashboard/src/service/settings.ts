@@ -172,6 +172,7 @@ export interface SubscriptionTemplateSettings {
 	mux_template: string;
 	subscription_path: string;
 	subscription_aliases: string[];
+	subscription_backup_prefixes: string[];
 	subscription_ports: number[];
 	client_routing_rules?: ClientRoutingRule[];
 	subscription_placeholder_enabled: boolean;

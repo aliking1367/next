@@ -64,6 +64,7 @@ id INTEGER PRIMARY KEY AUTOINCREMENT,
 			subscription_placeholder_enabled INTEGER NOT NULL DEFAULT 0,
 			subscription_placeholder_remark TEXT NOT NULL DEFAULT 'disabled',
 			subscription_aliases TEXT NOT NULL DEFAULT '[]',
+			subscription_backup_prefixes TEXT NOT NULL DEFAULT '[]',
 			created_at DATETIME NULL,
 			updated_at DATETIME NULL
 		)`,

@@ -123,3 +123,25 @@ func TestReadTemplateContentIgnoresPersistentDirectoryWhenDBDirectoryIsEmpty(t *
 		t.Fatalf("expected a resolved path, got %#v", content.ResolvedPath)
 	}
 }
+
+// Admins paste domains in whatever form they have them; what is stored has to
+// be a usable origin, because each entry becomes a subscription link handed
+// straight to a user's client.
+func TestNormalizeBackupPrefixes(t *testing.T) {
+	got := normalizeBackupPrefixes([]string{
+		"  cdn.example.net  ",
+		"https://cdn.example.net/",
+		"https://static.example.org",
+		"   ",
+		"http://legacy.example.com:2053",
+	})
+	want := []string{"https://cdn.example.net", "https://static.example.org", "http://legacy.example.com:2053"}
+	if len(got) != len(want) {
+		t.Fatalf("normalizeBackupPrefixes = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

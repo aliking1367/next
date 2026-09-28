@@ -46,24 +46,28 @@ type RuntimeSettingsUpdate struct {
 }
 
 type SubscriptionSettings struct {
-	SubscriptionURLPrefix          string              `json:"subscription_url_prefix"`
-	SubscriptionProfileTitle       string              `json:"subscription_profile_title"`
-	SubscriptionSupportURL         string              `json:"subscription_support_url"`
-	SubscriptionUpdateInterval     string              `json:"subscription_update_interval"`
-	CustomTemplatesDirectory       *string             `json:"custom_templates_directory"`
-	ClashSubscriptionTemplate      string              `json:"clash_subscription_template"`
-	ClashSettingsTemplate          string              `json:"clash_settings_template"`
-	SubscriptionPageTemplate       string              `json:"subscription_page_template"`
-	HomePageTemplate               string              `json:"home_page_template"`
-	V2RaySubscriptionTemplate      string              `json:"v2ray_subscription_template"`
-	V2RaySettingsTemplate          string              `json:"v2ray_settings_template"`
-	HappSubscriptionTemplate       string              `json:"happ_subscription_template"`
-	IncySubscriptionTemplate       string              `json:"incy_subscription_template"`
-	SingBoxSubscriptionTemplate    string              `json:"singbox_subscription_template"`
-	SingBoxSettingsTemplate        string              `json:"singbox_settings_template"`
-	MuxTemplate                    string              `json:"mux_template"`
-	SubscriptionPath               string              `json:"subscription_path"`
-	SubscriptionAliases            []string            `json:"subscription_aliases"`
+	SubscriptionURLPrefix       string   `json:"subscription_url_prefix"`
+	SubscriptionProfileTitle    string   `json:"subscription_profile_title"`
+	SubscriptionSupportURL      string   `json:"subscription_support_url"`
+	SubscriptionUpdateInterval  string   `json:"subscription_update_interval"`
+	CustomTemplatesDirectory    *string  `json:"custom_templates_directory"`
+	ClashSubscriptionTemplate   string   `json:"clash_subscription_template"`
+	ClashSettingsTemplate       string   `json:"clash_settings_template"`
+	SubscriptionPageTemplate    string   `json:"subscription_page_template"`
+	HomePageTemplate            string   `json:"home_page_template"`
+	V2RaySubscriptionTemplate   string   `json:"v2ray_subscription_template"`
+	V2RaySettingsTemplate       string   `json:"v2ray_settings_template"`
+	HappSubscriptionTemplate    string   `json:"happ_subscription_template"`
+	IncySubscriptionTemplate    string   `json:"incy_subscription_template"`
+	SingBoxSubscriptionTemplate string   `json:"singbox_subscription_template"`
+	SingBoxSettingsTemplate     string   `json:"singbox_settings_template"`
+	MuxTemplate                 string   `json:"mux_template"`
+	SubscriptionPath            string   `json:"subscription_path"`
+	SubscriptionAliases         []string `json:"subscription_aliases"`
+	// SubscriptionBackupPrefixes are extra origins the same subscription is
+	// served on, handed to users alongside the primary link so one blocked
+	// domain does not cut them off.
+	SubscriptionBackupPrefixes     []string            `json:"subscription_backup_prefixes"`
 	SubscriptionPorts              []int               `json:"subscription_ports"`
 	ClientRoutingRules             []ClientRoutingRule `json:"client_routing_rules"`
 	SubscriptionPlaceholderEnabled bool                `json:"subscription_placeholder_enabled"`
@@ -89,6 +93,7 @@ type SubscriptionSettingsUpdate struct {
 	MuxTemplate                    *string              `json:"mux_template,omitempty"`
 	SubscriptionPath               *string              `json:"subscription_path,omitempty"`
 	SubscriptionAliases            *[]string            `json:"subscription_aliases,omitempty"`
+	SubscriptionBackupPrefixes     *[]string            `json:"subscription_backup_prefixes,omitempty"`
 	SubscriptionPorts              *[]int               `json:"subscription_ports,omitempty"`
 	ClientRoutingRules             *[]ClientRoutingRule `json:"client_routing_rules,omitempty"`
 	SubscriptionPlaceholderEnabled *bool                `json:"subscription_placeholder_enabled,omitempty"`

@@ -172,7 +172,8 @@ func (r Repository) subscriptionSettings(ctx context.Context) (SubscriptionSetti
 	}
 	result.SubscriptionPorts = normalizePorts(row["subscription_ports"])
 	result.SubscriptionAliases = normalizeAliases(row["subscription_aliases"])
-	result.ClientRoutingRules = normalizeClientRoutingRules(row["client_routing_rules"])	
+	result.SubscriptionBackupPrefixes = normalizeBackupPrefixes(row["subscription_backup_prefixes"])
+	result.ClientRoutingRules = normalizeClientRoutingRules(row["client_routing_rules"])
 	result.SubscriptionPlaceholderEnabled = truthy(row["subscription_placeholder_enabled"])
 	result.SubscriptionPlaceholderRemark = firstNonEmptyString(stringValue(row["subscription_placeholder_remark"]), "disabled")
 	result.RawSubscriptionSettings = json.RawMessage(mustJSON(row))
@@ -882,6 +883,23 @@ func normalizePorts(raw any) []int {
 		}
 		seen[port] = struct{}{}
 		result = append(result, port)
+	}
+	return result
+}
+
+// normalizeBackupPrefixes reads the extra subscription origins stored by the
+// settings page. Each becomes a full link the user's client can fall back to,
+// so a blank or malformed entry is dropped rather than handed out.
+func normalizeBackupPrefixes(raw any) []string {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, value := range normalizeAliases(raw) {
+		prefix := normalizePrefix(ensureScheme(strings.TrimSpace(value)))
+		if prefix == "" || seen[prefix] {
+			continue
+		}
+		seen[prefix] = true
+		result = append(result, prefix)
 	}
 	return result
 }

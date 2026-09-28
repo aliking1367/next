@@ -574,6 +574,7 @@ const buildDefaultValues = (settings: TelegramSettingsResponse): FormValues => {
 
 type SubscriptionFormValues = SubscriptionTemplateSettings & {
 	subscription_aliases_text: string;
+	subscription_backup_prefixes_text: string;
 	subscription_ports_text: string;
 	client_routing_rules: { pattern: string; result: string }[];
 };
@@ -622,12 +623,16 @@ const buildSubscriptionDefaults = (
 	mux_template: settings?.mux_template ?? "",
 	subscription_path: settings?.subscription_path ?? "sub",
 	subscription_aliases: settings?.subscription_aliases ?? [],
+	subscription_backup_prefixes: settings?.subscription_backup_prefixes ?? [],
 	subscription_ports: settings?.subscription_ports ?? [],
 	subscription_placeholder_enabled:
 		settings?.subscription_placeholder_enabled ?? false,
 	subscription_placeholder_remark:
 		settings?.subscription_placeholder_remark ?? "disabled",
 	subscription_aliases_text: (settings?.subscription_aliases ?? []).join("\n"),
+	subscription_backup_prefixes_text: (
+		settings?.subscription_backup_prefixes ?? []
+	).join("\n"),
 	subscription_ports_text: formatSubscriptionPorts(
 		settings?.subscription_ports ?? [],
 	),
@@ -765,6 +770,10 @@ const buildSubscriptionPayload = (
 	mux_template: values.mux_template.trim(),
 	subscription_path: values.subscription_path?.trim() || "sub",
 	subscription_aliases: (values.subscription_aliases_text || "")
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean),
+	subscription_backup_prefixes: (values.subscription_backup_prefixes_text || "")
 		.split(/\r?\n/)
 		.map((line) => line.trim())
 		.filter(Boolean),
@@ -2807,6 +2816,24 @@ export const IntegrationSettingsPage = () => {
 										/>
 										<FormHelperText>
 											{t("settings.subscriptions.urlPrefixHint")}
+										</FormHelperText>
+									</FormControl>
+									<FormControl>
+										<FormLabel>
+											{t("settings.subscriptions.backupPrefixes")}
+										</FormLabel>
+										<Textarea
+											placeholder={"https://cdn.example.net\nhttps://static.example.org"}
+											rows={3}
+											dir="ltr"
+											autoComplete="off"
+											spellCheck={false}
+											{...subscriptionRegister(
+												"subscription_backup_prefixes_text",
+											)}
+										/>
+										<FormHelperText>
+											{t("settings.subscriptions.backupPrefixesHint")}
 										</FormHelperText>
 									</FormControl>
 									<FormControl>

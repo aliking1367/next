@@ -1857,6 +1857,8 @@
 	"settings.subscriptions.globalTemplate": "Panel default template",
 	"settings.subscriptions.urlPrefix": "Subscription URL prefix",
 	"settings.subscriptions.urlPrefixHint": "Base domain for generated links. Keep empty for relative URLs.",
+	"settings.subscriptions.backupPrefixes": "Backup subscription domains",
+	"settings.subscriptions.backupPrefixesHint": "One origin per line, e.g. https://cdn.example.net. Every domain pointed at this panel serves the same subscription, so each user is handed one link per domain. If one domain gets blocked their client still has a working one, with nothing to resend.",
 	"settings.subscriptions.customTemplatesDir": "Custom templates directory",
 	"settings.subscriptions.customTemplatesDirHint": "Optional override for Jinja template lookup.",
 	"settings.subscriptions.templateGallery.title": "Subscription page design",

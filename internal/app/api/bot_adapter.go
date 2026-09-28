@@ -82,6 +82,7 @@ func (b botUserService) Get(ctx context.Context, username string) (telegrambot.U
 		SubscriptionURL: detail.SubscriptionURL,
 		Links:           detail.Links,
 	}
+	view.BackupSubscriptionURLs = backupSubscriptionURLs(detail)
 	if detail.Note != nil {
 		view.Note = *detail.Note
 	}
@@ -89,6 +90,35 @@ func (b botUserService) Get(ctx context.Context, username string) (telegrambot.U
 		view.OwnerAdmin = *detail.AdminUsername
 	}
 	return view, nil
+}
+
+// backupSubscriptionURLs lists the primary link's own subscription type on
+// each backup domain. Taking only the matching type keeps the message to one
+// link per domain instead of every link format of every domain.
+func backupSubscriptionURLs(detail userapp.UserDetail) []string {
+	primaryType := ""
+	for _, key := range detail.SubscriptionURLs.Keys() {
+		if strings.Contains(key, "@") {
+			continue
+		}
+		if value, ok := detail.SubscriptionURLs.Get(key); ok && value == detail.SubscriptionURL {
+			primaryType = key
+			break
+		}
+	}
+	if primaryType == "" {
+		return nil
+	}
+	var backups []string
+	for _, key := range detail.SubscriptionURLs.Keys() {
+		if !strings.HasPrefix(key, primaryType+"@") {
+			continue
+		}
+		if value, ok := detail.SubscriptionURLs.Get(key); ok && strings.TrimSpace(value) != "" {
+			backups = append(backups, value)
+		}
+	}
+	return backups
 }
 
 func (b botUserService) actorAdmin(actor telegrambot.Actor) (adminapp.Admin, error) {

@@ -190,6 +190,12 @@ func (m OrderedStringMap) Get(key string) (string, bool) {
 	return value, ok
 }
 
+// Keys lists the map's keys in insertion order, which is the order the links
+// were built in.
+func (m OrderedStringMap) Keys() []string {
+	return append([]string{}, m.keys...)
+}
+
 func (m OrderedStringMap) Without(key string) OrderedStringMap {
 	result := NewOrderedStringMap(len(m.keys))
 	for _, existingKey := range m.keys {
@@ -309,6 +315,7 @@ type SubscriptionSettings struct {
 	SubscriptionPath               string                         `json:"subscription_path"`
 	SubscriptionPorts              []int                          `json:"subscription_ports"`
 	SubscriptionAliases            []string                       `json:"subscription_aliases"`
+	SubscriptionBackupPrefixes     []string                       `json:"subscription_backup_prefixes"`
 	ClientRoutingRules             []ClientRoutingRule            `json:"client_routing_rules"`
 	SubscriptionPlaceholderEnabled bool                           `json:"subscription_placeholder_enabled"`
 	SubscriptionPlaceholderRemark  string                         `json:"subscription_placeholder_remark"`
