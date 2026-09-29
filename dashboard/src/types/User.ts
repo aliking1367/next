@@ -75,6 +75,7 @@ export type User = {
 	subscription_urls?: Record<string, string>;
 	inbounds: UserInbounds;
 	note: string;
+	extra_links?: string[];
 	telegram_id?: string | null;
 	contact_number?: string | null;
 	online_at: string;
@@ -146,6 +147,7 @@ export type UserCreateWithService = Pick<
 	auto_delete_in_days?: number | null;
 	next_plans?: NextPlan[];
 	credential_key?: string;
+	extra_links?: string[];
 };
 
 export type UserApi = {

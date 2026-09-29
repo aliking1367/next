@@ -151,6 +151,7 @@ func (r Repository) userDetailRow(ctx context.Context, username string) (UserDet
 	u.note,
 	u.telegram_id,
 	u.contact_number,
+	u.extra_links,
 	COALESCE((SELECT usa.updated_at FROM user_subscription_access usa WHERE usa.user_id = u.id), u.sub_updated_at),
 	COALESCE((SELECT usa.user_agent FROM user_subscription_access usa WHERE usa.user_id = u.id), u.sub_last_user_agent),
 	` + online.LastSeenExpression + `,
@@ -171,6 +172,7 @@ LIMIT 1`
 	var row UserDetail
 	var createdAt, subUpdatedAt, onlineAt, onHoldTimeout any
 	var credentialKey, resetStrategy, flow, note, telegramID, contactNumber, userAgent, subadress sql.NullString
+	var extraLinks sql.NullString
 	var expire, dataLimit, holdDuration, autoDelete, serviceID, adminID sql.NullInt64
 	var serviceName, adminUsername sql.NullString
 	scan := func(where string) error {
@@ -190,6 +192,7 @@ LIMIT 1`
 			&note,
 			&telegramID,
 			&contactNumber,
+			&extraLinks,
 			&subUpdatedAt,
 			&userAgent,
 			&onlineAt,
@@ -223,6 +226,7 @@ LIMIT 1`
 	row.Note = stringPtr(note)
 	row.TelegramID = stringPtr(telegramID)
 	row.ContactNumber = stringPtr(contactNumber)
+	row.ExtraLinks = ParseExtraLinks(nullStringValue(extraLinks))
 	if value := dbTimeString(subUpdatedAt); value != "" {
 		row.SubUpdatedAt = &value
 	}

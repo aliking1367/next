@@ -467,6 +467,7 @@ func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail
 			return "", err
 		}
 		connectable = connectableConfigLinks(links)
+		connectable = appendExtraLinks(connectable, user.ExtraLinks)
 	}
 	raw := connectable.Links
 	switch config.Format {
@@ -524,6 +525,26 @@ func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail
 	default:
 		return "", clientError(404, "Unsupported client type")
 	}
+}
+
+// appendExtraLinks puts the admin's hand-added configs after the panel's own
+// ones. Everything downstream converts from this list, so they reach every
+// client format. Metadata is padded to keep it index-aligned with the links:
+// these configs did not come from an inbound, so there is nothing to report
+// about their transport.
+func appendExtraLinks(connectable ConfigLinksResponse, extra []string) ConfigLinksResponse {
+	if len(extra) == 0 {
+		return connectable
+	}
+	for _, link := range extra {
+		link = strings.TrimSpace(link)
+		if link == "" {
+			continue
+		}
+		connectable.Links = append(connectable.Links, link)
+		connectable.Metadata = append(connectable.Metadata, ConfigLinkMetadata{})
+	}
+	return connectable
 }
 
 func subscriptionPlaceholderRemark(user UserDetail, settings SubscriptionSettings) string {

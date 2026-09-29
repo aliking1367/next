@@ -747,7 +747,7 @@ func newSubscriptionClientTestService(t *testing.T) (Service, string) {
 			flow TEXT NULL,
 			note TEXT NULL,
 			telegram_id TEXT NULL,
-			contact_number TEXT NULL,
+			contact_number TEXT NULL, extra_links TEXT NULL,
 			sub_updated_at DATETIME NULL,
 			sub_last_user_agent TEXT NULL,
 			online_at DATETIME NULL,

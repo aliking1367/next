@@ -76,11 +76,15 @@ type UserPayloadBase struct {
 	Note                   *string                    `json:"note,omitempty"`
 	TelegramID             *string                    `json:"telegram_id,omitempty"`
 	ContactNumber          *string                    `json:"contact_number,omitempty"`
-	OnHoldExpireDuration   *int64                     `json:"on_hold_expire_duration,omitempty"`
-	OnHoldTimeout          *string                    `json:"on_hold_timeout,omitempty"`
-	IPLimit                *int64                     `json:"ip_limit,omitempty"`
-	AutoDeleteInDays       *int64                     `json:"auto_delete_in_days,omitempty"`
-	NextPlans              []NextPlanPayload          `json:"next_plans,omitempty"`
+	// ExtraLinks are configs the admin supplies by hand. They are appended to
+	// this user's subscription in every client format, so a user still has
+	// something that works when the panel's own configs are blocked.
+	ExtraLinks           []string          `json:"extra_links,omitempty"`
+	OnHoldExpireDuration *int64            `json:"on_hold_expire_duration,omitempty"`
+	OnHoldTimeout        *string           `json:"on_hold_timeout,omitempty"`
+	IPLimit              *int64            `json:"ip_limit,omitempty"`
+	AutoDeleteInDays     *int64            `json:"auto_delete_in_days,omitempty"`
+	NextPlans            []NextPlanPayload `json:"next_plans,omitempty"`
 }
 
 type UserCreate struct {

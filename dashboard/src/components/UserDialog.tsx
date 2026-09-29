@@ -209,6 +209,9 @@ export type FormType = BaseFormFields & {
 
 	manual_key_entry: boolean;
 
+	/** One config link per line; sent to the API as extra_links. */
+	extra_links_text: string;
+
 	service_id: number | null;
 
 	next_plan_enabled: boolean;
@@ -259,6 +262,7 @@ const formatUser = (user: User): FormType => {
 
 		telegram_id: user.telegram_id ?? "",
 		contact_number: user.contact_number ?? "",
+		extra_links_text: (user.extra_links ?? []).join("\n"),
 	};
 };
 
@@ -285,6 +289,7 @@ const getDefaultValues = (): FormType => {
 		on_hold_expire_duration: null,
 
 		note: "",
+		extra_links_text: "",
 
 		service_id: null,
 
@@ -403,6 +408,13 @@ const buildSchema = (isEditing: boolean) => {
 			if (typeof value !== "string") return "";
 			return value;
 		}),
+
+		extra_links_text: z
+			.union([z.string(), z.null(), z.undefined()])
+			.transform((value) => {
+				if (typeof value !== "string") return "";
+				return value;
+			}),
 
 		telegram_id: z
 			.union([z.string(), z.null(), z.undefined()])
@@ -1664,6 +1676,10 @@ export const UserDialog: FC<UserDialogProps> = () => {
 				service_id: effectiveServiceId,
 
 				note: values.note,
+				extra_links: (values.extra_links_text || "")
+					.split(/\r?\n/)
+					.map((line) => line.trim())
+					.filter(Boolean),
 
 				telegram_id: values.telegram_id,
 
@@ -3536,6 +3552,25 @@ export const UserDialog: FC<UserDialogProps> = () => {
 																	<FormErrorMessage>
 																		{form.formState.errors?.note?.message}
 																	</FormErrorMessage>
+																</FormControl>
+																<FormControl w="full">
+																	<FormLabel
+																		textAlign={isRTL ? "right" : "left"}
+																		w="full"
+																	>
+																		{t("userDialog.extraLinks")}
+																	</FormLabel>
+																	<Textarea
+																		{...form.register("extra_links_text")}
+																		dir="ltr"
+																		rows={3}
+																		autoComplete="off"
+																		spellCheck={false}
+																		placeholder="vless://..."
+																	/>
+																	<FormHelperText>
+																		{t("userDialog.extraLinksHint")}
+																	</FormHelperText>
 																</FormControl>
 																<FormControl
 																	isInvalid={

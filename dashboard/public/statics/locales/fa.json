@@ -2162,6 +2162,8 @@
 	"userDialog.links.subscriptionKey": "کلید",
 	"userDialog.links.subscriptionKeyUsername": "کلید + نام کاربری",
 	"userDialog.links.subscriptionToken": "توکن",
+	"userDialog.extraLinks": "کانفیگ‌های اضافه‌ی این کاربر",
+	"userDialog.extraLinksHint": "هر خط یک لینک کانفیگ (vless://، vmess://، trojan://، hysteria2://...). فقط به این کاربر و در همه‌ی فرمت‌های برنامه‌ها اضافه می‌شوند؛ پس اگر کانفیگ‌های خود پنل فیلتر شدند، کاربر باز هم چیزی دارد که کار می‌کند.",
 	"userDialog.links.noSubscription": "لینک اشتراکی موجود نیست",
 	"userDialog.links.recommended": "پیشنهاد شده",
 	"userDialog.links.configs": "کانفیگ‌ها",

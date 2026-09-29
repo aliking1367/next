@@ -147,7 +147,7 @@ func TestInspectAndExtractSQLite(t *testing.T) {
 	}
 	if _, err := db.Exec(`CREATE TABLE users (
 		id INTEGER PRIMARY KEY, username TEXT, status TEXT, data_limit INTEGER,
-		expire INTEGER, note TEXT, telegram_id INTEGER, contact_number TEXT,
+		expire INTEGER, note TEXT, telegram_id INTEGER, contact_number TEXT, extra_links TEXT NULL,
 		on_hold_expire_duration INTEGER, on_hold_timeout INTEGER, ip_limit INTEGER,
 		auto_delete_in_days INTEGER, data_limit_reset_strategy TEXT, admin_id INTEGER
 	)`); err != nil {

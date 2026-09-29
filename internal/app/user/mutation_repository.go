@@ -112,8 +112,8 @@ INSERT INTO users (
 	username, credential_key, subadress, flow, status, used_traffic, data_limit,
 	data_limit_reset_strategy, expire, admin_id, created_at, note, telegram_id,
 	contact_number, on_hold_expire_duration, on_hold_timeout, ip_limit,
-	auto_delete_in_days, last_status_change, service_id
-) VALUES (?, ?, '', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	auto_delete_in_days, last_status_change, service_id, extra_links
+) VALUES (?, ?, '', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		payload.Username,
 		nullableStringValue(credentialKey),
 		nullableStringPtr(payload.Flow),
@@ -132,6 +132,7 @@ INSERT INTO users (
 		nilIfZero(payload.AutoDeleteInDays),
 		dbTime(now),
 		nullableInt64Ptr(serviceID),
+		nullableStringValue(NormalizeExtraLinks(payload.ExtraLinks)),
 	)
 	if err != nil {
 		if isDuplicateUserInsertError(err) {
@@ -314,6 +315,10 @@ func (r Repository) updateUserMutation(ctx context.Context, admin adminapp.Admin
 	if rawFieldPresent(rawFields, "contact_number") {
 		sets = append(sets, "contact_number = ?")
 		args = append(args, nullableStringPtr(payload.ContactNumber))
+	}
+	if rawFieldPresent(rawFields, "extra_links") {
+		sets = append(sets, "extra_links = ?")
+		args = append(args, nullableStringValue(NormalizeExtraLinks(payload.ExtraLinks)))
 	}
 	if rawFieldPresent(rawFields, "data_limit_reset_strategy") {
 		sets = append(sets, "data_limit_reset_strategy = ?")
