@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	externalapps "github.com/aliking1367/next/internal/app/externalapps"
+	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -202,6 +202,11 @@ func (s *Server) registerServiceRoutes(r chi.Router) {
 }
 
 func (s *Server) registerUserRoutes(r chi.Router) {
+	// Marzban-compatible plan presets. Reseller bots read these right after
+	// logging in to build their plan list, so a panel without them looks to
+	// the bot like a panel it cannot talk to at all.
+	r.HandleFunc("/user_template/*", s.requireAdmin(s.handleUserTemplatePath))
+	r.HandleFunc("/user_template", s.requireAdmin(s.handleUserTemplatesRoot))
 	r.HandleFunc("/v2/users/*", s.requireAdmin(s.handleUserV2Path))
 	r.HandleFunc("/v2/users", s.requireAdmin(s.handleUserV2Root))
 	r.HandleFunc("/users/actions", s.requireAdmin(s.handleUsersBulkAction))
