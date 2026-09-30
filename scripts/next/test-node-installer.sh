@@ -14,6 +14,7 @@ for SCRIPT in "$ROOT/next-node.sh" "$ROOT/next-node-binary.sh"; do
     select_node_version latest
     [ "$SELECTED_NODE_VERSION" = "latest" ]
 
+    eval "$(sed -n '/^write_node_certificate_from_bundle() {$/,/^}$/p' "$SCRIPT")"
     eval "$(sed -n '/^read_node_certificate_bundle() {$/,/^}$/p' "$SCRIPT")"
     CERT_FILE="$TMP/cert.pem"
     CERT_KEY_FILE="$TMP/cert.key"
