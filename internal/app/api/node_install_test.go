@@ -29,7 +29,10 @@ func TestPanelBaseURLFollowsTheRequest(t *testing.T) {
 
 func TestNodeInstallCommandAndStartupScript(t *testing.T) {
 	command := nodeInstallCommand("https://panel.example.com", "tok123")
-	if !strings.Contains(command, "https://panel.example.com/node-install.sh") {
+	// The installer path must stay under /api/, so one CDN rule covers every
+	// call a node server makes. Outside it, a challenge answers the installer
+	// with a 403.
+	if !strings.Contains(command, "https://panel.example.com/api/node/install-script") {
 		t.Errorf("command does not fetch the installer: %q", command)
 	}
 	if !strings.Contains(command, "--token tok123") {

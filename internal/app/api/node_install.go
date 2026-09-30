@@ -21,7 +21,15 @@ import (
 // its own bundle over HTTPS, so the admin runs one line, or pastes a startup
 // script when creating the server and never opens a terminal at all.
 
-const nodeInstallScriptPath = "/node-install.sh"
+// The installer lives under /api/ so that one WAF rule covers everything a
+// node server fetches. A path outside it needs its own exception, and a CDN
+// that challenges unknown clients then answers the installer with a 403 that
+// looks nothing like a security setting.
+const nodeInstallScriptPath = "/api/node/install-script"
+
+// nodeInstallScriptLegacyPath keeps commands generated before that move
+// working.
+const nodeInstallScriptLegacyPath = "/node-install.sh"
 
 type nodeInstallTokenResponse struct {
 	Token     string `json:"token"`

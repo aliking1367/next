@@ -77,7 +77,7 @@ func (s *Server) Handler() http.Handler {
 	r.HandleFunc("/sub/*", s.handleSubscriptionPath)
 	// The node server calls these itself, with a single-use token as its only
 	// credential, so they cannot sit behind admin authentication.
-	r.HandleFunc(nodeInstallScriptPath, s.handleNodeInstallScript)
+	r.HandleFunc(nodeInstallScriptLegacyPath, s.handleNodeInstallScript)
 
 	r.Route("/api", func(r chi.Router) {
 		s.registerAdminRoutes(r)
@@ -248,6 +248,7 @@ func (s *Server) registerNodeRoutes(r chi.Router) {
 	r.HandleFunc("/nodes/usage", s.requireSudo(s.handleNodesUsage))
 	r.HandleFunc("/nodes/metrics", s.requireSudo(s.handleNodesMetricsWebSocket))
 	r.HandleFunc("/nodes", s.requireSudo(s.handleNodes))
+	r.HandleFunc("/node/install-script", s.handleNodeInstallScript)
 	r.HandleFunc("/node/install-bundle", s.handleNodeInstallBundle)
 	r.HandleFunc("/node/*", s.requireSudo(s.handleNodePath))
 	r.HandleFunc("/node", s.requireSudo(s.handleNodeRoot))
