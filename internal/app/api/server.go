@@ -406,6 +406,8 @@ func (s *Server) handleNodePath(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
+	case "install-token":
+		s.handleNodeInstallToken(w, r, id)
 	case "reconnect":
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")

@@ -25,6 +25,7 @@ import {
 	Wrap,
 	WrapItem,
 } from "@chakra-ui/react";
+import { fetch } from "service/http";
 import { PanelSelect as Select } from "components/common/PanelSelect";
 import {
 	ArrowDownTrayIcon,
@@ -254,6 +255,35 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 			data_limit: formatDataLimitForInput(baseDefaults.data_limit ?? null),
 		},
 	});
+
+	// The panel hands out a single-use token so the node server fetches its own
+	// bundle: pasting a PEM block into a provider's console is what most node
+	// installs trip over.
+	const [installToken, setInstallToken] = useState<{
+		command: string;
+		startup_script: string;
+		expires_at: string;
+	} | null>(null);
+	const [installTokenLoading, setInstallTokenLoading] = useState(false);
+	const handleGenerateInstallToken = async () => {
+		if (!node?.id || installTokenLoading) return;
+		setInstallTokenLoading(true);
+		try {
+			const response = await fetch(`/node/${node.id}/install-token`, {
+				method: "POST",
+			});
+			setInstallToken(response);
+		} catch (_error) {
+			toast({
+				title: t("nodes.install.tokenFailed"),
+				status: "error",
+				isClosable: true,
+				position: "top",
+			});
+		} finally {
+			setInstallTokenLoading(false);
+		}
+	};
 
 	const nodeCertificateValue = !isAddMode
 		? buildNodeInstallBundle(node?.node_certificate, node?.node_certificate_key)
@@ -671,6 +701,56 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 							</Stack>
 						)}
 
+						{!isAddMode && node?.id ? (
+							<Stack className="xray-dialog-section" spacing={3}>
+								<Text fontWeight="medium">{t("nodes.install.title")}</Text>
+								<Text fontSize="sm" opacity={0.8}>
+									{t("nodes.install.hint")}
+								</Text>
+								<Button
+									size="sm"
+									variant="outline"
+									alignSelf="flex-start"
+									isLoading={installTokenLoading}
+									onClick={handleGenerateInstallToken}
+								>
+									{t("nodes.install.generate")}
+								</Button>
+								{installToken && (
+									<Stack spacing={3}>
+										<Box>
+											<Text fontSize="sm" fontWeight="medium" mb={1}>
+												{t("nodes.install.commandLabel")}
+											</Text>
+											<Textarea
+												value={installToken.command}
+												isReadOnly
+												rows={2}
+												dir="ltr"
+												fontSize="xs"
+												fontFamily="mono"
+											/>
+										</Box>
+										<Box>
+											<Text fontSize="sm" fontWeight="medium" mb={1}>
+												{t("nodes.install.startupLabel")}
+											</Text>
+											<Textarea
+												value={installToken.startup_script}
+												isReadOnly
+												rows={4}
+												dir="ltr"
+												fontSize="xs"
+												fontFamily="mono"
+											/>
+										</Box>
+										<Text fontSize="xs" opacity={0.75}>
+											{t("nodes.install.expires")}
+										</Text>
+									</Stack>
+								)}
+							</Stack>
+						) : null}
 						{!isAddMode && nodeCertificateValue && (
 							<Stack className="xray-dialog-section" spacing={3}>
 								<Stack
