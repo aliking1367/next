@@ -180,6 +180,62 @@ export const NodeSchema = z
 	});
 
 export type NodeType = z.infer<typeof NodeSchema>;
+
+// The node form edits a handful of fields, but its values come from a whole
+// node object as the API returned it. Validating that object would make a
+// field the form does not even show -- a live status the panel has not seen
+// before, or a custom Xray config -- block the save with nothing on screen
+// pointing at the cause. This schema covers exactly what the form submits.
+export const NodeFormSchema = NodeSchema.innerType()
+	.pick({
+		id: true,
+		name: true,
+		note: true,
+		address: true,
+		public_address: true,
+		port: true,
+		api_port: true,
+		usage_coefficient: true,
+		data_limit: true,
+		proxy_enabled: true,
+		proxy_type: true,
+		proxy_host: true,
+		proxy_port: true,
+		proxy_username: true,
+		proxy_password: true,
+	})
+	.superRefine((value, ctx) => {
+		if (!value.proxy_enabled) {
+			return;
+		}
+		if (!value.proxy_type) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["proxy_type"],
+				message: "Proxy type is required",
+			});
+		}
+		if (!value.proxy_host) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["proxy_host"],
+				message: "Proxy host is required",
+			});
+		}
+		if (
+			value.proxy_port === null ||
+			value.proxy_port === undefined ||
+			Number.isNaN(value.proxy_port) ||
+			value.proxy_port < 1 ||
+			value.proxy_port > 65535
+		) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["proxy_port"],
+				message: "Proxy port must be between 1 and 65535",
+			});
+		}
+	});
 type NodeServiceUpdateRequest = NodeType & {
 	channel?: string;
 	version?: string;

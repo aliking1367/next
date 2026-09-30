@@ -35,6 +35,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	getNodeDefaultValues,
+	NodeFormSchema,
 	NodeSchema,
 	type NodeType,
 	useNodes,
@@ -247,7 +248,7 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 			};
 
 	const form = useForm({
-		resolver: zodResolver(NodeSchema),
+		resolver: zodResolver(NodeFormSchema),
 		defaultValues: {
 			...baseDefaults,
 			data_limit: formatDataLimitForInput(baseDefaults.data_limit ?? null),
@@ -391,9 +392,21 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 				}, 1000);
 			},
 		});
-	}, () => {
+	}, (errors) => {
 		if (submitStatus !== "idle") return;
+		// Name the field that blocked the save: an invalid form used to look
+		// exactly like a save that silently did nothing.
+		const [field] = Object.keys(errors);
 		showSubmitError();
+		if (field) {
+			toast({
+				title: t("nodes.formInvalidField", { field }),
+				status: "error",
+				isClosable: true,
+				position: "top",
+				duration: 6000,
+			});
+		}
 	});
 
 	const handleCopyNodeCertificate = () => {

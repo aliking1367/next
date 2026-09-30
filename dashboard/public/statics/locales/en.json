@@ -2170,6 +2170,7 @@
 	"userDialog.links.subscriptionKey": "Key",
 	"userDialog.links.subscriptionKeyUsername": "Key + Username",
 	"userDialog.links.subscriptionToken": "Token",
+	"nodes.formInvalidField": "This field is not valid, so the node was not saved: {{field}}",
 	"userDialog.extraLinks": "Extra configs for this user",
 	"userDialog.extraLinksHint": "One config link per line (vless://, vmess://, trojan://, hysteria2://...). They are appended to this user only, in every client format, so the user still has something that works when the panel’s own configs are blocked.",
 	"userDialog.links.noSubscription": "No subscription links",
