@@ -7,6 +7,9 @@ NODE_DISCOVERY_BASE="/opt"
 SKIP_SERVICE_UPDATE=0
 INSTALL_MODE_REQUESTED=""
 NODE_VERSION_REQUESTED=""
+# Path to a node install bundle, so the certificate never has to be pasted
+# into a terminal. Set with --bundle-file or NEXT_NODE_BUNDLE_FILE.
+NODE_BUNDLE_FILE="${NEXT_NODE_BUNDLE_FILE:-}"
 NODE_VERSION_SET=0
 NEXT_NODE_SCRIPT_FLAVOR="${NEXT_NODE_SCRIPT_FLAVOR:-binary}"
 NEXT_NODE_SCRIPT_SOURCE_FILE="${NEXT_NODE_SCRIPT_SOURCE_FILE:-next-node-binary.sh}"
@@ -86,6 +89,14 @@ while [[ $# -gt 0 ]]; do
         --binary)
             INSTALL_MODE_REQUESTED="binary"
             shift
+        ;;
+        --bundle-file)
+            if [ -z "${2:-}" ]; then
+                echo "Error: --bundle-file requires a path."
+                exit 1
+            fi
+            NODE_BUNDLE_FILE="${2:-}"
+            shift 2
         ;;
         --docker|--dockerized)
             INSTALL_MODE_REQUESTED="docker"
@@ -1196,6 +1207,27 @@ install_latest_xray_for_binary_node() {
     NEXT_DATA_DIR="$DATA_DIR" XRAY_INSTALL_DIR="$DATA_DIR/xray-core" XRAY_ASSETS_DIR="$DATA_DIR/xray-core" XRAY_CORE_VERSION="${XRAY_CORE_VERSION:-$DEFAULT_XRAY_CORE_VERSION}" bash "$APP_DIR/scripts/install_latest_xray.sh"
 }
 
+write_node_certificate_from_bundle() {
+    local bundle_file="$1"
+
+    awk 'BEGIN{capture=0} /-----BEGIN CERTIFICATE-----/{capture=1} capture{print} /-----END CERTIFICATE-----/{exit}' "$bundle_file" >"$CERT_FILE"
+    awk 'BEGIN{capture=0} /-----BEGIN( [^-]+)? PRIVATE KEY-----/{capture=1} capture{print} /-----END( [^-]+)? PRIVATE KEY-----/{exit}' "$bundle_file" >"$CERT_KEY_FILE"
+
+    if ! grep -q -- "-----END CERTIFICATE-----" "$CERT_FILE"; then
+        colorized_echo red "The bundle does not contain a valid PEM certificate."
+        rm -f "$CERT_FILE" "$CERT_KEY_FILE"
+        exit 1
+    fi
+    if ! grep -Eq -- "-----END( [^-]+)? PRIVATE KEY-----" "$CERT_KEY_FILE"; then
+        colorized_echo red "The bundle does not contain a valid PEM private key."
+        rm -f "$CERT_FILE" "$CERT_KEY_FILE"
+        exit 1
+    fi
+
+    chmod 600 "$CERT_KEY_FILE"
+    colorized_echo green "Node certificate bundle saved to $CERT_FILE and $CERT_KEY_FILE"
+}
+
 read_node_certificate_bundle() {
     local bundle_file
     local bundle_started=0
@@ -1231,23 +1263,25 @@ read_node_certificate_bundle() {
         exit 1
     fi
 
-    awk 'BEGIN{capture=0} /-----BEGIN CERTIFICATE-----/{capture=1} capture{print} /-----END CERTIFICATE-----/{exit}' "$bundle_file" >"$CERT_FILE"
-    awk 'BEGIN{capture=0} /-----BEGIN( [^-]+)? PRIVATE KEY-----/{capture=1} capture{print} /-----END( [^-]+)? PRIVATE KEY-----/{exit}' "$bundle_file" >"$CERT_KEY_FILE"
+    write_node_certificate_from_bundle "$bundle_file"
     rm -f "$bundle_file"
+}
 
-    if ! grep -q -- "-----END CERTIFICATE-----" "$CERT_FILE"; then
-        colorized_echo red "The bundle does not contain a valid PEM certificate."
-        rm -f "$CERT_FILE" "$CERT_KEY_FILE"
+# load_node_certificate_bundle takes the bundle from a file when one was
+# given. Pasting a multi-line PEM block is the step most likely to fail on a
+# provider's web console, where a wrong keyboard layout or a wrapped line
+# silently corrupts the key, so --bundle-file removes the paste entirely.
+load_node_certificate_bundle() {
+    if [ -z "$NODE_BUNDLE_FILE" ]; then
+        read_node_certificate_bundle
+        return
+    fi
+    if [ ! -f "$NODE_BUNDLE_FILE" ]; then
+        colorized_echo red "Bundle file not found: $NODE_BUNDLE_FILE"
         exit 1
     fi
-    if ! grep -Eq -- "-----END( [^-]+)? PRIVATE KEY-----" "$CERT_KEY_FILE"; then
-        colorized_echo red "The bundle does not contain a valid PEM private key."
-        rm -f "$CERT_FILE" "$CERT_KEY_FILE"
-        exit 1
-    fi
-
-    chmod 600 "$CERT_KEY_FILE"
-    colorized_echo green "Node certificate bundle saved to $CERT_FILE and $CERT_KEY_FILE"
+    colorized_echo blue "Reading the node install bundle from $NODE_BUNDLE_FILE"
+    write_node_certificate_from_bundle "$NODE_BUNDLE_FILE"
 }
 
 configure_binary_node_env() {
@@ -1256,7 +1290,7 @@ configure_binary_node_env() {
 
     if [ ! -s "$CERT_FILE" ] || [ ! -s "$CERT_KEY_FILE" ]; then
         rm -f "$CERT_FILE" "$CERT_KEY_FILE"
-        read_node_certificate_bundle
+        load_node_certificate_bundle
     fi
 
     get_occupied_ports
@@ -1470,7 +1504,7 @@ install_next_node() {
     echo "$BRANCH" > "$BRANCH_FILE"
     
     rm -f "$CERT_FILE" "$CERT_KEY_FILE"
-    read_node_certificate_bundle
+    load_node_certificate_bundle
 
     get_occupied_ports
 

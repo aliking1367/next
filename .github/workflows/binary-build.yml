@@ -89,6 +89,7 @@ jobs:
           bash scripts/next/test-database-tuning.sh
           bash scripts/next/test-panel-firewall.sh
           bash scripts/next/test-backup-service.sh
+          bash scripts/next/test-node-bundle.sh
 
       - name: Test node wire compatibility
         run: go test ./internal/proto/node/v1
