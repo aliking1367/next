@@ -2921,6 +2921,14 @@
                 });
             }
 
+            // Dates get their own locale: plain fa-IR still numbers the days on
+            // the Gregorian calendar, which is not the calendar a Persian
+            // reader counts an expiry date in.
+            function localeForDates() {
+                if (state.language === 'fa') return 'fa-IR-u-ca-persian';
+                return localeForLanguage();
+            }
+
             function localeForLanguage() {
                 if (state.language === 'fa') return 'fa-IR';
                 if (state.language === 'ru') return 'ru-RU';
@@ -2951,7 +2959,7 @@
             function formatDateTime(date) {
                 if (!date) return '—';
                 try {
-                    return new Intl.DateTimeFormat(localeForLanguage(), {
+                    return new Intl.DateTimeFormat(localeForDates(), {
                         year: 'numeric',
                         month: 'short',
                         day: '2-digit',

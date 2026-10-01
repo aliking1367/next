@@ -529,20 +529,24 @@
             catch (e) { return location.origin + location.pathname; }
         }
         function parseLink(link) {
-            var scheme = (link.split("://")[0] || "").toLowerCase(), name = "", host = "";
+            var scheme = (link.split("://")[0] || "").toLowerCase(), name = "", host = "", net = "", security = "";
             try {
                 if (scheme === "vmess") {
                     var body = link.slice(8).split("#")[0].replace(/-/g, "+").replace(/_/g, "/");
                     while (body.length % 4) body += "=";
                     var json = JSON.parse(decodeURIComponent(escape(atob(body))));
                     name = json.ps || ""; host = (json.add || "") + (json.port ? ":" + json.port : "");
+                    net = json.net || ""; security = json.tls || "";
                 } else {
                     var hash = link.indexOf("#");
                     if (hash >= 0) name = decodeURIComponent(link.slice(hash + 1));
-                    host = new URL(link.replace(/^[a-z0-9+.-]+:\/\//i, "http://")).host;
+                    var parsed = new URL(link.replace(/^[a-z0-9+.-]+:\/\//i, "http://"));
+                    host = parsed.host;
+                    net = parsed.searchParams.get("type") || "";
+                    security = parsed.searchParams.get("security") || "";
                 }
             } catch (e) { }
-            return { scheme: scheme, name: name, host: host };
+            return { scheme: scheme, name: name, host: host, net: net, security: security };
         }
         function configLinks() {
             return Array.prototype.map.call(document.querySelectorAll("#configList .cfg:not([hidden])"), function (item) { return item.getAttribute("data-link"); });
@@ -659,7 +663,13 @@
                 var badge = item.querySelector(".proto");
                 badge.textContent = proto[0]; badge.style.background = proto[1];
                 item.querySelector(".cfg-name").textContent = info.name || (proto[0] + " " + formatNumber(index + 1, 0));
-                item.querySelector(".cfg-host").textContent = info.host || "";
+                // The transport and TLS mode decide whether a config survives a
+                // given network, so they belong next to the address rather than
+                // hidden inside the link.
+                var detail = [info.host, info.net, info.security].filter(function (part) {
+                    return part && part !== "none";
+                });
+                item.querySelector(".cfg-host").textContent = detail.join(" · ");
             });
         }
 
