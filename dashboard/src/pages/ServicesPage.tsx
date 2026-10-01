@@ -874,6 +874,8 @@ const ServicesPage: FC = () => {
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
+	const [fastlyHost, setFastlyHost] = useState("");
+	const [fastlySni, setFastlySni] = useState("");
 	const navigate = useNavigate();
 	const [isVerifying, setIsVerifying] = useState(false);
 	const [verifyResults, setVerifyResults] = useState<ProtocolCheckResult[] | null>(
@@ -1001,8 +1003,13 @@ const ServicesPage: FC = () => {
 		try {
 			const domain = cdnDomain.trim();
 			const body =
-				domain || wireGuardTunnel
-					? { cdn_domain: domain, wireguard: wireGuardTunnel }
+				domain || wireGuardTunnel || fastlyHost.trim()
+					? {
+							cdn_domain: domain,
+							wireguard: wireGuardTunnel,
+							fastly_host: fastlyHost.trim(),
+							fastly_sni: fastlySni.trim(),
+						}
 					: undefined;
 			const response = await fetch<AutoConfigureResponse>(
 				"/core/auto-configure",
@@ -2306,6 +2313,34 @@ const ServicesPage: FC = () => {
 							{cdnDomainInvalid
 								? t("services.autoConfigure.cdnInvalid")
 								: t("services.autoConfigure.cdnHelp")}
+						</FormHelperText>
+					</FormControl>
+					<FormControl>
+						<FormLabel>{t("services.autoConfigure.fastlyLabel")}</FormLabel>
+						<Input
+							value={fastlyHost}
+							onChange={(event) => setFastlyHost(event.target.value)}
+							placeholder="xxxxx.global.ssl.fastly.net"
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>
+							{t("services.autoConfigure.fastlyHelp")}
+						</FormHelperText>
+					</FormControl>
+					<FormControl>
+						<FormLabel>{t("services.autoConfigure.fastlySniLabel")}</FormLabel>
+						<Input
+							value={fastlySni}
+							onChange={(event) => setFastlySni(event.target.value)}
+							placeholder="speedtest.net"
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>
+							{t("services.autoConfigure.fastlySniHelp")}
 						</FormHelperText>
 					</FormControl>
 					<FormControl>

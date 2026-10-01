@@ -28,6 +28,7 @@ const (
 	RecipeHysteria2     = "hysteria2-obfs"
 	RecipeCDNXHTTP      = "cdn-xhttp"
 	RecipeAmneziaWG     = "amneziawg-tunnel"
+	RecipeFastlyWS      = "fastly-ws"
 )
 
 // autoProvisionLegacyTags are inbounds created by earlier releases of this
@@ -53,6 +54,19 @@ type AutoProvisionOptions struct {
 	// origin IP, which keeps working when that IP is filtered. The domain
 	// must already be proxied ("orange cloud") through Cloudflare.
 	CDNDomain string
+	// FastlyHost, when set, provisions a VLESS+WebSocket inbound meant to sit
+	// behind a Fastly service. REALITY is the stronger protocol, but its
+	// weakness is the one that actually bites: the origin IP gets graylisted
+	// and every config on it dies at once. A CDN-fronted inbound answers on
+	// the CDN's addresses instead, so it survives exactly the case REALITY
+	// does not. The value is the hostname Fastly gave the admin's service,
+	// usually <service>.global.ssl.fastly.net.
+	FastlyHost string
+	// FastlySNI is the name the TLS handshake announces, which is what a DPI
+	// box reads. Fastly still serves a request whose Host header names the
+	// service while the SNI names something else, so the two differ on
+	// purpose.
+	FastlySNI string
 	// WireGuard, when set, also provisions an AmneziaWG tunnel. It is a real
 	// UDP tunnel rather than a proxy, so latency is lower than any TCP-based
 	// protocol here, which suits games and voice calls. It is off by default
@@ -83,14 +97,18 @@ type AutoProvisionResult struct {
 	CDNRequested bool `json:"cdn_requested"`
 	// WireGuardRequested is true when the AmneziaWG tunnel was asked for.
 	WireGuardRequested bool `json:"wireguard_requested"`
+	// FastlyRequested is true when a Fastly-fronted inbound was asked for.
+	FastlyRequested bool `json:"fastly_requested"`
 }
 
 type autoProvisionBuild struct {
-	tag       string
-	port      int
-	catalog   Catalog
-	usedDests map[string]bool
-	cdnDomain string
+	tag        string
+	port       int
+	catalog    Catalog
+	usedDests  map[string]bool
+	cdnDomain  string
+	fastlyHost string
+	fastlySNI  string
 	// usedPorts are the ports already claimed in this config. A recipe that
 	// needs a second port (the tunnel recipes listen locally as well as
 	// publicly) both reads and extends it.
@@ -104,6 +122,7 @@ type autoProvisionSpec struct {
 	preferredPorts []int
 	cdn            bool
 	wireGuard      bool
+	fastly         bool
 	build          func(in autoProvisionBuild) (map[string]any, error)
 }
 
@@ -114,6 +133,7 @@ func autoProvisionSpecs() []autoProvisionSpec {
 		{protocol: "hysteria", recipe: RecipeHysteria2, tag: "auto-hysteria2-obfs", build: buildAutoHysteria2},
 		{protocol: "vless", recipe: RecipeCDNXHTTP, tag: "auto-cdn-xhttp", preferredPorts: cdnPreferredPorts, cdn: true, build: buildAutoCDNXHTTP},
 		{protocol: AWGProtocol, recipe: RecipeAmneziaWG, tag: "auto-amneziawg", preferredPorts: []int{51820}, wireGuard: true, build: buildAutoAmneziaWG},
+		{protocol: "vless", recipe: RecipeFastlyWS, tag: "auto-fastly-ws", fastly: true, build: buildAutoFastlyWS},
 	}
 }
 
@@ -164,7 +184,18 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 	if err != nil {
 		return AutoProvisionResult{}, err
 	}
-	result := AutoProvisionResult{CDNRequested: cdnDomain != "", WireGuardRequested: opts.WireGuard}
+	fastlyHost, err := NormalizeCDNDomain(opts.FastlyHost)
+	if err != nil {
+		return AutoProvisionResult{}, fmt.Errorf("fastly host: %w", err)
+	}
+	fastlySNI, err := NormalizeCDNDomain(opts.FastlySNI)
+	if err != nil {
+		return AutoProvisionResult{}, fmt.Errorf("fastly sni: %w", err)
+	}
+	if fastlySNI == "" {
+		fastlySNI = DefaultFastlySNI
+	}
+	result := AutoProvisionResult{CDNRequested: cdnDomain != "", WireGuardRequested: opts.WireGuard, FastlyRequested: fastlyHost != ""}
 
 	for _, tag := range autoProvisionLegacyTags {
 		if _, err := r.DeleteInbound(ctx, tag); err != nil {
@@ -191,9 +222,18 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 		if spec.wireGuard && !opts.WireGuard {
 			continue
 		}
+		if spec.fastly && fastlyHost == "" {
+			continue
+		}
 		existing, err := r.GetInbound(ctx, spec.tag)
 		if err != nil && !errors.Is(err, ErrInboundNotFound) {
 			return AutoProvisionResult{}, err
+		}
+		if existing != nil && spec.fastly && fastlyInboundHost(existing) != fastlyHost {
+			if _, err := r.DeleteInbound(ctx, spec.tag); err != nil {
+				return AutoProvisionResult{}, fmt.Errorf("replace %s: %w", spec.tag, err)
+			}
+			existing = nil
 		}
 		if existing != nil && spec.cdn && cdnInboundDomain(existing) != cdnDomain {
 			// The domain changed: the old inbound's TLS name and host row would
@@ -219,6 +259,7 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 
 		payload, err := spec.build(autoProvisionBuild{
 			tag: spec.tag, port: port, catalog: catalog, usedDests: usedDests, cdnDomain: cdnDomain, usedPorts: used,
+			fastlyHost: fastlyHost, fastlySNI: fastlySNI,
 		})
 		if err != nil {
 			return AutoProvisionResult{}, fmt.Errorf("%s: %w", spec.recipe, err)
@@ -233,6 +274,10 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 			}
 		case RecipeHysteria2:
 			if err := r.pinHostCertificate(ctx, spec.tag, payload); err != nil {
+				return AutoProvisionResult{}, fmt.Errorf("%s host: %w", spec.recipe, err)
+			}
+		case RecipeFastlyWS:
+			if err := r.configureFastlyHost(ctx, spec.tag, fastlyHost, fastlySNI, autoFastlyPath(payload)); err != nil {
 				return AutoProvisionResult{}, fmt.Errorf("%s host: %w", spec.recipe, err)
 			}
 		}
@@ -598,6 +643,64 @@ func tunnelServerAddress(pool string) (string, error) {
 		return "", err
 	}
 	return netip.PrefixFrom(prefix.Masked().Addr().Next(), prefix.Bits()).String(), nil
+}
+
+// DefaultFastlySNI is what the TLS handshake announces when the admin does
+// not pick one. It is a name ordinary traffic reaches constantly, which is
+// the point: the handshake has to look unremarkable.
+const DefaultFastlySNI = "speedtest.net"
+
+// buildAutoFastlyWS is VLESS over WebSocket, the transport a CDN carries
+// without special handling. Fastly terminates TLS at its edge and talks to
+// this inbound over the origin port the admin configures there, so the
+// inbound itself stays plain: a second TLS layer underneath would only give
+// Fastly a certificate to reject.
+//
+// The stealth lives in the host entry, not here -- see configureFastlyHost.
+func buildAutoFastlyWS(in autoProvisionBuild) (map[string]any, error) {
+	path, err := randomXHTTPPath()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"tag":      in.tag,
+		"listen":   "::",
+		"port":     in.port,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"clients":    []any{},
+			"decryption": "none",
+		},
+		"streamSettings": map[string]any{
+			"network":  "ws",
+			"security": "none",
+			"wsSettings": map[string]any{
+				"path": path,
+				"host": in.fastlyHost,
+			},
+		},
+		"sniffing": autoProvisionSniffing(),
+	}, nil
+}
+
+func autoFastlyPath(inbound map[string]any) string {
+	return stringValue(mapValue(mapValue(inbound["streamSettings"])["wsSettings"])["path"])
+}
+
+func fastlyInboundHost(inbound map[string]any) string {
+	return strings.ToLower(strings.TrimSpace(stringValue(mapValue(mapValue(inbound["streamSettings"])["wsSettings"])["host"])))
+}
+
+// configureFastlyHost points the inbound's host row at Fastly. The address
+// and the Host header name the Fastly service, while the SNI names something
+// else entirely: Fastly routes on the Host header, so a DPI box reading the
+// handshake sees only the innocuous name.
+func (r Repository) configureFastlyHost(ctx context.Context, tag, fastlyHost, sni, path string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE hosts SET address = ?, port = 443, host = ?, sni = ?, path = ?, security = 'tls', alpn = 'http/1.1', fingerprint = 'chrome' WHERE inbound_tag = ?`,
+		fastlyHost, fastlyHost, sni, path, tag,
+	)
+	return err
 }
 
 func stringsToAny(values []string) []any {

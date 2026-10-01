@@ -49,6 +49,8 @@ func provisionTestRepository(t *testing.T) (Repository, *sql.DB) {
 	useEmbeddedCatalogForTest(t)
 	repo, db := testRepository(t)
 	for _, statement := range []string{
+		`ALTER TABLE hosts ADD COLUMN port BIGINT NULL`,
+		`ALTER TABLE hosts ADD COLUMN path TEXT NULL`,
 		`ALTER TABLE hosts ADD COLUMN sni TEXT NULL`,
 		`ALTER TABLE hosts ADD COLUMN host TEXT NULL`,
 		`ALTER TABLE hosts ADD COLUMN security TEXT NOT NULL DEFAULT 'inbound_default'`,
@@ -639,5 +641,126 @@ func TestAutoProvisionTunnelLeavesTheProxyInboundsIntact(t *testing.T) {
 	}
 	if got := stringValue(tunnel["listen"]); got != "127.0.0.1" {
 		t.Errorf("runtime tunnel listen = %q, want loopback only", got)
+	}
+}
+
+func TestAutoProvisionSkipsFastlyUnlessAHostIsGiven(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+
+	result, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FastlyRequested {
+		t.Error("no Fastly host was supplied")
+	}
+	if _, err := repo.GetInbound(ctx, "auto-fastly-ws"); !errors.Is(err, ErrInboundNotFound) {
+		t.Errorf("no Fastly inbound should exist, got %v", err)
+	}
+}
+
+// The whole point of the Fastly inbound is that a client reaches it at
+// Fastly's addresses, not the node's: the origin IP is what gets graylisted.
+func TestAutoProvisionFastlyFrontsTheInbound(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+
+	result, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{
+		FastlyHost: "abc123.global.ssl.fastly.net",
+	})
+	if err != nil {
+		t.Fatalf("AutoProvisionBestProtocols: %v", err)
+	}
+	if !result.FastlyRequested {
+		t.Error("a Fastly host was supplied")
+	}
+	entry := protocolsByRecipe(result)[RecipeFastlyWS]
+	if entry.Tag != "auto-fastly-ws" || entry.Protocol != "vless" || !entry.Created {
+		t.Fatalf("unexpected Fastly entry %+v", entry)
+	}
+
+	inbound, err := repo.GetInbound(ctx, "auto-fastly-ws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream := mapValue(inbound["streamSettings"])
+	if got := stringValue(stream["network"]); got != "ws" {
+		t.Errorf("network = %q, want ws: a CDN carries WebSocket without special handling", got)
+	}
+	// Fastly terminates TLS at its edge; a second TLS layer underneath would
+	// only give it a certificate to reject.
+	if got := stringValue(stream["security"]); got != "none" {
+		t.Errorf("security = %q, want none on the origin side", got)
+	}
+	ws := mapValue(stream["wsSettings"])
+	if got := stringValue(ws["host"]); got != "abc123.global.ssl.fastly.net" {
+		t.Errorf("ws host = %q", got)
+	}
+	path := stringValue(ws["path"])
+	if !strings.HasPrefix(path, "/") || len(path) < 4 {
+		t.Errorf("ws path = %q, want a random path", path)
+	}
+
+	var address, host, sni, security, hostPath string
+	var port int64
+	if err := db.QueryRow(`SELECT address, host, sni, security, path, port FROM hosts WHERE inbound_tag = ?`,
+		"auto-fastly-ws").Scan(&address, &host, &sni, &security, &hostPath, &port); err != nil {
+		t.Fatal(err)
+	}
+	if address != "abc123.global.ssl.fastly.net" || host != "abc123.global.ssl.fastly.net" {
+		t.Errorf("clients must reach Fastly, not the node: address=%q host=%q", address, host)
+	}
+	// Host and SNI differ on purpose: Fastly routes on the Host header, so a
+	// DPI box reading the handshake sees only the innocuous name.
+	if sni != DefaultFastlySNI {
+		t.Errorf("sni = %q, want the fronting name %q", sni, DefaultFastlySNI)
+	}
+	if sni == host {
+		t.Error("an SNI equal to the Host header gives the fronting away")
+	}
+	if security != "tls" || port != 443 {
+		t.Errorf("security=%q port=%d, want tls on 443", security, port)
+	}
+	if hostPath != path {
+		t.Errorf("host path %q must match the inbound's %q", hostPath, path)
+	}
+}
+
+func TestAutoProvisionFastlyRebuildsWhenTheHostChanges(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+
+	if _, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{FastlyHost: "one.global.ssl.fastly.net"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{FastlyHost: "two.global.ssl.fastly.net"}); err != nil {
+		t.Fatal(err)
+	}
+	inbound, err := repo.GetInbound(ctx, "auto-fastly-ws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fastlyInboundHost(inbound); got != "two.global.ssl.fastly.net" {
+		t.Fatalf("the inbound still fronts %q after the host changed", got)
+	}
+}
+
+func TestAutoProvisionFastlyAcceptsACustomSNI(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+
+	if _, err := repo.AutoProvisionBestProtocols(ctx, AutoProvisionOptions{
+		FastlyHost: "abc.global.ssl.fastly.net",
+		FastlySNI:  "www.wikipedia.org",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var sni string
+	if err := db.QueryRow(`SELECT sni FROM hosts WHERE inbound_tag = ?`, "auto-fastly-ws").Scan(&sni); err != nil {
+		t.Fatal(err)
+	}
+	if sni != "www.wikipedia.org" {
+		t.Fatalf("sni = %q, want the admin's choice", sni)
 	}
 }

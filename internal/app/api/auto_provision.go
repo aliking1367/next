@@ -60,6 +60,13 @@ type autoProvisionRequest struct {
 	// WireGuard optionally adds an AmneziaWG tunnel for latency-sensitive
 	// traffic such as games and calls.
 	WireGuard bool `json:"wireguard"`
+	// FastlyHost optionally adds a VLESS+WebSocket inbound fronted by the
+	// admin's Fastly service, which keeps working when the origin IP is
+	// graylisted and REALITY stops answering.
+	FastlyHost string `json:"fastly_host"`
+	// FastlySNI is the name announced in the TLS handshake; it deliberately
+	// differs from the Fastly hostname.
+	FastlySNI string `json:"fastly_sni"`
 }
 
 type autoProvisionResponse struct {
@@ -70,6 +77,7 @@ type autoProvisionResponse struct {
 	Retired            []string             `json:"retired,omitempty"`
 	CDNRequested       bool                 `json:"cdn_requested"`
 	WireGuardRequested bool                 `json:"wireguard_requested"`
+	FastlyRequested    bool                 `json:"fastly_requested"`
 	Nodes              provisionNodeSummary `json:"nodes"`
 	Warning            string               `json:"warning,omitempty"`
 	Detail             string               `json:"detail"`
@@ -164,9 +172,11 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 	}
 
 	result, err := s.configRepo.AutoProvisionBestProtocols(r.Context(), xrayconfig.AutoProvisionOptions{
-		CDNDomain: request.CDNDomain,
-		WireGuard: request.WireGuard,
-		PortBusy:  localPortBusy,
+		CDNDomain:  request.CDNDomain,
+		WireGuard:  request.WireGuard,
+		FastlyHost: request.FastlyHost,
+		FastlySNI:  request.FastlySNI,
+		PortBusy:   localPortBusy,
 	})
 	if err != nil {
 		if errors.Is(err, xrayconfig.ErrInvalidInbound) {
@@ -243,6 +253,7 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 		Retired:            result.Retired,
 		CDNRequested:       result.CDNRequested,
 		WireGuardRequested: result.WireGuardRequested,
+		FastlyRequested:    result.FastlyRequested,
 		Nodes:              summary,
 		Warning:            warning,
 		Detail:             "Best protocols configured",
