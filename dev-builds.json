@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-eeeb439",
-  "updated_at": "2026-10-01T08:24:12Z",
+  "latest": "dev-eee77b9",
+  "updated_at": "2026-10-01T10:09:30Z",
   "builds": [
+    {
+      "tag": "dev-eee77b9",
+      "sha": "eee77b9be40276b3e9bbd287117483583d81aaf5",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "36846864643",
+      "run_number": "87",
+      "created_at": "2026-10-01T10:09:30Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-eee77b9.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-eee77b9.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-eee77b9.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-eee77b9.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-eeeb439",
       "sha": "eeeb43972edc6f3428e635a0cc07053eeef4ab59",
