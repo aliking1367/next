@@ -168,3 +168,27 @@ func (c cloudflareClient) upsertProxiedRecord(ctx context.Context, zoneID, hostn
 	_, err = c.do(ctx, http.MethodPost, "/zones/"+zoneID+"/dns_records", payload)
 	return err
 }
+
+// deleteRecords removes every record for a hostname. It is used when a node
+// leaves: a record left pointing at an address the panel no longer controls is
+// a hostname someone else can eventually answer for.
+func (c cloudflareClient) deleteRecords(ctx context.Context, zoneID, hostname string) error {
+	result, err := c.do(ctx, http.MethodGet,
+		"/zones/"+zoneID+"/dns_records?name="+url.QueryEscape(hostname), nil)
+	if err != nil {
+		return err
+	}
+	var existing []cloudflareDNSRecord
+	if err := json.Unmarshal(result, &existing); err != nil {
+		return cloudflareError{Message: "could not read the existing DNS records"}
+	}
+	for _, record := range existing {
+		if !strings.EqualFold(record.Name, hostname) {
+			continue
+		}
+		if _, err := c.do(ctx, http.MethodDelete, "/zones/"+zoneID+"/dns_records/"+record.ID, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}

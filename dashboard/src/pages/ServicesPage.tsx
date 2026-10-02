@@ -166,6 +166,24 @@ type CdnHostsResponse = {
 	}[];
 };
 
+type CdnAutomationSettings = {
+	enabled: boolean;
+	domain_suffix: string;
+	inbound_tag: string;
+	remove_records_on_delete: boolean;
+	token_set: boolean;
+	ready: boolean;
+	last_sync_at?: string;
+	last_sync_detail?: string;
+};
+
+type CdnAutomationResponse = {
+	settings: CdnAutomationSettings;
+	hosts?: CdnHostsResponse["hosts"];
+	created?: number;
+	sync_error?: string;
+};
+
 type AutoConfigureResponse = {
 	warning?: ProvisionNodeWarning;
 	retired?: string[];
@@ -895,6 +913,7 @@ const ServicesPage: FC = () => {
 	const dialogDisclosure = useDisclosure();
 	const autoConfigureDisclosure = useDisclosure();
 	const cdnHostsDisclosure = useDisclosure();
+	const cdnAutomationDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
@@ -1046,6 +1065,108 @@ const ServicesPage: FC = () => {
 			});
 		} finally {
 			setCdnHostsBusy(false);
+		}
+	};
+
+	// Doing the above by hand on every node change is the part that costs an
+	// evening. With a domain and a token stored once, the panel keeps the
+	// records and host rows correct by itself -- adding a node, renaming one, or
+	// moving to a fresh server because the old one got blocked.
+	const [cdnAutoEnabled, setCdnAutoEnabled] = useState(false);
+	const [cdnAutoDomain, setCdnAutoDomain] = useState("");
+	const [cdnAutoToken, setCdnAutoToken] = useState("");
+	const [cdnAutoRemoveRecords, setCdnAutoRemoveRecords] = useState(true);
+	const [cdnAutoSettings, setCdnAutoSettings] = useState<CdnAutomationSettings | null>(null);
+	const [cdnAutoBusy, setCdnAutoBusy] = useState(false);
+	const [cdnAutoResult, setCdnAutoResult] = useState<CdnAutomationResponse | null>(null);
+
+	const loadCdnAutomation = async () => {
+		try {
+			const settings = await fetch<CdnAutomationSettings>("/core/cdn-automation");
+			setCdnAutoSettings(settings);
+			setCdnAutoEnabled(settings.enabled);
+			setCdnAutoDomain(settings.domain_suffix ?? "");
+			setCdnAutoRemoveRecords(settings.remove_records_on_delete);
+			// The stored token is never sent back, so the field starts empty and
+			// an empty field on save means "keep the one you have".
+			setCdnAutoToken("");
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? t("services.cdnAuto.loadFailed"),
+			});
+		}
+	};
+
+	const openCdnAutomation = () => {
+		setCdnAutoResult(null);
+		cdnAutomationDisclosure.onOpen();
+		void loadCdnAutomation();
+	};
+
+	const handleSaveCdnAutomation = async (syncNow: boolean) => {
+		if (cdnAutoBusy) return;
+		setCdnAutoBusy(true);
+		try {
+			const body: Record<string, unknown> = {
+				enabled: cdnAutoEnabled,
+				domain_suffix: cdnAutoDomain.trim(),
+				remove_records_on_delete: cdnAutoRemoveRecords,
+				sync_now: syncNow,
+			};
+			if (cdnAutoToken.trim()) {
+				body.cloudflare_token = cdnAutoToken.trim();
+			}
+			const response = await fetch<CdnAutomationResponse>("/core/cdn-automation", {
+				method: "PUT",
+				body,
+			});
+			setCdnAutoSettings(response.settings);
+			setCdnAutoToken("");
+			setCdnAutoResult(response);
+			if (response.sync_error) {
+				toast({
+					status: "warning",
+					isClosable: true,
+					title: response.sync_error,
+				});
+			} else {
+				toast({ status: "success", isClosable: true, title: t("services.cdnAuto.saved") });
+			}
+			await Promise.all([fetchServices(), fetchHosts()]);
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? t("services.cdnAuto.failed"),
+			});
+		} finally {
+			setCdnAutoBusy(false);
+		}
+	};
+
+	const handleSyncCdnAutomation = async () => {
+		if (cdnAutoBusy) return;
+		setCdnAutoBusy(true);
+		try {
+			const response = await fetch<CdnAutomationResponse>("/core/cdn-automation/sync", {
+				method: "POST",
+			});
+			setCdnAutoResult(response);
+			if (response.settings) setCdnAutoSettings(response.settings);
+			if (response.sync_error) {
+				toast({ status: "warning", isClosable: true, title: response.sync_error });
+			}
+			await Promise.all([fetchServices(), fetchHosts()]);
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? t("services.cdnAuto.failed"),
+			});
+		} finally {
+			setCdnAutoBusy(false);
 		}
 	};
 
@@ -2032,6 +2153,19 @@ const ServicesPage: FC = () => {
 								{t("services.cdnHosts.open")}
 							</Button>
 						)}
+						{isSudoOrAbove && (
+							<Button
+								variant="outline"
+								colorScheme="primary"
+								onClick={openCdnAutomation}
+								size="sm"
+								h="36px"
+								px={3}
+								borderRadius="4px"
+							>
+								{t("services.cdnAuto.open")}
+							</Button>
+						)}
 						<Button
 							leftIcon={<PlusIcon width={18} />}
 							colorScheme="primary"
@@ -2531,6 +2665,146 @@ const ServicesPage: FC = () => {
 								{t("services.cdnHosts.proxyReminder")}
 							</Text>
 						</Stack>
+					)}
+				</Stack>
+			</AppDialog>
+
+			<AppDialog
+				isOpen={cdnAutomationDisclosure.isOpen}
+				onClose={() => {
+					cdnAutomationDisclosure.onClose();
+					setCdnAutoResult(null);
+				}}
+				size="xl"
+				title={t("services.cdnAuto.title")}
+				overlayProps={{ bg: "blackAlpha.300" }}
+				footer={
+					<>
+						<Button
+							variant="ghost"
+							onClick={() => {
+								cdnAutomationDisclosure.onClose();
+								setCdnAutoResult(null);
+							}}
+						>
+							{t("close")}
+						</Button>
+						<Button
+							variant="outline"
+							colorScheme="primary"
+							isLoading={cdnAutoBusy}
+							isDisabled={!cdnAutoSettings?.ready}
+							onClick={handleSyncCdnAutomation}
+						>
+							{t("services.cdnAuto.syncNow")}
+						</Button>
+						<Button
+							colorScheme="primary"
+							isLoading={cdnAutoBusy}
+							onClick={() => handleSaveCdnAutomation(true)}
+						>
+							{t("services.cdnAuto.save")}
+						</Button>
+					</>
+				}
+			>
+				<Stack spacing={4}>
+					<Text fontSize="sm">{t("services.cdnAuto.intro")}</Text>
+
+					<Checkbox
+						isChecked={cdnAutoEnabled}
+						onChange={(event) => setCdnAutoEnabled(event.target.checked)}
+					>
+						{t("services.cdnAuto.enableLabel")}
+					</Checkbox>
+					<Text fontSize="xs" opacity={0.75} mt={-2}>
+						{t("services.cdnAuto.enableHelp")}
+					</Text>
+
+					<FormControl>
+						<FormLabel>{t("services.cdnAuto.domainLabel")}</FormLabel>
+						<Input
+							value={cdnAutoDomain}
+							onChange={(event) => setCdnAutoDomain(event.target.value)}
+							placeholder="example.com"
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>{t("services.cdnAuto.domainHelp")}</FormHelperText>
+					</FormControl>
+
+					<FormControl>
+						<FormLabel>{t("services.cdnAuto.tokenLabel")}</FormLabel>
+						<Input
+							type="password"
+							value={cdnAutoToken}
+							onChange={(event) => setCdnAutoToken(event.target.value)}
+							placeholder={
+								cdnAutoSettings?.token_set
+									? t("services.cdnAuto.tokenStored")
+									: "Cloudflare API token"
+							}
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>{t("services.cdnAuto.tokenHelp")}</FormHelperText>
+					</FormControl>
+
+					<Checkbox
+						isChecked={cdnAutoRemoveRecords}
+						onChange={(event) => setCdnAutoRemoveRecords(event.target.checked)}
+					>
+						{t("services.cdnAuto.removeRecordsLabel")}
+					</Checkbox>
+					<Text fontSize="xs" opacity={0.75} mt={-2}>
+						{t("services.cdnAuto.removeRecordsHelp")}
+					</Text>
+
+					<Alert status="warning" borderRadius="6px" fontSize="sm">
+						<AlertIcon />
+						<AlertDescription>{t("services.cdnAuto.securityRuleNotice")}</AlertDescription>
+					</Alert>
+
+					{cdnAutoSettings?.last_sync_at && (
+						<Text fontSize="xs" opacity={0.75} dir="ltr">
+							{t("services.cdnAuto.lastSync", {
+								when: new Date(cdnAutoSettings.last_sync_at).toLocaleString(),
+								detail: cdnAutoSettings.last_sync_detail ?? "",
+							})}
+						</Text>
+					)}
+
+					{cdnAutoResult?.hosts && cdnAutoResult.hosts.length > 0 && (
+						<Box overflowX="auto">
+							<Table size="sm" variant="simple">
+								<Thead>
+									<Tr>
+										<Th>{t("services.cdnHosts.colNode")}</Th>
+										<Th>{t("services.cdnHosts.colName")}</Th>
+										<Th>{t("services.cdnHosts.colContent")}</Th>
+										<Th>{t("services.cdnHosts.colStatus")}</Th>
+									</Tr>
+								</Thead>
+								<Tbody>
+									{cdnAutoResult.hosts.map((item) => (
+										<Tr key={item.hostname}>
+											<Td>{item.node_name}</Td>
+											<Td dir="ltr">{item.hostname}</Td>
+											<Td dir="ltr">{item.node_ip}</Td>
+											<Td>
+												{item.dns_error
+													? item.dns_error
+													: item.created
+														? t("services.cdnHosts.ok")
+														: t("services.cdnAuto.alreadyCorrect")}
+											</Td>
+										</Tr>
+									))}
+								</Tbody>
+							</Table>
+						</Box>
 					)}
 				</Stack>
 			</AppDialog>

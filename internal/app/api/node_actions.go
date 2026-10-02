@@ -32,6 +32,9 @@ func (s *Server) handleNodeRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.telegramReports.NodeCreated(r.Context(), telegramNodeReport(node, "", telegramActor(r)))
+	// A new node has no CDN hostname yet, so this is what turns adding a server
+	// into one action instead of also editing DNS and hosts by hand.
+	s.kickCDNAutomation("node created")
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -78,6 +81,12 @@ func (s *Server) handleNodeUpdate(w http.ResponseWriter, r *http.Request, nodeID
 	if strings.TrimSpace(before.Status) != "" && before.Status != node.Status {
 		s.telegramReports.NodeStatusChanged(r.Context(), telegramNodeReport(node, before.Status, telegramActor(r)))
 	}
+	// Swapping a blocked server for a fresh one is an address change and a name
+	// change, and both have to reach DNS or every user's config keeps pointing
+	// at the server that stopped working.
+	if before.Address != node.Address || before.Name != node.Name {
+		s.kickCDNAutomation("node address or name changed")
+	}
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -85,11 +94,15 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request, nodeID
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	before, _ := s.nodeMutations.GetNode(ctx, nodeID)
+	// Read the hostname while the row still exists; once the node is gone there
+	// is nothing left to look it up from.
+	retiring := s.nodeCDNHostname(ctx, nodeID)
 	if err := s.nodeMutations.DeleteNode(ctx, nodeID); err != nil {
 		writeNodeMutationError(w, err)
 		return
 	}
 	s.telegramReports.NodeDeleted(r.Context(), telegramNodeReport(before, "", telegramActor(r)))
+	s.retireCDNForNode(retiring)
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
