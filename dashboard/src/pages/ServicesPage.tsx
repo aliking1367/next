@@ -20,7 +20,13 @@ import {
 	SimpleGrid,
 	Spinner,
 	Stack,
+	Table,
+	Tbody,
+	Td,
 	Text,
+	Th,
+	Thead,
+	Tr,
 	Tooltip,
 	useColorModeValue,
 	useDisclosure,
@@ -141,6 +147,23 @@ type ProtocolCheckResult = {
 	address?: string;
 	status: "ok" | "failed" | "skipped";
 	detail: string;
+};
+
+type CdnHostsResponse = {
+	inbound_tag: string;
+	created: number;
+	dns_created: number;
+	dns_managed: boolean;
+	hosts: {
+		node_name: string;
+		node_ip: string;
+		hostname: string;
+		dns_name: string;
+		created: boolean;
+		dns_created: boolean;
+		dns_error?: string;
+		skip_reason?: string;
+	}[];
 };
 
 type AutoConfigureResponse = {
@@ -871,6 +894,7 @@ const ServicesPage: FC = () => {
 
 	const dialogDisclosure = useDisclosure();
 	const autoConfigureDisclosure = useDisclosure();
+	const cdnHostsDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
@@ -994,6 +1018,36 @@ const ServicesPage: FC = () => {
 	};
 
 	const cdnDomainInvalid = !isValidCdnDomain(cdnDomain);
+
+	// One CDN hostname only ever reaches the node it resolves to, so covering
+	// every node means a host row and a DNS record each. This builds both.
+	const [cdnHostsDomain, setCdnHostsDomain] = useState("");
+	const [cdnHostsToken, setCdnHostsToken] = useState("");
+	const [cdnHostsBusy, setCdnHostsBusy] = useState(false);
+	const [cdnHostsResult, setCdnHostsResult] = useState<CdnHostsResponse | null>(null);
+	const handleBuildCdnHosts = async () => {
+		if (cdnHostsBusy || !cdnHostsDomain.trim()) return;
+		setCdnHostsBusy(true);
+		try {
+			const response = await fetch<CdnHostsResponse>("/core/cdn-hosts", {
+				method: "POST",
+				body: {
+					domain_suffix: cdnHostsDomain.trim(),
+					cloudflare_token: cdnHostsToken.trim(),
+				},
+			});
+			setCdnHostsResult(response);
+			await Promise.all([fetchServices(), fetchHosts()]);
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? t("services.cdnHosts.failed"),
+			});
+		} finally {
+			setCdnHostsBusy(false);
+		}
+	};
 
 	const handleAutoConfigureBestProtocols = async () => {
 		if (cdnDomainInvalid) {
@@ -1965,6 +2019,19 @@ const ServicesPage: FC = () => {
 								{t("services.autoConfigure.button")}
 							</Button>
 						)}
+						{isSudoOrAbove && (
+							<Button
+								variant="outline"
+								colorScheme="primary"
+								onClick={cdnHostsDisclosure.onOpen}
+								size="sm"
+								h="36px"
+								px={3}
+								borderRadius="4px"
+							>
+								{t("services.cdnHosts.open")}
+							</Button>
+						)}
 						<Button
 							leftIcon={<PlusIcon width={18} />}
 							colorScheme="primary"
@@ -2354,6 +2421,117 @@ const ServicesPage: FC = () => {
 							{t("services.autoConfigure.wireGuardHelp")}
 						</FormHelperText>
 					</FormControl>
+				</Stack>
+			</AppDialog>
+
+			<AppDialog
+				isOpen={cdnHostsDisclosure.isOpen}
+				onClose={() => {
+					cdnHostsDisclosure.onClose();
+					setCdnHostsResult(null);
+				}}
+				size="xl"
+				title={t("services.cdnHosts.title")}
+				overlayProps={{ bg: "blackAlpha.300" }}
+				footer={
+					<>
+						<Button
+							variant="ghost"
+							onClick={() => {
+								cdnHostsDisclosure.onClose();
+								setCdnHostsResult(null);
+							}}
+						>
+							{t("close")}
+						</Button>
+						<Button
+							colorScheme="primary"
+							isLoading={cdnHostsBusy}
+							isDisabled={!cdnHostsDomain.trim()}
+							onClick={handleBuildCdnHosts}
+						>
+							{t("services.cdnHosts.build")}
+						</Button>
+					</>
+				}
+			>
+				<Stack spacing={4}>
+					<Text fontSize="sm">{t("services.cdnHosts.intro")}</Text>
+
+					<FormControl>
+						<FormLabel>{t("services.cdnHosts.domainLabel")}</FormLabel>
+						<Input
+							value={cdnHostsDomain}
+							onChange={(event) => setCdnHostsDomain(event.target.value)}
+							placeholder="example.com"
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>{t("services.cdnHosts.domainHelp")}</FormHelperText>
+					</FormControl>
+
+					<FormControl>
+						<FormLabel>{t("services.cdnHosts.tokenLabel")}</FormLabel>
+						<Input
+							type="password"
+							value={cdnHostsToken}
+							onChange={(event) => setCdnHostsToken(event.target.value)}
+							placeholder="Cloudflare API token"
+							dir="ltr"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+						<FormHelperText>{t("services.cdnHosts.tokenHelp")}</FormHelperText>
+					</FormControl>
+
+					{cdnHostsResult && (
+						<Stack spacing={3}>
+							<Text fontWeight="medium">
+								{t("services.cdnHosts.resultTitle", {
+									created: cdnHostsResult.created,
+								})}
+							</Text>
+							{!cdnHostsResult.dns_managed && (
+								<Text fontSize="sm" color="orange.400">
+									{t("services.cdnHosts.manualDns")}
+								</Text>
+							)}
+							<Box overflowX="auto">
+								<Table size="sm" variant="simple">
+									<Thead>
+										<Tr>
+											<Th>{t("services.cdnHosts.colNode")}</Th>
+											<Th>{t("services.cdnHosts.colName")}</Th>
+											<Th>{t("services.cdnHosts.colContent")}</Th>
+											<Th>{t("services.cdnHosts.colStatus")}</Th>
+										</Tr>
+									</Thead>
+									<Tbody>
+										{cdnHostsResult.hosts.map((item) => (
+											<Tr key={item.hostname}>
+												<Td>{item.node_name}</Td>
+												<Td dir="ltr">{item.dns_name}</Td>
+												<Td dir="ltr">{item.node_ip}</Td>
+												<Td>
+													{item.skip_reason
+														? t("services.cdnHosts.skipped")
+														: item.dns_error
+															? item.dns_error
+															: item.created
+																? t("services.cdnHosts.ok")
+																: t("services.cdnHosts.pending")}
+												</Td>
+											</Tr>
+										))}
+									</Tbody>
+								</Table>
+							</Box>
+							<Text fontSize="xs" opacity={0.75}>
+								{t("services.cdnHosts.proxyReminder")}
+							</Text>
+						</Stack>
+					)}
 				</Stack>
 			</AppDialog>
 
