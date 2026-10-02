@@ -72,6 +72,6 @@ CREATE TABLE cdn_automation (
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO cdn_automation
 (enabled, domain_suffix, inbound_tag, cloudflare_token, manage_security_rule, remove_records_on_delete, last_sync_detail)
-VALUES (0, '', '', '', 1, 1, '')`)
+VALUES (0, '', '', '', 0, 1, '')`)
 	return err
 }

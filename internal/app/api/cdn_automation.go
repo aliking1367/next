@@ -33,6 +33,10 @@ type cdnAutomation struct {
 	InboundTag            string
 	Token                 string
 	RemoveRecordsOnDelete bool
+	// ManageSecurityRule lets the panel keep the Cloudflare rule that stops
+	// these hostnames being challenged. It is off unless an admin turns it on:
+	// it switches a protection off, narrowly, and that is theirs to decide.
+	ManageSecurityRule bool
 	LastSyncAt            sql.NullTime
 	LastSyncDetail        string
 }
@@ -54,6 +58,7 @@ type cdnAutomationResponse struct {
 	DomainSuffix          string `json:"domain_suffix"`
 	InboundTag            string `json:"inbound_tag"`
 	RemoveRecordsOnDelete bool   `json:"remove_records_on_delete"`
+	ManageSecurityRule    bool   `json:"manage_security_rule"`
 	// TokenSet reports that a token is stored without revealing it, which is
 	// what the dashboard needs to show "configured" and nothing more.
 	TokenSet       bool   `json:"token_set"`
@@ -67,6 +72,7 @@ type cdnAutomationUpdate struct {
 	DomainSuffix          *string `json:"domain_suffix"`
 	InboundTag            *string `json:"inbound_tag"`
 	RemoveRecordsOnDelete *bool   `json:"remove_records_on_delete"`
+	ManageSecurityRule    *bool   `json:"manage_security_rule"`
 	// CloudflareToken replaces the stored token. Omitted leaves it alone; an
 	// empty string clears it, which is how an admin revokes it from here.
 	CloudflareToken *string `json:"cloudflare_token"`
@@ -77,11 +83,11 @@ type cdnAutomationUpdate struct {
 
 func (s *Server) loadCDNAutomation(ctx context.Context) (cdnAutomation, error) {
 	var config cdnAutomation
-	var enabled, removeOnDelete int
+	var enabled, removeOnDelete, manageRule int
 	var suffix, tag, token, detail sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT enabled, domain_suffix, inbound_tag, cloudflare_token,
-remove_records_on_delete, last_sync_at, last_sync_detail FROM cdn_automation ORDER BY id LIMIT 1`).
-		Scan(&enabled, &suffix, &tag, &token, &removeOnDelete, &config.LastSyncAt, &detail)
+remove_records_on_delete, manage_security_rule, last_sync_at, last_sync_detail FROM cdn_automation ORDER BY id LIMIT 1`).
+		Scan(&enabled, &suffix, &tag, &token, &removeOnDelete, &manageRule, &config.LastSyncAt, &detail)
 	if err == sql.ErrNoRows {
 		// A panel upgraded before the row existed behaves as "not configured"
 		// rather than failing every node write.
@@ -92,6 +98,7 @@ remove_records_on_delete, last_sync_at, last_sync_detail FROM cdn_automation ORD
 	}
 	config.Enabled = enabled != 0
 	config.RemoveRecordsOnDelete = removeOnDelete != 0
+	config.ManageSecurityRule = manageRule != 0
 	config.DomainSuffix = suffix.String
 	config.InboundTag = tag.String
 	config.Token = token.String
@@ -102,9 +109,9 @@ remove_records_on_delete, last_sync_at, last_sync_detail FROM cdn_automation ORD
 func (s *Server) saveCDNAutomation(ctx context.Context, config cdnAutomation) error {
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE cdn_automation SET enabled = ?, domain_suffix = ?,
-inbound_tag = ?, cloudflare_token = ?, remove_records_on_delete = ?`,
+inbound_tag = ?, cloudflare_token = ?, remove_records_on_delete = ?, manage_security_rule = ?`,
 			boolToInt(config.Enabled), config.DomainSuffix, config.InboundTag, config.Token,
-			boolToInt(config.RemoveRecordsOnDelete))
+			boolToInt(config.RemoveRecordsOnDelete), boolToInt(config.ManageSecurityRule))
 		if err != nil {
 			return err
 		}
@@ -112,10 +119,10 @@ inbound_tag = ?, cloudflare_token = ?, remove_records_on_delete = ?`,
 			return nil
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO cdn_automation
-(enabled, domain_suffix, inbound_tag, cloudflare_token, remove_records_on_delete, last_sync_detail)
-VALUES (?, ?, ?, ?, ?, ?)`,
+(enabled, domain_suffix, inbound_tag, cloudflare_token, remove_records_on_delete, manage_security_rule, last_sync_detail)
+VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			boolToInt(config.Enabled), config.DomainSuffix, config.InboundTag, config.Token,
-			boolToInt(config.RemoveRecordsOnDelete), "")
+			boolToInt(config.RemoveRecordsOnDelete), boolToInt(config.ManageSecurityRule), "")
 		return err
 	})
 }
@@ -133,6 +140,7 @@ func cdnAutomationView(config cdnAutomation) cdnAutomationResponse {
 		DomainSuffix:          config.DomainSuffix,
 		InboundTag:            config.inboundTag(),
 		RemoveRecordsOnDelete: config.RemoveRecordsOnDelete,
+		ManageSecurityRule:    config.ManageSecurityRule,
 		TokenSet:              strings.TrimSpace(config.Token) != "",
 		Ready:                 config.ready(),
 		LastSyncDetail:        config.LastSyncDetail,
@@ -187,6 +195,9 @@ func (s *Server) updateCDNAutomation(w http.ResponseWriter, r *http.Request) {
 	}
 	if payload.RemoveRecordsOnDelete != nil {
 		config.RemoveRecordsOnDelete = *payload.RemoveRecordsOnDelete
+	}
+	if payload.ManageSecurityRule != nil {
+		config.ManageSecurityRule = *payload.ManageSecurityRule
 	}
 	if payload.CloudflareToken != nil {
 		config.Token = strings.TrimSpace(*payload.CloudflareToken)

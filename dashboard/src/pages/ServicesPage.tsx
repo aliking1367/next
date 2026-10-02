@@ -172,6 +172,7 @@ type CdnAutomationSettings = {
 	domain_suffix: string;
 	inbound_tag: string;
 	remove_records_on_delete: boolean;
+	manage_security_rule: boolean;
 	token_set: boolean;
 	ready: boolean;
 	last_sync_at?: string;
@@ -1077,6 +1078,7 @@ const ServicesPage: FC = () => {
 	const [cdnAutoDomain, setCdnAutoDomain] = useState("");
 	const [cdnAutoToken, setCdnAutoToken] = useState("");
 	const [cdnAutoRemoveRecords, setCdnAutoRemoveRecords] = useState(true);
+	const [cdnAutoManageRule, setCdnAutoManageRule] = useState(false);
 	const [cdnAutoSettings, setCdnAutoSettings] = useState<CdnAutomationSettings | null>(null);
 	const [cdnAutoBusy, setCdnAutoBusy] = useState(false);
 	const [cdnAutoResult, setCdnAutoResult] = useState<CdnAutomationResponse | null>(null);
@@ -1088,6 +1090,7 @@ const ServicesPage: FC = () => {
 			setCdnAutoEnabled(settings.enabled);
 			setCdnAutoDomain(settings.domain_suffix ?? "");
 			setCdnAutoRemoveRecords(settings.remove_records_on_delete);
+			setCdnAutoManageRule(settings.manage_security_rule);
 			// The stored token is never sent back, so the field starts empty and
 			// an empty field on save means "keep the one you have".
 			setCdnAutoToken("");
@@ -1114,6 +1117,7 @@ const ServicesPage: FC = () => {
 				enabled: cdnAutoEnabled,
 				domain_suffix: cdnAutoDomain.trim(),
 				remove_records_on_delete: cdnAutoRemoveRecords,
+				manage_security_rule: cdnAutoManageRule,
 				sync_now: syncNow,
 			};
 			if (cdnAutoToken.trim()) {
@@ -2763,10 +2767,22 @@ const ServicesPage: FC = () => {
 						{t("services.cdnAuto.removeRecordsHelp")}
 					</Text>
 
-					<Alert status="warning" borderRadius="6px" fontSize="sm">
-						<AlertIcon />
-						<AlertDescription>{t("services.cdnAuto.securityRuleNotice")}</AlertDescription>
-					</Alert>
+					<Checkbox
+						isChecked={cdnAutoManageRule}
+						onChange={(event) => setCdnAutoManageRule(event.target.checked)}
+					>
+						{t("services.cdnAuto.manageRuleLabel")}
+					</Checkbox>
+					<Text fontSize="xs" opacity={0.75} mt={-2}>
+						{t("services.cdnAuto.manageRuleHelp")}
+					</Text>
+
+					{!cdnAutoManageRule && (
+						<Alert status="warning" borderRadius="6px" fontSize="sm">
+							<AlertIcon />
+							<AlertDescription>{t("services.cdnAuto.securityRuleNotice")}</AlertDescription>
+						</Alert>
+					)}
 
 					{cdnAutoSettings?.last_sync_at && (
 						<Text fontSize="xs" opacity={0.75} dir="ltr">

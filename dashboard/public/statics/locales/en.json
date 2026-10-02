@@ -1628,6 +1628,8 @@
 	"services.cdnAuto.removeRecordsLabel": "Remove the DNS record when a node is removed or renamed",
 	"services.cdnAuto.removeRecordsHelp": "Leaves nothing pointing at a server you no longer control. Turn this off if you add other uses to these records yourself.",
 	"services.cdnAuto.securityRuleNotice": "One step is still yours: in Cloudflare → Security → Security rules, add a rule that skips security for these hostnames. A proxy client cannot answer a JavaScript challenge, so without it Cloudflare answers these configs with 403 and they look broken.",
+	"services.cdnAuto.manageRuleLabel": "Also keep the Cloudflare security rule for these hostnames",
+	"services.cdnAuto.manageRuleHelp": "A proxy client cannot answer a JavaScript challenge, so Cloudflare's checks have to be skipped for the CDN hostnames or these configs come back 403. With this on, the panel writes and updates that one rule itself, so a new node needs nothing by hand. It covers only hostnames the panel built for your nodes: your panel's own hostname is excluded, other domains are excluded, and your own security rules are read and written back untouched. The token needs WAF:Edit on this zone as well as Zone:Read and DNS:Edit.",
 	"services.cdnAuto.save": "Save and sync",
 	"services.cdnAuto.syncNow": "Sync now",
 	"services.cdnAuto.saved": "Saved.",

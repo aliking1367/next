@@ -108,8 +108,66 @@ func (s *Server) syncCDNAutomationLocked(ctx context.Context, config cdnAutomati
 	if failures > 0 {
 		detail = fmt.Sprintf("%s, %d failed", detail, failures)
 	}
+
+	// Last, and never fatal. A proxy client cannot answer a challenge, so
+	// without this rule Cloudflare refuses these configs with a 403 -- but the
+	// records and host rows above are correct either way, and an admin who has
+	// the rule in place by hand needs this to stay out of the way.
+	if config.ManageSecurityRule {
+		covered, ruleErr := s.ensureCDNSecurityRule(ctx, client, zoneID, suffix, plans)
+		switch {
+		case ruleErr != nil:
+			detail = fmt.Sprintf("%s; security rule not written: %s", detail, ruleErr.Error())
+			logging.Warnf(logging.ComponentNode, "cdn automation: security rule not written: %v", ruleErr)
+		case covered > 0:
+			detail = fmt.Sprintf("%s; security rule covers %d hostname(s)", detail, covered)
+		}
+	}
+
 	s.recordCDNSync(ctx, detail)
 	return plans, nil
+}
+
+// ensureCDNSecurityRule asks Cloudflare to stop challenging the hostnames this
+// sync just confirmed. Only hostnames that resolve to a node are offered, and
+// the panel's own hostname is excluded even if a node's label would collide with
+// it -- the panel has a dashboard and an API and keeps every protection.
+func (s *Server) ensureCDNSecurityRule(ctx context.Context, client cloudflareClient, zoneID, suffix string, plans []cdnHostPlan) (int, error) {
+	hostnames := make([]string, 0, len(plans))
+	for _, plan := range plans {
+		if plan.DNSError != "" || plan.HostError != "" || plan.Hostname == "" {
+			continue
+		}
+		hostnames = append(hostnames, plan.Hostname)
+	}
+	eligible := cdnSkipRuleHostnames(hostnames, suffix, s.panelOwnHostname(ctx))
+	if len(eligible) == 0 {
+		return 0, nil
+	}
+	return client.ensureCDNSkipRule(ctx, zoneID, eligible)
+}
+
+// panelOwnHostname reads the hostname the panel is served on, so the security
+// rule can refuse to include it. An empty answer only loses this one extra
+// guard: the hostnames offered are still limited to the ones the panel built
+// for nodes under the managed zone.
+func (s *Server) panelOwnHostname(ctx context.Context) string {
+	settings, err := s.settingsRepo.SubscriptionSettings(ctx)
+	if err != nil {
+		return ""
+	}
+	prefix := strings.TrimSpace(settings.SubscriptionURLPrefix)
+	if prefix == "" {
+		return ""
+	}
+	prefix = strings.TrimPrefix(strings.TrimPrefix(prefix, "https://"), "http://")
+	if slash := strings.Index(prefix, "/"); slash >= 0 {
+		prefix = prefix[:slash]
+	}
+	if host, _, found := strings.Cut(prefix, ":"); found {
+		prefix = host
+	}
+	return strings.ToLower(strings.Trim(strings.TrimSpace(prefix), "."))
 }
 
 // upsertCDNHostRow writes the host row for one node and reports whether
