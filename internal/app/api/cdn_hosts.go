@@ -114,7 +114,7 @@ func (s *Server) handleCoreCDNHosts(w http.ResponseWriter, r *http.Request) {
 			NodeIP:   node.Address,
 			DNSName:  label,
 			Hostname: label + "." + suffix,
-			Remark:   strings.TrimSpace(node.Name) + " · CDN",
+			Remark:   cdnHostRemark(node.Name),
 		}
 		if existing[strings.ToLower(plan.Hostname)] {
 			plan.SkipReason = "a host with this address already exists"

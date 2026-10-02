@@ -68,7 +68,7 @@ func (s *Server) syncCDNAutomationLocked(ctx context.Context, config cdnAutomati
 			NodeIP:   node.Address,
 			DNSName:  label,
 			Hostname: label + "." + suffix,
-			Remark:   strings.TrimSpace(node.Name) + " · CDN",
+			Remark:   cdnHostRemark(node.Name),
 		}
 
 		if err := client.upsertProxiedRecord(ctx, zoneID, plan.Hostname, plan.NodeIP); err != nil {
