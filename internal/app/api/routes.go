@@ -95,7 +95,7 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	r.NotFound(s.handleHomeOrSubscriptionPath)
-	return &externalAppAwareHandler{apps: s.externalApps, next: withAPIRequestBodyLimit(r)}
+	return &externalAppAwareHandler{apps: s.externalApps, next: withAPIRejectionLog(withAPIRequestBodyLimit(r))}
 }
 
 func (s *Server) registerAdminRoutes(r chi.Router) {
