@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	adminapp "github.com/aliking1367/next/internal/app/admin"
 )
 
 func TestRejectionDetailReadsThePanelsOwnSentence(t *testing.T) {
@@ -48,10 +51,11 @@ func TestRejectionDetailReadsThePanelsOwnSentence(t *testing.T) {
 // without carrying the credential they used.
 func TestAPIRejectionActorNeverCarriesTheCredential(t *testing.T) {
 	const secret = "super-secret-api-key"
+	holder := &apiActorHolder{}
 	request := httptest.NewRequest(http.MethodPost, "/api/user", nil)
 	request.Header.Set("Authorization", "Bearer "+secret)
 
-	actor := apiRejectionActor(request)
+	actor := apiRejectionActor(request, holder)
 	if strings.Contains(actor, secret) {
 		t.Fatalf("the actor carried the token: %q", actor)
 	}
@@ -154,5 +158,56 @@ func TestAPIRejectionLogTreatsImplicitStatusAsSuccess(t *testing.T) {
 	}
 	if recorder.capture {
 		t.Fatal("a successful response should not be captured")
+	}
+}
+
+// The bug this guards against: the auth middleware calls the handler with
+// r.WithContext(...), so the request this middleware holds never gains the
+// principal. Reading the context here named every authenticated caller
+// "unauthenticated", which sent the reader hunting an auth problem that was not
+// there.
+func TestAPIRejectionLogNamesTheCallerAcrossContextDerivation(t *testing.T) {
+	var logged string
+	handler := withAPIRejectionLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Stand in for requireAdmin: authenticate, record, then hand the
+		// handler a derived request.
+		principal := adminPrincipal{ID: 7, Username: "ddbot", Role: "full_access"}
+		recordAPIActor(r, principal)
+		derived := r.WithContext(context.WithValue(r.Context(), adminContextKey, principal))
+		holder, _ := derived.Context().Value(apiActorContextKey).(*apiActorHolder)
+		logged = apiRejectionActor(derived, holder)
+		writeError(w, http.StatusBadGateway, "something broke")
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/api/user", nil)
+	request.Header.Set("Authorization", "Bearer some-api-key")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	if logged != "ddbot (api key)" {
+		t.Fatalf("actor = %q, want %q", logged, "ddbot (api key)")
+	}
+}
+
+func TestAPIRejectionActorFallsBackWhenAuthNeverSucceeded(t *testing.T) {
+	holder := &apiActorHolder{}
+	request := httptest.NewRequest(http.MethodPost, "/api/user", nil)
+	if got := apiRejectionActor(request, holder); got != "unauthenticated" {
+		t.Fatalf("actor = %q", got)
+	}
+	request.Header.Set("Authorization", "Bearer rejected-key")
+	if got := apiRejectionActor(request, holder); got != "unauthenticated (bearer token rejected)" {
+		t.Fatalf("actor = %q", got)
+	}
+}
+
+func TestRecordAPIActorDistinguishesDashboardFromAPIKey(t *testing.T) {
+	holder := &apiActorHolder{}
+	request := httptest.NewRequest(http.MethodGet, "/api/user", nil).
+		WithContext(context.WithValue(context.Background(), apiActorContextKey, holder))
+
+	session := adminPrincipal{Username: "pouria"}
+	session.Context.Source = adminapp.AuthSourceSession
+	recordAPIActor(request, session)
+	if got := holder.get(); got != "pouria (dashboard)" {
+		t.Fatalf("actor = %q", got)
 	}
 }

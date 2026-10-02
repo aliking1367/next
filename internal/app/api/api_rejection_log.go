@@ -2,9 +2,11 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 
 	adminapp "github.com/aliking1367/next/internal/app/admin"
 	"github.com/aliking1367/next/internal/app/logging"
@@ -70,14 +72,16 @@ func withAPIRejectionLog(next http.Handler) http.Handler {
 			return
 		}
 		recorder := &apiRejectionRecorder{ResponseWriter: w}
-		next.ServeHTTP(recorder, r)
+		holder := &apiActorHolder{}
+		request := r.WithContext(context.WithValue(r.Context(), apiActorContextKey, holder))
+		next.ServeHTTP(recorder, request)
 		if recorder.status < http.StatusBadRequest {
 			return
 		}
 		logging.Warnf(logging.ComponentAdmin,
 			"api refused %s %s status=%d actor=%s reason=%q",
 			r.Method, r.URL.Path, recorder.status,
-			apiRejectionActor(r), rejectionDetail(recorder.body.Bytes()))
+			apiRejectionActor(r, holder), rejectionDetail(recorder.body.Bytes()))
 	})
 }
 
@@ -104,19 +108,59 @@ func websocketUpgradeRequested(r *http.Request) bool {
 	return strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket")
 }
 
+// apiActorHolder carries the caller's identity back out to this middleware.
+//
+// It cannot be read from the request context: the auth middleware authenticates
+// and then calls the handler with r.WithContext(...), a *derived* request, so
+// the one this middleware holds never gains the principal. Reading the context
+// here reported every authenticated call as unauthenticated, which is worse
+// than logging nothing -- it sent the reader looking for an auth problem that
+// was not there. A pointer placed in the context before the chain runs is
+// filled in by whichever guard authenticates, and survives the derivation.
+type apiActorHolder struct {
+	mu   sync.Mutex
+	name string
+}
+
+func (h *apiActorHolder) set(name string) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.name = name
+	h.mu.Unlock()
+}
+
+func (h *apiActorHolder) get() string {
+	if h == nil {
+		return ""
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.name
+}
+
+// recordAPIActor is called by the auth guards once they know who is calling.
+func recordAPIActor(r *http.Request, principal adminPrincipal) {
+	holder, _ := r.Context().Value(apiActorContextKey).(*apiActorHolder)
+	if holder == nil || principal.Username == "" {
+		return
+	}
+	if principal.Context.Source == adminapp.AuthSourceSession {
+		holder.set(principal.Username + " (dashboard)")
+		return
+	}
+	holder.set(principal.Username + " (api key)")
+}
+
 // apiRejectionActor names the caller without revealing the credential it used.
 // An API key is identified by its owner, never by the key itself: this line
 // goes to a log file that is read, copied and pasted into chats.
-func apiRejectionActor(r *http.Request) string {
-	if principal, ok := r.Context().Value(adminContextKey).(adminPrincipal); ok && principal.Username != "" {
-		switch principal.Context.Source {
-		case adminapp.AuthSourceSession:
-			return principal.Username + " (dashboard)"
-		default:
-			return principal.Username + " (api key)"
-		}
+func apiRejectionActor(r *http.Request, holder *apiActorHolder) string {
+	if name := holder.get(); name != "" {
+		return name
 	}
-	// Refused before authentication ran, so the caller is not known yet.
+	// Refused before authentication succeeded, so the caller is not known.
 	if bearerToken(r) != "" {
 		return "unauthenticated (bearer token rejected)"
 	}

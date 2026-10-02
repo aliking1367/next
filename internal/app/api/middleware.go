@@ -15,6 +15,9 @@ type contextKey string
 const (
 	adminContextKey             contextKey = "admin"
 	recentActionBatchContextKey contextKey = "recent_action_batch"
+	// apiActorContextKey carries the holder the rejection log fills in. See
+	// apiActorHolder for why the principal cannot simply be read back.
+	apiActorContextKey contextKey = "api_actor"
 )
 
 type adminPrincipal struct {
@@ -31,6 +34,7 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			writeAuthError(w, err)
 			return
 		}
+		recordAPIActor(r, principal)
 		if principal.Context.Source == adminapp.AuthSourceSession && !requestOriginAllowed(r) {
 			writeError(w, http.StatusForbidden, "Invalid request origin")
 			return

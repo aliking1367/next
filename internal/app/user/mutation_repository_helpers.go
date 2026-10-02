@@ -9,6 +9,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1054,4 +1055,42 @@ WHERE id = ?`,
 
 	_, err := tx.ExecContext(ctx, `INSERT INTO admin_created_traffic_logs (admin_id, service_id, amount, action, created_at) VALUES (?, ?, ?, ?, ?)`, admin.ID, nullableInt64Ptr(user.ServiceID), -amount, "user_delete_credit", dbTime(now))
 	return err
+}
+
+// normalizeOnHoldTimeout turns whatever a caller sent into the one shape a
+// DATETIME column accepts.
+//
+// on_hold_timeout arrives as a string straight from the API, and it used to be
+// bound to the column unchanged. A Marzban-era client sends RFC 3339
+// ("2026-10-03T13:49:08Z"), which MySQL refuses outright -- the whole user
+// creation failed with "Incorrect datetime value", so a reseller bot could not
+// create a single user. SQLite accepted it, which is why this only showed up in
+// production.
+//
+// Every form a client plausibly sends is accepted: RFC 3339 with or without a
+// zone or fraction, the space-separated DATETIME form, and a bare Unix
+// timestamp, which is how Marzban stored this field. Anything else is reported
+// as a bad request, because the alternative is the database raising a 502 with
+// its own error text and nobody being able to tell what was wrong.
+func normalizeOnHoldTimeout(value *string) (any, error) {
+	if value == nil {
+		return nil, nil
+	}
+	text := strings.TrimSpace(*value)
+	if text == "" {
+		return nil, nil
+	}
+	// Marzban kept this as a Unix timestamp, so a client ported from it sends a
+	// bare number.
+	if seconds, err := strconv.ParseInt(text, 10, 64); err == nil {
+		if seconds <= 0 {
+			return nil, nil
+		}
+		return dbTime(time.Unix(seconds, 0).UTC()), nil
+	}
+	parsed, err := parseSubscriptionTime(text)
+	if err != nil {
+		return nil, clientError(400, "on_hold_timeout must be a date and time, for example 2026-10-03T13:49:08Z")
+	}
+	return dbTime(parsed), nil
 }

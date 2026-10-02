@@ -107,6 +107,10 @@ func (r Repository) createUserMutation(ctx context.Context, admin adminapp.Admin
 	}
 	now := time.Now().UTC()
 	adminID := nullableInt64Value(admin.ID)
+	onHoldTimeout, err := normalizeOnHoldTimeout(payload.OnHoldTimeout)
+	if err != nil {
+		return MutationResult{}, err
+	}
 	res, err := tx.ExecContext(ctx, `
 INSERT INTO users (
 	username, credential_key, subadress, flow, status, used_traffic, data_limit,
@@ -127,7 +131,7 @@ INSERT INTO users (
 		nullableStringPtr(payload.TelegramID),
 		nullableStringPtr(payload.ContactNumber),
 		nilIfZero(payload.OnHoldExpireDuration),
-		nullableStringPtr(payload.OnHoldTimeout),
+		onHoldTimeout,
 		int64OrZero(payload.IPLimit),
 		nilIfZero(payload.AutoDeleteInDays),
 		dbTime(now),
@@ -329,8 +333,12 @@ func (r Repository) updateUserMutation(ctx context.Context, admin adminapp.Admin
 		args = append(args, int64OrZero(payload.IPLimit))
 	}
 	if rawFieldPresent(rawFields, "on_hold_timeout") {
+		onHoldTimeout, err := normalizeOnHoldTimeout(payload.OnHoldTimeout)
+		if err != nil {
+			return MutationResult{}, err
+		}
 		sets = append(sets, "on_hold_timeout = ?")
-		args = append(args, nullableStringPtr(payload.OnHoldTimeout))
+		args = append(args, onHoldTimeout)
 	}
 	if rawFieldPresent(rawFields, "on_hold_expire_duration") {
 		sets = append(sets, "on_hold_expire_duration = ?")
