@@ -66,6 +66,18 @@ func isShareLink(link string) bool {
 	if !found || strings.TrimSpace(rest) == "" {
 		return false
 	}
+	// A real share link holds none of these. They are rejected here as well as
+	// escaped where the link is written out, because a stored link reaches a
+	// user's subscription page, a client's config list and anywhere else it is
+	// displayed, and only one of those is under this code's control.
+	if strings.ContainsAny(link, "<>\"") {
+		return false
+	}
+	for _, r := range link {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
 	switch strings.ToLower(strings.TrimSpace(scheme)) {
 	case "vless", "vmess", "trojan", "ss", "ssr", "hysteria", "hysteria2", "hy2",
 		"tuic", "wireguard", "wg", "socks", "socks5", "anytls", "mieru":

@@ -20,6 +20,15 @@ import (
 // never connects -- worse than no config at all, since they have no way to tell
 // the difference.
 func (s *Server) syncCDNAutomation(ctx context.Context, config cdnAutomation) ([]cdnHostPlan, error) {
+	// Every caller comes through here -- the background pass after a node
+	// change, the Sync now button, and the save that syncs -- so one lock here
+	// is what keeps two of them from both deciding a host is missing.
+	s.cdnSyncRunMu.Lock()
+	defer s.cdnSyncRunMu.Unlock()
+	return s.syncCDNAutomationLocked(ctx, config)
+}
+
+func (s *Server) syncCDNAutomationLocked(ctx context.Context, config cdnAutomation) ([]cdnHostPlan, error) {
 	suffix := normalizeCDNSuffix(config.DomainSuffix)
 	if suffix == "" {
 		return nil, fmt.Errorf("no CDN domain is configured")
@@ -82,7 +91,7 @@ func (s *Server) syncCDNAutomation(ctx context.Context, config cdnAutomation) ([
 
 		changed, hostErr := s.upsertCDNHostRow(ctx, inboundTag, template, plan)
 		if hostErr != nil {
-			plan.DNSError = hostErr.Error()
+			plan.HostError = hostErr.Error()
 			failures++
 			plans = append(plans, plan)
 			continue
@@ -209,20 +218,48 @@ const cdnAutomationTimeout = 90 * time.Second
 // because of it -- would mean a node they can see in the panel reports as an
 // error. Failures are logged and shown on the next sync instead.
 func (s *Server) kickCDNAutomation(reason string) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), cdnAutomationTimeout)
-		defer cancel()
-		config, err := s.loadCDNAutomation(ctx)
-		if err != nil || !config.ready() {
+	s.cdnSyncStateMu.Lock()
+	if s.cdnSyncRunning {
+		// Someone is already syncing. One more pass afterwards covers this
+		// change too, however many arrive while that pass runs -- editing five
+		// nodes must not leave five goroutines queued behind one another.
+		s.cdnSyncPending = true
+		s.cdnSyncStateMu.Unlock()
+		return
+	}
+	s.cdnSyncRunning = true
+	s.cdnSyncStateMu.Unlock()
+	go s.runCDNAutomation(reason)
+}
+
+func (s *Server) runCDNAutomation(reason string) {
+	for {
+		s.runCDNAutomationOnce(reason)
+		s.cdnSyncStateMu.Lock()
+		if !s.cdnSyncPending {
+			s.cdnSyncRunning = false
+			s.cdnSyncStateMu.Unlock()
 			return
 		}
-		if _, err := s.syncCDNAutomation(ctx, config); err != nil {
-			logging.Warnf(logging.ComponentNode, "cdn automation (%s) failed: %v", reason, err)
-			s.recordCDNSync(ctx, reason+" failed: "+err.Error())
-			return
-		}
-		logging.Infof(logging.ComponentNode, "cdn automation ran after %s", reason)
-	}()
+		s.cdnSyncPending = false
+		s.cdnSyncStateMu.Unlock()
+		reason = "further node changes"
+	}
+}
+
+func (s *Server) runCDNAutomationOnce(reason string) {
+	ctx, cancel := context.WithTimeout(context.Background(), cdnAutomationTimeout)
+	defer cancel()
+	config, err := s.loadCDNAutomation(ctx)
+	if err != nil || !config.ready() {
+		return
+	}
+	if _, err := s.syncCDNAutomation(ctx, config); err != nil {
+		logging.Warnf(logging.ComponentNode, "cdn automation (%s) failed: %v", reason, err)
+		s.recordCDNSync(ctx, reason+" failed: "+err.Error())
+		return
+	}
+	logging.Infof(logging.ComponentNode, "cdn automation ran after %s", reason)
 }
 
 // retireCDNForNode is the delete path. The hostname is read before the node
@@ -245,6 +282,11 @@ func (s *Server) retireCDNForNode(hostname string) {
 			logging.Warnf(logging.ComponentNode, "cdn automation: could not reach the zone to retire %s: %v", hostname, err)
 			return
 		}
+		// Taking the same lock as a sync: removing a host row while a sync is
+		// deciding which rows are missing would have it recreate what this is
+		// removing.
+		s.cdnSyncRunMu.Lock()
+		defer s.cdnSyncRunMu.Unlock()
 		s.retireCDNHostname(ctx, client, zoneID, config.inboundTag(), hostname, config.RemoveRecordsOnDelete)
 		logging.Infof(logging.ComponentNode, "cdn automation retired %s", hostname)
 	}()

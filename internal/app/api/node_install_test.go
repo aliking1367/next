@@ -59,7 +59,8 @@ func TestNodeInstallScriptIsSafeUnattended(t *testing.T) {
 		"set -euo pipefail",
 		"A --token is required",
 		"Run this as root",
-		"install-bundle?token=",
+		`-H "Authorization: Bearer $TOKEN"`,
+		"install-bundle",
 		"-----END CERTIFICATE-----",
 		"--bundle-file",
 		"</dev/null",
@@ -74,5 +75,11 @@ func TestNodeInstallScriptIsSafeUnattended(t *testing.T) {
 	}
 	if strings.Contains(script, "--token") && strings.Contains(script, "echo $TOKEN") {
 		t.Error("the script must not echo the token")
+	}
+	// The token must not travel in a URL. Query strings are written to the
+	// access log of every proxy in front of the panel, and this one token is
+	// enough to collect a node's private key.
+	if strings.Contains(script, "token=$TOKEN") || strings.Contains(script, "?token=") {
+		t.Error("the install token must be sent as a header, not in the URL")
 	}
 }

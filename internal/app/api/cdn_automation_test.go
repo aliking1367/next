@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCDNAutomationReadyNeedsEverythingItRunsOn(t *testing.T) {
@@ -259,4 +260,49 @@ func newCDNAutomationTestServer(t *testing.T) *Server {
 	}
 	t.Cleanup(func() { _ = server.db.Close() })
 	return server
+}
+
+// Two syncs at once would both read "this host is missing" and both write it,
+// which reaches every user as a duplicate config. A burst of node edits is
+// exactly how that happens, so a kick while one is running has to fold into a
+// single follow-up pass rather than start a second sync.
+func TestKickCDNAutomationCoalescesWhileOneIsRunning(t *testing.T) {
+	server := newCDNAutomationTestServer(t)
+
+	server.cdnSyncStateMu.Lock()
+	server.cdnSyncRunning = true
+	server.cdnSyncStateMu.Unlock()
+
+	for i := 0; i < 5; i++ {
+		server.kickCDNAutomation("node created")
+	}
+
+	server.cdnSyncStateMu.Lock()
+	running, pending := server.cdnSyncRunning, server.cdnSyncPending
+	server.cdnSyncStateMu.Unlock()
+	if !running {
+		t.Fatal("the running sync should still be marked as running")
+	}
+	if !pending {
+		t.Fatal("five kicks during a sync should have left exactly one pass pending")
+	}
+}
+
+func TestKickCDNAutomationStartsWhenIdle(t *testing.T) {
+	server := newCDNAutomationTestServer(t)
+	// Not configured, so the pass returns immediately; what is under test is
+	// that the kick claims the slot rather than skipping.
+	server.kickCDNAutomation("node created")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		server.cdnSyncStateMu.Lock()
+		running := server.cdnSyncRunning
+		server.cdnSyncStateMu.Unlock()
+		if !running {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the sync slot was never released")
 }

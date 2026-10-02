@@ -42,6 +42,10 @@ type cdnHostPlan struct {
 	// not, so one failing record does not hide the rest.
 	DNSCreated bool   `json:"dns_created"`
 	DNSError   string `json:"dns_error,omitempty"`
+	// HostError is kept apart from DNSError on purpose. Reporting a failed
+	// host write as a DNS error sends an admin to Cloudflare to look for a
+	// problem that is in the panel.
+	HostError string `json:"host_error,omitempty"`
 }
 
 type cdnHostsResponse struct {

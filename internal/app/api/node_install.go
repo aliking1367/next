@@ -71,7 +71,13 @@ func (s *Server) handleNodeInstallBundle(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	// Header first: the query form stays accepted so an install command issued
+	// before this change still works, but nothing the panel hands out puts the
+	// token in a URL any more.
+	token := strings.TrimSpace(bearerToken(r))
+	if token == "" {
+		token = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	bundle, err := s.nodeMutations.RedeemInstallToken(ctx, token)
@@ -186,7 +192,10 @@ cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
 echo "Fetching this node's install bundle from the panel"
-if ! curl -fsSL "$PANEL_URL/api/node/install-bundle?token=$TOKEN" -o "$WORK/bundle.pem"; then
+# The token goes in a header, not the URL. A query string is written to the
+# access log of every proxy in front of the panel -- Cloudflare included --
+# and this token is enough to collect a node's private key.
+if ! curl -fsSL -H "Authorization: Bearer $TOKEN" "$PANEL_URL/api/node/install-bundle" -o "$WORK/bundle.pem"; then
     echo "The panel refused the token. It is single-use and expires; generate a new one in the panel." >&2
     exit 1
 fi

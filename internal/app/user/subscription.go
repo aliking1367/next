@@ -3817,17 +3817,72 @@ func subscriptionTemplateContext(user UserDetail, links []string, usageURL strin
 	return context
 }
 
+// legacyTemplateStringList renders the links as a JavaScript array literal for
+// the template expressions that ask for raw output: the bundled page writes
+// `var rawLinks = {{ links_text|safe }};`, and a legacy template writes
+// `const subLinks = "{{ user.links }}";` -- the same value, once bare and once
+// inside a double-quoted string. `|safe` turns the template's own escaping off,
+// so this value has to be safe in both places on its own.
+//
+// It previously escaped only the backslash and the single quote. That left `<`
+// alone, so a link whose remark held `</script>` closed the script block and
+// whatever followed it ran as script, on every user's subscription page, stored
+// -- reachable by anyone who could set a user's extra links. It also left `"`
+// alone, which ends the string in the legacy form.
+//
+// Single quotes are kept for the array, because that is what nests inside the
+// legacy template's double quotes. Every escape emitted below is valid in both
+// quote styles, so one rendering is correct in both contexts.
 func legacyTemplateStringList(values []string) string {
 	if len(values) == 0 {
 		return "[]"
 	}
 	quoted := make([]string, 0, len(values))
 	for _, value := range values {
-		escaped := strings.ReplaceAll(value, `\`, `\\`)
-		escaped = strings.ReplaceAll(escaped, `'`, `\'`)
-		quoted = append(quoted, `'`+escaped+`'`)
+		quoted = append(quoted, "'"+escapeJavaScriptStringBody(value)+"'")
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+// escapeJavaScriptStringBody makes one value safe inside a JavaScript string
+// that is itself inside an HTML <script> element.
+func escapeJavaScriptStringBody(value string) string {
+	var b strings.Builder
+	b.Grow(len(value) + 8)
+	for _, r := range value {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '\'':
+			b.WriteString(`\'`)
+		case '"':
+			// Would otherwise end the legacy template's surrounding string.
+			b.WriteString(`\"`)
+		case '<', '>':
+			// The HTML parser finds `</script>` before JavaScript ever runs, so
+			// these cannot be left literal whatever the quoting around them.
+			// `&` is left alone on purpose: script content is raw text, so an
+			// ampersand is not markup there, and query strings in these links
+			// are full of them.
+			b.WriteString(fmt.Sprintf(`\u%04x`, r))
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		case ' ', ' ':
+			// Line terminators in JavaScript, invisible in the source.
+			b.WriteString(fmt.Sprintf(`\u%04x`, r))
+		default:
+			if r < 0x20 || r == 0x7f {
+				b.WriteString(fmt.Sprintf(`\u%04x`, r))
+				continue
+			}
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func subscriptionBytesFilter(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {

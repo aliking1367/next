@@ -74,6 +74,15 @@ type Server struct {
 	loginLimiter         loginRateLimiter
 	operators            *operatorResolver
 	recentActionsEnabled bool
+	// A CDN sync reads the hosts, decides what is missing, and writes it. Two
+	// of them at once both read "missing" and both write, which is a duplicate
+	// config in every user's subscription. Node edits arrive in bursts, so this
+	// is reachable: one lock around the sync, and one coalescing slot so a
+	// burst collapses into a single follow-up pass.
+	cdnSyncRunMu   sync.Mutex
+	cdnSyncStateMu sync.Mutex
+	cdnSyncRunning bool
+	cdnSyncPending bool
 }
 
 func New(cfg Config) (*Server, error) {

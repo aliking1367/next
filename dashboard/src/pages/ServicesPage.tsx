@@ -162,6 +162,7 @@ type CdnHostsResponse = {
 		created: boolean;
 		dns_created: boolean;
 		dns_error?: string;
+		host_error?: string;
 		skip_reason?: string;
 	}[];
 };
@@ -2794,11 +2795,11 @@ const ServicesPage: FC = () => {
 											<Td dir="ltr">{item.hostname}</Td>
 											<Td dir="ltr">{item.node_ip}</Td>
 											<Td>
-												{item.dns_error
-													? item.dns_error
-													: item.created
+												{item.dns_error ||
+													item.host_error ||
+													(item.created
 														? t("services.cdnHosts.ok")
-														: t("services.cdnAuto.alreadyCorrect")}
+														: t("services.cdnAuto.alreadyCorrect"))}
 											</Td>
 										</Tr>
 									))}
