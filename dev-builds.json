@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-68e43ca",
-  "updated_at": "2026-10-02T14:03:46Z",
+  "latest": "dev-846c648",
+  "updated_at": "2026-10-02T14:29:35Z",
   "builds": [
+    {
+      "tag": "dev-846c648",
+      "sha": "846c6489f52042f77e45591226ba49883f63e52f",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "37019661078",
+      "run_number": "101",
+      "created_at": "2026-10-02T14:29:35Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-846c648.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-846c648.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-846c648.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-846c648.zip"
+        }
+      }
+    },
     {
       "tag": "dev-68e43ca",
       "sha": "68e43ca5c91e8c541a7e01dab1b5068b2d28a556",
