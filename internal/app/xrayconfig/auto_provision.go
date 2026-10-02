@@ -547,7 +547,11 @@ func buildAutoCDNXHTTP(in autoProvisionBuild) (map[string]any, error) {
 			"security": "tls",
 			"xhttpSettings": map[string]any{
 				"path": path,
-				"host": in.cdnDomain,
+				// No host is pinned here on purpose. A CDN forwards the
+				// hostname the client used, and one inbound is meant to serve
+				// a hostname per node; pinning one would make the inbound
+				// reject every other node's hostname, which reads as a config
+				// that simply does not connect.
 				"mode": "packet-up",
 			},
 			"tlsSettings": map[string]any{

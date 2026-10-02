@@ -383,8 +383,15 @@ func TestAutoProvisionCDNInboundAndHost(t *testing.T) {
 	if streamNetwork(stream) != "xhttp" || stringValue(stream["security"]) != "tls" {
 		t.Errorf("CDN inbound must be xhttp+tls, got %v", stream)
 	}
-	if stringValue(tlsSettings["serverName"]) != "cdn.example.com" || stringValue(xhttp["host"]) != "cdn.example.com" {
-		t.Errorf("domain must be normalized into the TLS name and Host header, got %v / %v", tlsSettings, xhttp)
+	if stringValue(tlsSettings["serverName"]) != "cdn.example.com" {
+		t.Errorf("the TLS name must carry the domain, got %v", tlsSettings)
+	}
+	// The inbound pins no hostname: a CDN forwards whatever name the client
+	// used, and one inbound is meant to serve a hostname per node. Pinning one
+	// would make it reject every other node's hostname, which reaches a user
+	// as a config that simply does not connect.
+	if _, pinned := xhttp["host"]; pinned {
+		t.Errorf("the CDN inbound must not pin a Host header, got %v", xhttp)
 	}
 	if stringValue(xhttp["mode"]) != "packet-up" {
 		t.Errorf("packet-up is the CDN-safe mode, got %q", stringValue(xhttp["mode"]))
