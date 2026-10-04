@@ -919,6 +919,16 @@ const ServicesPage: FC = () => {
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
+	// Which protocols auto-configure should build. All of them is the old
+	// behaviour; unticking one retires its inbound, which is how an admin
+	// clears out configs that no longer connect on their users' networks.
+	const AUTO_RECIPES = [
+		"reality-vision",
+		"reality-xhttp",
+		"hysteria2",
+		"cdn-xhttp",
+	] as const;
+	const [autoRecipes, setAutoRecipes] = useState<string[]>([...AUTO_RECIPES]);
 	const [fastlyHost, setFastlyHost] = useState("");
 	const [fastlySni, setFastlySni] = useState("");
 	const navigate = useNavigate();
@@ -1182,13 +1192,17 @@ const ServicesPage: FC = () => {
 		setIsAutoConfiguring(true);
 		try {
 			const domain = cdnDomain.trim();
+			const everyRecipe = autoRecipes.length === AUTO_RECIPES.length;
 			const body =
-				domain || wireGuardTunnel || fastlyHost.trim()
+				domain || wireGuardTunnel || fastlyHost.trim() || !everyRecipe
 					? {
 							cdn_domain: domain,
 							wireguard: wireGuardTunnel,
 							fastly_host: fastlyHost.trim(),
 							fastly_sni: fastlySni.trim(),
+							// Sending nothing keeps the old "build them all"
+							// behaviour, so only a narrowed choice is sent.
+							...(everyRecipe ? {} : { recipes: autoRecipes }),
 						}
 					: undefined;
 			const response = await fetch<AutoConfigureResponse>(
@@ -2492,7 +2506,7 @@ const ServicesPage: FC = () => {
 							colorScheme="primary"
 							onClick={handleAutoConfigureBestProtocols}
 							isLoading={isAutoConfiguring}
-							isDisabled={cdnDomainInvalid}
+							isDisabled={cdnDomainInvalid || autoRecipes.length === 0}
 						>
 							{t("services.autoConfigure.button")}
 						</Button>
@@ -2547,6 +2561,31 @@ const ServicesPage: FC = () => {
 						/>
 						<FormHelperText>
 							{t("services.autoConfigure.fastlySniHelp")}
+						</FormHelperText>
+					</FormControl>
+					<FormControl>
+						<FormLabel>{t("services.autoConfigure.recipesLabel")}</FormLabel>
+						<Stack spacing={1} pl={1}>
+							{AUTO_RECIPES.map((recipe) => (
+								<Checkbox
+									key={recipe}
+									isChecked={autoRecipes.includes(recipe)}
+									onChange={(event) =>
+										setAutoRecipes((current) =>
+											event.target.checked
+												? [...current, recipe]
+												: current.filter((item) => item !== recipe),
+										)
+									}
+								>
+									{t(`services.autoConfigure.recipe.${recipe}`)}
+								</Checkbox>
+							))}
+						</Stack>
+						<FormHelperText>
+							{autoRecipes.length === 0
+								? t("services.autoConfigure.recipesEmpty")
+								: t("services.autoConfigure.recipesHelp")}
 						</FormHelperText>
 					</FormControl>
 					<FormControl>

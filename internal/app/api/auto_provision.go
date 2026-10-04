@@ -67,6 +67,11 @@ type autoProvisionRequest struct {
 	// FastlySNI is the name announced in the TLS handshake; it deliberately
 	// differs from the Fastly hostname.
 	FastlySNI string `json:"fastly_sni"`
+	// Recipes limits the run to the named protocols. Empty keeps the old
+	// behaviour of building every one. A protocol left out has its inbound
+	// retired, which is how an admin clears out configs that no longer
+	// connect on their users' networks.
+	Recipes []string `json:"recipes"`
 }
 
 type autoProvisionResponse struct {
@@ -176,6 +181,7 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 		WireGuard:  request.WireGuard,
 		FastlyHost: request.FastlyHost,
 		FastlySNI:  request.FastlySNI,
+		Recipes:    request.Recipes,
 		PortBusy:   localPortBusy,
 	})
 	if err != nil {

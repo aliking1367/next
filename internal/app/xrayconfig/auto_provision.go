@@ -73,9 +73,64 @@ type AutoProvisionOptions struct {
 	// because it needs its own client app (WireGuard/Amnezia) and does not
 	// appear in the usual proxy clients.
 	WireGuard bool
+	// Recipes limits the run to the named recipes. Empty means every recipe
+	// whose own inputs are present, which is what every earlier caller got.
+	//
+	// It exists because "best protocols" is not one answer everywhere. Where a
+	// node's IP is graylisted -- the usual case on some Iranian carriers -- the
+	// direct-to-IP recipes answer nothing while the CDN-fronted one works, and
+	// a subscription listing fifteen configs that cannot connect is worse than
+	// one listing five that can: the user tries them, they fail, and the panel
+	// looks broken.
+	//
+	// A recipe left out of a non-empty selection has its inbound retired, so
+	// deselecting is how an admin removes what no longer works.
+	Recipes []string
 	// PortBusy reports whether a port is already taken on this machine by a
 	// process outside Xray's config (e.g. the panel itself). Optional.
 	PortBusy func(port int) bool
+}
+
+// SelectableRecipes lists the recipes an admin may choose between, in the order
+// they are provisioned. The WireGuard and Fastly recipes are left out: each is
+// already gated on an input of its own.
+func SelectableRecipes() []string {
+	names := make([]string, 0, 4)
+	for _, spec := range autoProvisionSpecs() {
+		if spec.wireGuard || spec.fastly {
+			continue
+		}
+		names = append(names, spec.recipe)
+	}
+	return names
+}
+
+// normalizeRecipeSelection validates the requested recipes. An unknown name is
+// refused by name rather than silently ignored, because silently building
+// nothing is indistinguishable from the feature being broken.
+func normalizeRecipeSelection(requested []string) (map[string]bool, error) {
+	if len(requested) == 0 {
+		return nil, nil
+	}
+	known := map[string]bool{}
+	for _, spec := range autoProvisionSpecs() {
+		known[spec.recipe] = true
+	}
+	selected := map[string]bool{}
+	for _, name := range requested {
+		clean := strings.ToLower(strings.TrimSpace(name))
+		if clean == "" {
+			continue
+		}
+		if !known[clean] {
+			return nil, fmt.Errorf("unknown recipe %q", clean)
+		}
+		selected[clean] = true
+	}
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("no recipe was selected")
+	}
+	return selected, nil
 }
 
 // AutoProvisionProtocol describes one inbound created (or already present)
@@ -195,6 +250,10 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 	if fastlySNI == "" {
 		fastlySNI = DefaultFastlySNI
 	}
+	selected, err := normalizeRecipeSelection(opts.Recipes)
+	if err != nil {
+		return AutoProvisionResult{}, err
+	}
 	result := AutoProvisionResult{CDNRequested: cdnDomain != "", WireGuardRequested: opts.WireGuard, FastlyRequested: fastlyHost != ""}
 
 	for _, tag := range autoProvisionLegacyTags {
@@ -216,6 +275,18 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 	usedDests := map[string]bool{}
 
 	for _, spec := range autoProvisionSpecs() {
+		if selected != nil && !selected[spec.recipe] {
+			// Deselected: retire what a previous run built, so the configs the
+			// admin just removed stop reaching users.
+			if _, err := r.DeleteInbound(ctx, spec.tag); err != nil {
+				if !errors.Is(err, ErrInboundNotFound) {
+					return AutoProvisionResult{}, fmt.Errorf("retire %s: %w", spec.tag, err)
+				}
+				continue
+			}
+			result.Retired = append(result.Retired, spec.tag)
+			continue
+		}
 		if spec.cdn && cdnDomain == "" {
 			continue
 		}
