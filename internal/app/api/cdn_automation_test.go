@@ -306,3 +306,93 @@ func TestKickCDNAutomationStartsWhenIdle(t *testing.T) {
 	}
 	t.Fatal("the sync slot was never released")
 }
+
+// Adding a second CDN inbound without teaching the automation about it gave
+// that inbound the one default host instead of a hostname per node, so its
+// configs pointed at the bare domain and reached nothing.
+func TestCDNAutomationCoversEveryCDNInbound(t *testing.T) {
+	tags := cdnAutomation{}.inboundTags()
+	if len(tags) < 2 {
+		t.Fatalf("expected every CDN inbound to be covered, got %v", tags)
+	}
+	found := map[string]bool{}
+	for _, tag := range tags {
+		found[tag] = true
+	}
+	for _, want := range []string{"auto-cdn-xhttp", "auto-cdn-httpupgrade"} {
+		if !found[want] {
+			t.Fatalf("%s is not covered: %v", want, tags)
+		}
+	}
+}
+
+// An admin who named one tag meant that one. Widening it would start writing
+// host rows on an inbound they deliberately left alone.
+func TestCDNAutomationHonoursAnExplicitInboundTag(t *testing.T) {
+	tags := cdnAutomation{InboundTag: " my-own-cdn "}.inboundTags()
+	if len(tags) != 1 || tags[0] != "my-own-cdn" {
+		t.Fatalf("inboundTags() = %v, want just the configured one", tags)
+	}
+}
+
+// One hostname, one DNS record, but a host row on each inbound: the record is
+// the same either way while each inbound has its own port and path.
+func TestUpsertCDNHostRowWritesOneRowPerInbound(t *testing.T) {
+	server := newCDNAutomationTestServer(t)
+	ctx := context.Background()
+	for _, tag := range []string{"auto-cdn-xhttp", "auto-cdn-httpupgrade"} {
+		if _, err := server.db.Exec(`INSERT INTO inbounds (tag) VALUES (?)`, tag); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plan := cdnHostPlan{
+		NodeID:   1,
+		NodeName: "Amsterdam",
+		NodeIP:   "198.51.100.10",
+		Hostname: "amsterdam.example.com",
+		Remark:   "🇳🇱 Amsterdam · CDN",
+	}
+	for _, tag := range []string{"auto-cdn-xhttp", "auto-cdn-httpupgrade"} {
+		port := int64(2096)
+		path := "/27522950f26c"
+		if tag == "auto-cdn-httpupgrade" {
+			port, path = 2087, "/9357c9ae3a41"
+		}
+		template := hostPayload{Port: &port, Path: &path, Security: "tls"}
+		changed, err := server.upsertCDNHostRow(ctx, tag, template, plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !changed {
+			t.Fatalf("%s: expected the host to be created", tag)
+		}
+	}
+
+	var rows int
+	if err := server.db.QueryRow(
+		`SELECT COUNT(*) FROM hosts WHERE LOWER(COALESCE(address, '')) = ?`,
+		plan.Hostname).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 2 {
+		t.Fatalf("one hostname should appear once per inbound, got %d rows", rows)
+	}
+	// Each keeps its own inbound's port, or both configs would dial the same
+	// one and only one of them could work.
+	var ports []int64
+	results, err := server.db.Query(`SELECT port FROM hosts WHERE LOWER(COALESCE(address, '')) = ? ORDER BY port`, plan.Hostname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer results.Close()
+	for results.Next() {
+		var port int64
+		if err := results.Scan(&port); err != nil {
+			t.Fatal(err)
+		}
+		ports = append(ports, port)
+	}
+	if len(ports) != 2 || ports[0] != 2087 || ports[1] != 2096 {
+		t.Fatalf("ports = %v, want [2087 2096]", ports)
+	}
+}

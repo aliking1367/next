@@ -1041,3 +1041,18 @@ func DefaultRecipes() []string {
 	}
 	return names
 }
+
+// CDNInboundTags lists the inbound tags that sit behind a CDN, in the order
+// they are provisioned. Anything managing CDN hostnames has to cover all of
+// them: adding a second CDN recipe without this gave the new inbound one
+// default host instead of one per node, so its configs pointed at the bare
+// domain and reached nothing.
+func CDNInboundTags() []string {
+	tags := make([]string, 0, 2)
+	for _, spec := range autoProvisionSpecs() {
+		if spec.cdn {
+			tags = append(tags, spec.tag)
+		}
+	}
+	return tags
+}

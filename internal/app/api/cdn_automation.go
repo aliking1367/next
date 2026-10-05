@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aliking1367/next/internal/app/xrayconfig"
+
 	"github.com/aliking1367/next/internal/app/logging"
 )
 
@@ -37,8 +39,8 @@ type cdnAutomation struct {
 	// these hostnames being challenged. It is off unless an admin turns it on:
 	// it switches a protection off, narrowly, and that is theirs to decide.
 	ManageSecurityRule bool
-	LastSyncAt            sql.NullTime
-	LastSyncDetail        string
+	LastSyncAt         sql.NullTime
+	LastSyncDetail     string
 }
 
 func (c cdnAutomation) inboundTag() string {
@@ -46,6 +48,24 @@ func (c cdnAutomation) inboundTag() string {
 		return tag
 	}
 	return defaultCDNInboundTag
+}
+
+// inboundTags are the inbounds this run gives a hostname per node.
+//
+// An admin who named one tag gets that one and nothing else; they were
+// specific on purpose. Otherwise every CDN-fronted inbound is covered, because
+// a second CDN recipe that only ever receives the default host is a set of
+// configs pointing at the bare domain, which reaches the panel or nothing at
+// all -- and reads to a user as a config that simply does not work.
+func (c cdnAutomation) inboundTags() []string {
+	if tag := strings.TrimSpace(c.InboundTag); tag != "" {
+		return []string{tag}
+	}
+	tags := xrayconfig.CDNInboundTags()
+	if len(tags) == 0 {
+		return []string{defaultCDNInboundTag}
+	}
+	return tags
 }
 
 // ready says whether the panel has everything it needs to act on its own.

@@ -33,11 +33,32 @@ func (s *Server) syncCDNAutomationLocked(ctx context.Context, config cdnAutomati
 	if suffix == "" {
 		return nil, fmt.Errorf("no CDN domain is configured")
 	}
-	inboundTag := config.inboundTag()
-
-	template, err := s.cdnTemplateHost(ctx, inboundTag)
-	if err != nil {
-		return nil, err
+	// One DNS record per node, but a host row on every CDN inbound: the record
+	// is the same either way, while each inbound has its own port and path.
+	inboundTags := config.inboundTags()
+	templates := map[string]hostPayload{}
+	var templateErr error
+	for _, tag := range inboundTags {
+		template, err := s.cdnTemplateHost(ctx, tag)
+		if err != nil {
+			// An inbound that does not exist yet, or has no host to copy, is
+			// skipped rather than failing the whole run: the other inbounds
+			// still need their records. The first failure is kept rather than
+			// the last, so when none of them works the message names the
+			// primary inbound instead of whichever happened to be checked
+			// last.
+			if templateErr == nil {
+				templateErr = err
+			}
+			continue
+		}
+		templates[tag] = template
+	}
+	if len(templates) == 0 {
+		if templateErr != nil {
+			return nil, templateErr
+		}
+		return nil, fmt.Errorf("no CDN inbound has a host to copy yet")
 	}
 	nodes, err := s.cdnEligibleNodes(ctx)
 	if err != nil {
@@ -86,17 +107,31 @@ func (s *Server) syncCDNAutomationLocked(ctx context.Context, config cdnAutomati
 		// hostname pointing at it with nothing referring to it. Retire it.
 		previous := strings.TrimSpace(current[node.ID])
 		if previous != "" && !strings.EqualFold(previous, plan.Hostname) {
-			s.retireCDNHostname(ctx, client, zoneID, inboundTag, previous, config.RemoveRecordsOnDelete)
+			s.retireCDNHostname(ctx, client, zoneID, inboundTags, previous, config.RemoveRecordsOnDelete)
 		}
 
-		changed, hostErr := s.upsertCDNHostRow(ctx, inboundTag, template, plan)
+		hostErr := error(nil)
+		for _, tag := range inboundTags {
+			template, ok := templates[tag]
+			if !ok {
+				continue
+			}
+			changed, err := s.upsertCDNHostRow(ctx, tag, template, plan)
+			if err != nil {
+				hostErr = err
+				break
+			}
+			// Changed anywhere counts as changed: the row says what the sync
+			// did for this node, not for one inbound of it.
+			plan.Created = plan.Created || changed
+		}
 		if hostErr != nil {
 			plan.HostError = hostErr.Error()
+			plan.Created = false
 			failures++
 			plans = append(plans, plan)
 			continue
 		}
-		plan.Created = changed
 		if err := s.setNodeCDNHostname(ctx, node.ID, plan.Hostname); err != nil {
 			logging.Warnf(logging.ComponentNode,
 				"cdn automation: could not remember hostname for node %d: %v", node.ID, err)
@@ -215,14 +250,16 @@ func (s *Server) upsertCDNHostRow(ctx context.Context, inboundTag string, templa
 // retireCDNHostname removes a hostname the panel built and no longer uses. The
 // host row always goes; the DNS record only when the admin asked for it, since
 // a record they later added other uses for is not the panel's to delete.
-func (s *Server) retireCDNHostname(ctx context.Context, client cloudflareClient, zoneID, inboundTag, hostname string, removeRecord bool) {
+func (s *Server) retireCDNHostname(ctx context.Context, client cloudflareClient, zoneID string, inboundTags []string, hostname string, removeRecord bool) {
 	if strings.TrimSpace(hostname) == "" {
 		return
 	}
-	if _, err := s.db.ExecContext(ctx,
-		`DELETE FROM hosts WHERE inbound_tag = ? AND LOWER(COALESCE(address, '')) = ?`,
-		inboundTag, strings.ToLower(hostname)); err != nil {
-		logging.Warnf(logging.ComponentNode, "cdn automation: could not remove host %s: %v", hostname, err)
+	for _, tag := range inboundTags {
+		if _, err := s.db.ExecContext(ctx,
+			`DELETE FROM hosts WHERE inbound_tag = ? AND LOWER(COALESCE(address, '')) = ?`,
+			tag, strings.ToLower(hostname)); err != nil {
+			logging.Warnf(logging.ComponentNode, "cdn automation: could not remove host %s from %s: %v", hostname, tag, err)
+		}
 	}
 	if !removeRecord {
 		return
@@ -345,7 +382,7 @@ func (s *Server) retireCDNForNode(hostname string) {
 		// removing.
 		s.cdnSyncRunMu.Lock()
 		defer s.cdnSyncRunMu.Unlock()
-		s.retireCDNHostname(ctx, client, zoneID, config.inboundTag(), hostname, config.RemoveRecordsOnDelete)
+		s.retireCDNHostname(ctx, client, zoneID, config.inboundTags(), hostname, config.RemoveRecordsOnDelete)
 		logging.Infof(logging.ComponentNode, "cdn automation retired %s", hostname)
 	}()
 }
