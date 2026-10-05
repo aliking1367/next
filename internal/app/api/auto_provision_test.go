@@ -127,10 +127,13 @@ func TestCoreAutoConfigureAddsCDNInboundOnRequest(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("auto-configure status=%d body=%s", code, body)
 	}
-	if !resp.CDNRequested || len(resp.Protocols) != 4 {
-		t.Fatalf("expected four inbounds including the CDN one, got %+v", resp)
+	// Five: the three direct recipes plus both CDN-fronted ones. The second
+	// CDN recipe reuses the same domain, certificate and DNS record, so it
+	// costs nothing and gives a user another shape through the same CDN.
+	if !resp.CDNRequested || len(resp.Protocols) != 5 {
+		t.Fatalf("expected five inbounds including both CDN ones, got %+v", resp)
 	}
-	assertMasterAPICount(t, db, fmt.Sprintf(`SELECT COUNT(*) FROM service_hosts WHERE service_id = %d`, resp.ServiceID), 4)
+	assertMasterAPICount(t, db, fmt.Sprintf(`SELECT COUNT(*) FROM service_hosts WHERE service_id = %d`, resp.ServiceID), 5)
 	var address, sni string
 	if err := db.QueryRow(`SELECT address, sni FROM hosts WHERE inbound_tag = 'auto-cdn-xhttp'`).Scan(&address, &sni); err != nil {
 		t.Fatal(err)
@@ -356,8 +359,8 @@ func TestCoreVerifyProtocolsProbesEachConnectedNodesAddress(t *testing.T) {
 	if resp.Warning != "" {
 		t.Fatalf("unexpected warning %q", resp.Warning)
 	}
-	if len(resp.Results) != 4 {
-		t.Fatalf("expected 4 results (4 inbounds x the one probed node), got %d: %+v", len(resp.Results), resp.Results)
+	if len(resp.Results) != 5 {
+		t.Fatalf("expected 5 results (5 inbounds x the one probed node), got %d: %+v", len(resp.Results), resp.Results)
 	}
 	for _, result := range resp.Results {
 		if result.NodeID != 1 || result.NodeName != "edge" || result.Address != "127.0.0.1" {

@@ -919,16 +919,38 @@ const ServicesPage: FC = () => {
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
-	// Which protocols auto-configure should build. All of them is the old
-	// behaviour; unticking one retires its inbound, which is how an admin
-	// clears out configs that no longer connect on their users' networks.
-	const AUTO_RECIPES = [
-		"reality-vision",
-		"reality-xhttp",
-		"hysteria2",
-		"cdn-xhttp",
-	] as const;
-	const [autoRecipes, setAutoRecipes] = useState<string[]>([...AUTO_RECIPES]);
+	// Which protocols auto-configure should build. The list comes from the
+	// panel rather than from here: a copy on each side drifts the moment a
+	// recipe is renamed, and the symptom is a tick box the panel then rejects
+	// as an unknown recipe.
+	const [autoRecipeOptions, setAutoRecipeOptions] = useState<string[]>([]);
+	const [autoRecipes, setAutoRecipes] = useState<string[]>([]);
+	const [autoFingerprints, setAutoFingerprints] = useState<string[]>([]);
+	const [autoAlpnSets, setAutoAlpnSets] = useState<string[]>([]);
+	const [autoFingerprint, setAutoFingerprint] = useState("");
+	const [autoAlpn, setAutoAlpn] = useState("");
+
+	const openAutoConfigure = async () => {
+		autoConfigureDisclosure.onOpen();
+		try {
+			const options = await fetch<{
+				recipes: string[];
+				default_recipes: string[];
+				fingerprints: string[];
+				alpn_sets: string[];
+			}>("/core/auto-configure");
+			setAutoRecipeOptions(options.recipes ?? []);
+			setAutoRecipes(options.default_recipes ?? []);
+			setAutoFingerprints(options.fingerprints ?? []);
+			setAutoAlpnSets(options.alpn_sets ?? []);
+		} catch {
+			// An older panel has no GET here. Leaving the list empty makes the
+			// run send no selection at all, which is the previous behaviour of
+			// building every recipe.
+			setAutoRecipeOptions([]);
+			setAutoRecipes([]);
+		}
+	};
 	const [fastlyHost, setFastlyHost] = useState("");
 	const [fastlySni, setFastlySni] = useState("");
 	const navigate = useNavigate();
@@ -1192,9 +1214,16 @@ const ServicesPage: FC = () => {
 		setIsAutoConfiguring(true);
 		try {
 			const domain = cdnDomain.trim();
-			const everyRecipe = autoRecipes.length === AUTO_RECIPES.length;
+			const everyRecipe =
+				autoRecipeOptions.length > 0 &&
+				autoRecipes.length === autoRecipeOptions.length;
 			const body =
-				domain || wireGuardTunnel || fastlyHost.trim() || !everyRecipe
+				domain ||
+				wireGuardTunnel ||
+				fastlyHost.trim() ||
+				!everyRecipe ||
+				autoFingerprint ||
+				autoAlpn
 					? {
 							cdn_domain: domain,
 							wireguard: wireGuardTunnel,
@@ -1203,6 +1232,8 @@ const ServicesPage: FC = () => {
 							// Sending nothing keeps the old "build them all"
 							// behaviour, so only a narrowed choice is sent.
 							...(everyRecipe ? {} : { recipes: autoRecipes }),
+							...(autoFingerprint ? { fingerprint: autoFingerprint } : {}),
+							...(autoAlpn ? { alpn: autoAlpn } : {}),
 						}
 					: undefined;
 			const response = await fetch<AutoConfigureResponse>(
@@ -2150,7 +2181,7 @@ const ServicesPage: FC = () => {
 							<Button
 								variant="outline"
 								colorScheme="primary"
-								onClick={autoConfigureDisclosure.onOpen}
+								onClick={openAutoConfigure}
 								size="sm"
 								h="36px"
 								px={3}
@@ -2566,7 +2597,7 @@ const ServicesPage: FC = () => {
 					<FormControl>
 						<FormLabel>{t("services.autoConfigure.recipesLabel")}</FormLabel>
 						<Stack spacing={1} pl={1}>
-							{AUTO_RECIPES.map((recipe) => (
+							{autoRecipeOptions.map((recipe) => (
 								<Checkbox
 									key={recipe}
 									isChecked={autoRecipes.includes(recipe)}
@@ -2588,6 +2619,42 @@ const ServicesPage: FC = () => {
 								: t("services.autoConfigure.recipesHelp")}
 						</FormHelperText>
 					</FormControl>
+					{autoFingerprints.length > 0 && (
+						<FormControl>
+							<FormLabel>{t("services.autoConfigure.fingerprintLabel")}</FormLabel>
+							<Select
+								value={autoFingerprint}
+								onChange={(event) => setAutoFingerprint(event.target.value)}
+							>
+								<option value="">{t("services.autoConfigure.keepCurrent")}</option>
+								{autoFingerprints.map((item) => (
+									<option key={item} value={item}>
+										{item}
+									</option>
+								))}
+							</Select>
+							<FormHelperText>
+								{t("services.autoConfigure.fingerprintHelp")}
+							</FormHelperText>
+						</FormControl>
+					)}
+					{autoAlpnSets.length > 0 && (
+						<FormControl>
+							<FormLabel>{t("services.autoConfigure.alpnLabel")}</FormLabel>
+							<Select
+								value={autoAlpn}
+								onChange={(event) => setAutoAlpn(event.target.value)}
+							>
+								<option value="">{t("services.autoConfigure.keepCurrent")}</option>
+								{autoAlpnSets.map((item) => (
+									<option key={item} value={item}>
+										{item}
+									</option>
+								))}
+							</Select>
+							<FormHelperText>{t("services.autoConfigure.alpnHelp")}</FormHelperText>
+						</FormControl>
+					)}
 					<FormControl>
 						<Checkbox
 							isChecked={wireGuardTunnel}

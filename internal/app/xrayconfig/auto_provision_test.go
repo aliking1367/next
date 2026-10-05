@@ -361,8 +361,15 @@ func TestAutoProvisionCDNInboundAndHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.CDNRequested || len(result.Protocols) != 4 {
-		t.Fatalf("expected four inbounds including the CDN one, got %+v", result)
+	// Five: the three direct recipes plus both CDN-fronted ones. The second
+	// CDN recipe costs nothing extra -- same domain, same certificate, same
+	// DNS -- and gives a user a second shape through the same CDN for when a
+	// filter learns the first.
+	if !result.CDNRequested || len(result.Protocols) != 5 {
+		t.Fatalf("expected five inbounds including both CDN ones, got %+v", result)
+	}
+	if upgrade := protocolsByRecipe(result)[RecipeCDNHTTPUpgrade]; upgrade.Tag == "" {
+		t.Fatalf("the httpupgrade CDN inbound was not provisioned: %+v", result)
 	}
 	cdn := protocolsByRecipe(result)[RecipeCDNXHTTP]
 	validCDNPort := false

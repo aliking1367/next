@@ -72,6 +72,12 @@ type autoProvisionRequest struct {
 	// retired, which is how an admin clears out configs that no longer
 	// connect on their users' networks.
 	Recipes []string `json:"recipes"`
+	// Fingerprint is the TLS fingerprint the CDN-fronted hosts present. Empty
+	// keeps the previous value.
+	Fingerprint string `json:"fingerprint"`
+	// ALPN is what those hosts advertise in the handshake. Empty keeps each
+	// recipe's own default.
+	ALPN string `json:"alpn"`
 }
 
 type autoProvisionResponse struct {
@@ -161,6 +167,23 @@ func summarizeProvisionNodes(nodes []provisionNode) (provisionNodeSummary, strin
 // their hosts into a single service, so a sudo admin only has to create a
 // user afterward to hand out working access to all of them at once.
 func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		if err := requireServiceSudo(r); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		// The dashboard renders its checkboxes from this rather than holding a
+		// list of its own. A copy on each side drifts the moment a recipe is
+		// renamed, and the symptom is a tick box that reports "unknown recipe"
+		// -- which is exactly what shipped in v1.23.0.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"recipes":         xrayconfig.SelectableRecipes(),
+			"default_recipes": xrayconfig.DefaultRecipes(),
+			"fingerprints":    xrayconfig.KnownFingerprints,
+			"alpn_sets":       xrayconfig.KnownALPNSets,
+		})
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -177,12 +200,14 @@ func (s *Server) handleCoreAutoConfigure(w http.ResponseWriter, r *http.Request)
 	}
 
 	result, err := s.configRepo.AutoProvisionBestProtocols(r.Context(), xrayconfig.AutoProvisionOptions{
-		CDNDomain:  request.CDNDomain,
-		WireGuard:  request.WireGuard,
-		FastlyHost: request.FastlyHost,
-		FastlySNI:  request.FastlySNI,
-		Recipes:    request.Recipes,
-		PortBusy:   localPortBusy,
+		CDNDomain:   request.CDNDomain,
+		WireGuard:   request.WireGuard,
+		FastlyHost:  request.FastlyHost,
+		FastlySNI:   request.FastlySNI,
+		Recipes:     request.Recipes,
+		Fingerprint: request.Fingerprint,
+		ALPN:        request.ALPN,
+		PortBusy:    localPortBusy,
 	})
 	if err != nil {
 		if errors.Is(err, xrayconfig.ErrInvalidInbound) {

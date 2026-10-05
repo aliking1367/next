@@ -27,8 +27,20 @@ const (
 	RecipeRealityXHTTP  = "reality-xhttp"
 	RecipeHysteria2     = "hysteria2-obfs"
 	RecipeCDNXHTTP      = "cdn-xhttp"
-	RecipeAmneziaWG     = "amneziawg-tunnel"
-	RecipeFastlyWS      = "fastly-ws"
+	// RecipeCDNHTTPUpgrade is a second way through the same CDN. One technique
+	// that works is one technique away from not working, and httpupgrade is a
+	// plainer HTTP shape than XHTTP, so a filter tuned to one does not
+	// necessarily catch the other.
+	RecipeCDNHTTPUpgrade = "cdn-httpupgrade"
+	// RecipeDirectTCP is VLESS over bare TCP with no TLS at all. It is the one
+	// recipe here that depends on no third party, which is its entire point:
+	// where a node has an IPv6 address that is not filtered, this reaches it
+	// when every CDN path is blocked. It is opt-in because without TLS the
+	// protocol is visible to anything inspecting the stream, so it is a
+	// fallback to have, not a default to ship.
+	RecipeDirectTCP = "direct-tcp"
+	RecipeAmneziaWG = "amneziawg-tunnel"
+	RecipeFastlyWS  = "fastly-ws"
 )
 
 // autoProvisionLegacyTags are inbounds created by earlier releases of this
@@ -73,6 +85,23 @@ type AutoProvisionOptions struct {
 	// because it needs its own client app (WireGuard/Amnezia) and does not
 	// appear in the usual proxy clients.
 	WireGuard bool
+	// Fingerprint is the TLS fingerprint the CDN-fronted hosts present, for
+	// example "chrome", "firefox", "safari", "ios", "edge" or "random".
+	//
+	// It is configurable because a fixed value is itself a signal: every panel
+	// shipping "chrome" means every one of their users' handshakes looks
+	// identical, and a pool of identical handshakes is easier to pick out than
+	// a varied one. Empty keeps the previous value, so nothing changes for a
+	// caller that does not care.
+	Fingerprint string
+	// ALPN is what the handshake advertises on the CDN-fronted hosts. Empty
+	// keeps each recipe's own default.
+	//
+	// "h3,h2,http/1.1" is what a browser offers, so it blends in better than a
+	// bare "h2". It is safe over TCP even though h3 is QUIC-only: the server
+	// never selects a protocol it does not speak, so advertising it changes
+	// the hello and nothing else.
+	ALPN string
 	// Recipes limits the run to the named recipes. Empty means every recipe
 	// whose own inputs are present, which is what every earlier caller got.
 	//
@@ -178,7 +207,11 @@ type autoProvisionSpec struct {
 	cdn            bool
 	wireGuard      bool
 	fastly         bool
-	build          func(in autoProvisionBuild) (map[string]any, error)
+	// optIn keeps a recipe out of the default set. Selecting every recipe is
+	// what an empty selection means, and a recipe with a real downside must
+	// not arrive that way.
+	optIn bool
+	build func(in autoProvisionBuild) (map[string]any, error)
 }
 
 func autoProvisionSpecs() []autoProvisionSpec {
@@ -187,6 +220,8 @@ func autoProvisionSpecs() []autoProvisionSpec {
 		{protocol: "vless", recipe: RecipeRealityXHTTP, tag: "auto-reality-xhttp", preferredPorts: []int{8443}, build: buildAutoRealityXHTTP},
 		{protocol: "hysteria", recipe: RecipeHysteria2, tag: "auto-hysteria2-obfs", build: buildAutoHysteria2},
 		{protocol: "vless", recipe: RecipeCDNXHTTP, tag: "auto-cdn-xhttp", preferredPorts: cdnPreferredPorts, cdn: true, build: buildAutoCDNXHTTP},
+		{protocol: "vless", recipe: RecipeCDNHTTPUpgrade, tag: "auto-cdn-httpupgrade", preferredPorts: cdnPreferredPorts, cdn: true, build: buildAutoCDNHTTPUpgrade},
+		{protocol: "vless", recipe: RecipeDirectTCP, tag: "auto-direct-tcp", optIn: true, build: buildAutoDirectTCP},
 		{protocol: AWGProtocol, recipe: RecipeAmneziaWG, tag: "auto-amneziawg", preferredPorts: []int{51820}, wireGuard: true, build: buildAutoAmneziaWG},
 		{protocol: "vless", recipe: RecipeFastlyWS, tag: "auto-fastly-ws", fastly: true, build: buildAutoFastlyWS},
 	}
@@ -275,6 +310,9 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 	usedDests := map[string]bool{}
 
 	for _, spec := range autoProvisionSpecs() {
+		if selected == nil && spec.optIn {
+			continue
+		}
 		if selected != nil && !selected[spec.recipe] {
 			// Deselected: retire what a previous run built, so the configs the
 			// admin just removed stop reaching users.
@@ -339,8 +377,8 @@ func (r Repository) AutoProvisionBestProtocols(ctx context.Context, opts AutoPro
 			return AutoProvisionResult{}, fmt.Errorf("%s: %w", spec.recipe, err)
 		}
 		switch spec.recipe {
-		case RecipeCDNXHTTP:
-			if err := r.configureCDNHost(ctx, spec.tag, cdnDomain); err != nil {
+		case RecipeCDNXHTTP, RecipeCDNHTTPUpgrade:
+			if err := r.configureCDNHost(ctx, spec.tag, cdnDomain, opts.Fingerprint, opts.ALPN); err != nil {
 				return AutoProvisionResult{}, fmt.Errorf("%s host: %w", spec.recipe, err)
 			}
 		case RecipeHysteria2:
@@ -367,12 +405,48 @@ func cdnInboundDomain(inbound map[string]any) string {
 // configureCDNHost points the CDN inbound's default host at the domain
 // (clients dial Cloudflare, not the origin), with the TLS name, Host header
 // and a browser fingerprint that Cloudflare-fronted traffic should present.
-func (r Repository) configureCDNHost(ctx context.Context, tag, domain string) error {
+func (r Repository) configureCDNHost(ctx context.Context, tag, domain, fingerprint, alpn string) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE hosts SET address = ?, sni = ?, host = ?, security = 'tls', alpn = 'h2', fingerprint = 'chrome' WHERE inbound_tag = ?`,
-		domain, domain, domain, tag,
+		`UPDATE hosts SET address = ?, sni = ?, host = ?, security = 'tls', alpn = ?, fingerprint = ? WHERE inbound_tag = ?`,
+		domain, domain, domain, alpnOrDefault(alpn, "h2"), fingerprintOrDefault(fingerprint), tag,
 	)
 	return err
+}
+
+// KnownFingerprints are the TLS fingerprints an admin may pick between. They
+// are uTLS profiles Xray recognises; anything else would be written into the
+// host and then rejected at runtime, which surfaces as configs that simply do
+// not connect.
+var KnownFingerprints = []string{"chrome", "firefox", "safari", "ios", "android", "edge", "random", "randomized"}
+
+// KnownALPNSets are the ALPN lists offered in the dashboard. The first is what
+// the panel has always sent; the second is what a browser sends.
+var KnownALPNSets = []string{"h2", "h3,h2,http/1.1", "h2,http/1.1", "http/1.1"}
+
+func fingerprintOrDefault(value string) string {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	for _, known := range KnownFingerprints {
+		if clean == known {
+			return clean
+		}
+	}
+	// An unknown value is dropped rather than written through: Xray refuses a
+	// fingerprint it does not know, and the config would reach users looking
+	// perfectly normal and never connecting.
+	return "chrome"
+}
+
+func alpnOrDefault(value, fallback string) string {
+	clean := strings.TrimSpace(value)
+	if clean == "" {
+		return fallback
+	}
+	for _, known := range KnownALPNSets {
+		if clean == known {
+			return clean
+		}
+	}
+	return fallback
 }
 
 // pinHostCertificate records the SHA-256 of the inbound's self-signed
@@ -865,4 +939,105 @@ func splitPEMLines(value string) []string {
 		return nil
 	}
 	return strings.Split(trimmed, "\n")
+}
+
+// buildAutoCDNHTTPUpgrade is VLESS over httpupgrade behind the same CDN as the
+// XHTTP recipe.
+//
+// It exists so a user holds two different shapes through one CDN. httpupgrade
+// is an ordinary HTTP/1.1 Upgrade -- the same handshake a WebSocket starts with
+// and nothing more -- while XHTTP sends its own framing over POSTs. A filter
+// tuned to one shape does not necessarily recognise the other, so when one
+// stops connecting the other often still does, with no new account, domain or
+// DNS record to arrange.
+func buildAutoCDNHTTPUpgrade(in autoProvisionBuild) (map[string]any, error) {
+	certLines, keyLines, err := generateSelfSignedCertLines(in.cdnDomain, in.cdnDomain)
+	if err != nil {
+		return nil, err
+	}
+	path, err := randomXHTTPPath()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"tag":      in.tag,
+		"listen":   "::",
+		"port":     in.port,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"clients":    []any{},
+			"decryption": "none",
+		},
+		"streamSettings": map[string]any{
+			"network":  "httpupgrade",
+			"security": "tls",
+			"httpupgradeSettings": map[string]any{
+				"path": path,
+				// No host pinned, for the same reason as the XHTTP recipe: one
+				// inbound serves a hostname per node, and pinning one would
+				// make it refuse every other node's.
+			},
+			"tlsSettings": map[string]any{
+				"serverName": in.cdnDomain,
+				"alpn":       []any{"http/1.1"},
+				"minVersion": "1.2",
+				"certificates": []any{
+					map[string]any{
+						"certificate": certLines,
+						"key":         keyLines,
+					},
+				},
+			},
+		},
+		"sniffing": autoProvisionSniffing(),
+	}, nil
+}
+
+// buildAutoDirectTCP is VLESS over bare TCP with no TLS.
+//
+// Every other recipe here leans on something: a CDN, a certificate, a borrowed
+// SNI. This one leans on nothing, which is the point. Where a node has an
+// address that is reachable but every fronted path is blocked -- an IPv6
+// address is the usual case, since those are filtered far less thoroughly --
+// this still connects.
+//
+// The cost is real and is why it is opt-in: with no TLS the VLESS handshake is
+// in the clear, so anything inspecting the stream can identify it, and on an
+// address that is already watched it will be blocked quickly. It is worth
+// having as the path that survives when the others do not, not as a default.
+//
+// The port is deliberately high and random rather than a well-known one: a
+// plaintext protocol on 80 or 443 is more conspicuous than the same thing on a
+// port nothing expects.
+func buildAutoDirectTCP(in autoProvisionBuild) (map[string]any, error) {
+	return map[string]any{
+		"tag":      in.tag,
+		"listen":   "::",
+		"port":     in.port,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"clients":    []any{},
+			"decryption": "none",
+		},
+		"streamSettings": map[string]any{
+			"network":  "raw",
+			"security": "none",
+		},
+		"sniffing": autoProvisionSniffing(),
+	}, nil
+}
+
+// DefaultRecipes are the recipes an empty selection builds: every one that is
+// not opt-in and not gated on an input of its own. The dashboard ticks these,
+// so what it offers and what the panel would do agree without either side
+// holding a second copy of the list.
+func DefaultRecipes() []string {
+	names := make([]string, 0, 5)
+	for _, spec := range autoProvisionSpecs() {
+		if spec.wireGuard || spec.fastly || spec.optIn {
+			continue
+		}
+		names = append(names, spec.recipe)
+	}
+	return names
 }
