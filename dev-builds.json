@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-4d3c054",
-  "updated_at": "2026-10-05T12:57:08Z",
+  "latest": "dev-5b2d2b4",
+  "updated_at": "2026-10-05T13:49:00Z",
   "builds": [
+    {
+      "tag": "dev-5b2d2b4",
+      "sha": "5b2d2b40b29a218f9283eac2ee2e3cdc8f0f9e37",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "37319266329",
+      "run_number": "111",
+      "created_at": "2026-10-05T13:49:00Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-5b2d2b4.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5b2d2b4.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-5b2d2b4.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-5b2d2b4.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-4d3c054",
       "sha": "4d3c05482f94c4d4ff8ef66ff7f1b13f6261ac61",
