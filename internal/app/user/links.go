@@ -61,8 +61,10 @@ func BuildSubscriptionLinks(req SubscriptionLinkRequest, base SubscriptionSettin
 	token := createSubscriptionToken(username, secret, time.Now())
 	links.Set(subscriptionTypeToken, urlPrefix+"/"+token)
 
-	for _, extraPrefix := range prefixes[1:] {
-		label := prefixLabel(extraPrefix)
+	extraPrefixes := prefixes[1:]
+	extraLabels := prefixLabels(extraPrefixes)
+	for index, extraPrefix := range extraPrefixes {
+		label := extraLabels[index]
 		if subadress != "" {
 			links.Set("subadress@"+label, extraPrefix+"/"+subadress)
 		}
@@ -351,20 +353,53 @@ func preferredType(explicit string, fallback string) string {
 	return value
 }
 
-func prefixLabel(prefix string) string {
-	parsed, err := url.Parse(prefix)
-	if err != nil {
-		return prefix
+// prefixLabels names each extra origin. The label is shown next to the link in
+// the dashboard and is also part of the key the link is stored under, so two
+// origins sharing one would not merely look alike -- one would overwrite the
+// other and that origin's links would never reach the user.
+//
+// The host is what names an origin, because that is what differs between them.
+// An earlier version used the port, which was right when backups meant the same
+// host on another port; it stopped being right once they became separate
+// hostnames on the same port, and every backup was then labelled "2053" --
+// indistinguishable from the primary, and colliding with each other.
+//
+// The port is added only where a host appears more than once, and a numeric
+// suffix only if even that is not enough, so the common case stays readable.
+func prefixLabels(prefixes []string) []string {
+	hosts := make([]string, len(prefixes))
+	ports := make([]string, len(prefixes))
+	counts := map[string]int{}
+	for index, prefix := range prefixes {
+		parsed, err := url.Parse(prefix)
+		if err != nil {
+			continue
+		}
+		hosts[index] = parsed.Hostname()
+		ports[index] = parsed.Port()
+		if hosts[index] != "" {
+			counts[hosts[index]]++
+		}
 	}
-	if port := parsed.Port(); port != "" {
-		return port
+
+	labels := make([]string, len(prefixes))
+	used := map[string]bool{}
+	for index, prefix := range prefixes {
+		label := hosts[index]
+		switch {
+		case label == "":
+			label = prefix
+		case counts[label] > 1 && ports[index] != "":
+			label = label + ":" + ports[index]
+		}
+		base := label
+		for suffix := 2; used[label]; suffix++ {
+			label = base + "-" + strconv.Itoa(suffix)
+		}
+		used[label] = true
+		labels[index] = label
 	}
-	// A backup origin has no port to name it by, so the host is what tells
-	// the links apart.
-	if host := parsed.Hostname(); host != "" {
-		return host
-	}
-	return prefix
+	return labels
 }
 
 func randomSalt() (string, error) {
