@@ -21,11 +21,57 @@ func normalizePrefix(prefix string) string {
 	return strings.TrimRight(cleaned, "/")
 }
 
+// ensureScheme puts exactly one scheme in front of an origin.
+//
+// It strips whatever schemes have already accumulated before adding one,
+// because this ran on every save and the old version only recognised a scheme
+// written with both slashes. A stored value that had lost one -- "https:/host"
+// -- did not look like it had a scheme, so each save prepended another, and the
+// field grew "https://https:/https:/host" until nothing resolved. Saving
+// settings twice has to leave them as they were.
+//
+// The scheme the admin actually wrote is kept: an origin they deliberately put
+// on http is not quietly promoted.
 func ensureScheme(value string) string {
-	if value == "" || strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
-		return value
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
 	}
-	return "https://" + value
+	scheme := ""
+	for {
+		lower := strings.ToLower(value)
+		matched := ""
+		switch {
+		case strings.HasPrefix(lower, "https://"):
+			matched = "https://"
+		case strings.HasPrefix(lower, "http://"):
+			matched = "http://"
+		// One slash is the damaged form this repairs.
+		case strings.HasPrefix(lower, "https:/"):
+			matched = "https:/"
+		case strings.HasPrefix(lower, "http:/"):
+			matched = "http:/"
+		}
+		if matched == "" {
+			break
+		}
+		if scheme == "" {
+			if strings.HasPrefix(strings.ToLower(matched), "http:") {
+				scheme = "http://"
+			} else {
+				scheme = "https://"
+			}
+		}
+		value = value[len(matched):]
+	}
+	value = strings.TrimLeft(value, "/")
+	if value == "" {
+		return ""
+	}
+	if scheme == "" {
+		scheme = "https://"
+	}
+	return scheme + value
 }
 
 func normalizeSupportURL(value string) string {
