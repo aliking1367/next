@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-b05a259",
-  "updated_at": "2026-10-15T16:31:17Z",
+  "latest": "dev-ddb3dc9",
+  "updated_at": "2026-10-15T16:53:31Z",
   "builds": [
+    {
+      "tag": "dev-ddb3dc9",
+      "sha": "ddb3dc9db85627e7e7dc76b6434b756f87acac18",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "38772123696",
+      "run_number": "117",
+      "created_at": "2026-10-15T16:53:31Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-ddb3dc9.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ddb3dc9.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-ddb3dc9.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-ddb3dc9.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-b05a259",
       "sha": "b05a25930e1be9a73fb39b85f6ef8bea3d5727b3",
