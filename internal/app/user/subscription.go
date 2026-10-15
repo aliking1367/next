@@ -3800,13 +3800,17 @@ func subscriptionTemplateContext(user UserDetail, links []string, usageURL strin
 			"service_name":              user.ServiceName,
 			"placeholder":               placeholder,
 		},
-		"links":             links,
-		"links_text":        legacyTemplateStringList(links),
-		"usage_url":         usageURL,
-		"support_url":       supportURL,
-		"token":             token,
-		"current_timestamp": time.Now().UTC().Unix(),
-		"remaining_days":    subscriptionRemainingDaysInt(user.Expire),
+		"links": links,
+		// Top level, alongside the other things the page needs rather than
+		// inside "user": it is addresses for this page to offer, not a
+		// property of the account.
+		"backup_subscription_urls": backupSubscriptionURLs(user),
+		"links_text":               legacyTemplateStringList(links),
+		"usage_url":                usageURL,
+		"support_url":              supportURL,
+		"token":                    token,
+		"current_timestamp":        time.Now().UTC().Unix(),
+		"remaining_days":           subscriptionRemainingDaysInt(user.Expire),
 	}
 	for _, key := range []string{"openvpn", "wireguard", "amneziawg", "l2tp", "pptp", "ikev2", "anyconnect", "sstp", "gre"} {
 		if value, ok := vpn[key]; ok {
@@ -4859,4 +4863,55 @@ func int64Value(value any) int64 {
 func htmlEscape(value string) string {
 	replacer := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;")
 	return replacer.Replace(value)
+}
+
+// backupSubscriptionURLs picks one address per backup origin for the
+// subscription page to show.
+//
+// Nothing in the subscription protocol tells a client about alternative
+// addresses, and no client fails over between them: it only ever knows the URL
+// it was given. So an admin who wants a user covered has to hand them both, and
+// handing out two links per user is the part that does not happen. Putting them
+// on the page the user already opens means one link is enough -- they can save
+// the spare before the first one is blocked, which is the only moment it can
+// still be delivered.
+//
+// One row per origin, not one per link style: the page lists addresses to fall
+// back to, and four styles of the same address is noise that hides the point.
+func backupSubscriptionURLs(user UserDetail) []map[string]any {
+	urls := user.SubscriptionURLs
+	// Match the style the primary already uses, so the spare is the same kind
+	// of link the user was given rather than an unfamiliar one.
+	preferred := ""
+	for _, candidate := range []string{
+		subscriptionTypeKey, subscriptionTypeToken,
+		subscriptionTypeUsernameKey, subscriptionTypeKeyUsername,
+	} {
+		if _, ok := urls.Get(candidate); ok {
+			preferred = candidate
+			break
+		}
+	}
+	if preferred == "" {
+		return nil
+	}
+
+	result := []map[string]any{}
+	seen := map[string]bool{}
+	for _, key := range urls.Keys() {
+		base, label, found := strings.Cut(key, "@")
+		if !found || base != preferred || label == "" || seen[label] {
+			continue
+		}
+		value, ok := urls.Get(key)
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		seen[label] = true
+		result = append(result, map[string]any{"label": label, "url": value})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }

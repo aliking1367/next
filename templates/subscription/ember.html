@@ -256,6 +256,19 @@
             </div>
         </section>
 
+                {% if backup_subscription_urls %}
+        <section class="section">
+            <div class="section-head"><h2 data-i="backupLinks"></h2></div>
+            <p class="hint" data-i="backupHint"></p>
+            {% for item in backup_subscription_urls %}
+            <div class="cred-line">
+                <code class="mono" dir="ltr">{{ item.url }}</code>
+                <button class="icon" type="button" data-copy="{{ item.url }}" data-i-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></button>
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
         <section class="section">
             <div class="section-head"><h2 data-i="addToApp"></h2></div>
             <p class="hint" data-i="appHint"></p>
@@ -432,7 +445,7 @@
                 unlimited: "نامحدود", never: "همیشگی", expired: "تمام شده", ofTotal: "از {n}", usedOnly: "مصرف شده",
                 validThru: "معتبر تا", plan: "سرویس", standard: "استاندارد",
                 flipHint: "برای دیدن کد QR روی کارت بزنید", scanToImport: "با برنامه اسکن کنید",
-                subscription: "لینک اشتراک", subHint: "این لینک را یک‌بار در برنامه وارد کنید؛ کانفیگ‌ها خودکار به‌روز می‌شوند.",
+                subscription: "لینک اشتراک", backupLinks: "آدرس‌های پشتیبان", backupHint: "این آدرس‌ها را همین حالا جایی ذخیره کنید — مثلاً در یادداشت گوشی. اگر روزی آدرس بالا باز نشد، یکی از این‌ها را در برنامه اضافه کنید؛ همان اشتراک را می‌دهند. بعد از قطعی، دیگر نمی‌توانید آن‌ها را از این صفحه بردارید.", subHint: "این لینک را یک‌بار در برنامه وارد کنید؛ کانفیگ‌ها خودکار به‌روز می‌شوند.",
                 copyLink: "کپی لینک", showQr: "کد QR", copy: "کپی", copyAll: "کپی همه", copied: "کپی شد", copyFailed: "کپی نشد؛ دستی انتخاب کنید",
                 addToApp: "افزودن به برنامه", appHint: "برنامه را نصب کنید، بعد روی آن بزنید تا اشتراک اضافه شود.",
                 configs: "کانفیگ‌ها", vpnAccounts: "حساب‌های VPN", download: "دانلود",
@@ -449,7 +462,7 @@
                 unlimited: "Unlimited", never: "Never", expired: "Ended", ofTotal: "of {n}", usedOnly: "used",
                 validThru: "VALID THRU", plan: "PLAN", standard: "Standard",
                 flipHint: "Tap the card to show its QR code", scanToImport: "Scan with your app",
-                subscription: "Subscription link", subHint: "Add this link to your app once; configs then update on their own.",
+                subscription: "Subscription link", backupLinks: "Backup addresses", backupHint: "Save these somewhere now — a note on your phone is enough. If the address above ever stops opening, add one of these in your app instead; they serve the same subscription. Once it stops working you can no longer read them from this page.", subHint: "Add this link to your app once; configs then update on their own.",
                 copyLink: "Copy link", showQr: "QR code", copy: "Copy", copyAll: "Copy all", copied: "Copied", copyFailed: "Copy failed; select it manually",
                 addToApp: "Add to app", appHint: "Install an app, then tap it here to import the subscription.",
                 configs: "Configs", vpnAccounts: "VPN accounts", download: "Download",

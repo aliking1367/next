@@ -19,6 +19,13 @@ func RenderSubscriptionPagePreview(content string) (string, error) {
 		ServiceName:            &service,
 		SubscriptionURL:        "https://example.com/sub/demo",
 	}
+	// The preview shows the backup-address block too, so an admin choosing a
+	// template sees what their users will see rather than a page that looks
+	// shorter than the real one.
+	user.SubscriptionURLs = NewOrderedStringMap(3)
+	user.SubscriptionURLs.Set("key", "https://example.com/sub/demo")
+	user.SubscriptionURLs.Set("key@backup.example.net", "https://backup.example.net/sub/demo")
+	user.SubscriptionURLs.Set("key@7f3a9c1e.example.com", "https://7f3a9c1e.example.com/sub/demo")
 	links := []string{
 		"vless://00000000-0000-4000-8000-000000000000@203.0.113.10:443?security=reality&type=tcp&flow=xtls-rprx-vision#Germany%20Vision",
 		"vless://00000000-0000-4000-8000-000000000000@203.0.113.10:8443?security=reality&type=xhttp#Germany%20XHTTP",
