@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-a380e00",
-  "updated_at": "2026-10-20T09:53:14Z",
+  "latest": "dev-2a02343",
+  "updated_at": "2026-10-20T10:32:54Z",
   "builds": [
+    {
+      "tag": "dev-2a02343",
+      "sha": "2a0234349845eecabb805dff6ba94fcfafa5190b",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "39408166333",
+      "run_number": "121",
+      "created_at": "2026-10-20T10:32:54Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-2a02343.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-2a02343.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-2a02343.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-2a02343.zip"
+        }
+      }
+    },
     {
       "tag": "dev-a380e00",
       "sha": "a380e003a59fc973a57ccb4f9ec0fdc827881786",
