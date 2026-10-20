@@ -866,8 +866,9 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 								/>
 								<Input
 									label={t("nodes.nodeTunnelAddress")}
+									title={t("nodes.nodeTunnelAddressHelp")}
 									size="sm"
-									placeholder="tr.tunnel.example.ir"
+									placeholder="ar3.example.ir:8531"
 									maxLength={256}
 									{...form.register("tunnel_address")}
 									error={getInputError(form.formState?.errors?.tunnel_address)}

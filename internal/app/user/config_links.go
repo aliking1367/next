@@ -462,6 +462,15 @@ func effectiveInboundForHost(wildcardSalt string, variables map[string]string, i
 	if host.Port != nil && normalizeProxyProtocol(stringValue(inbound["protocol"])) != "openvpn" && normalizeProxyProtocol(stringValue(inbound["protocol"])) != "ikev2" {
 		effective["port"] = *host.Port
 	}
+	// An address may carry its own port, and when it does that port wins: it
+	// came from the node, while the host row's port is one value shared by
+	// every node the row is offered for. A tunnel provider commonly hands out
+	// one hostname and a port per destination, which no single host row can
+	// express.
+	if trimmed, port, ok := splitAddressPort(address); ok {
+		address = trimmed
+		effective["port"] = port
+	}
 	if tls := normalizedHostSecurity(host.Security); tls != "" {
 		effective["tls"] = tls
 	}
@@ -2606,4 +2615,38 @@ func pythonJSONDumpsValue(value any, sortKeys bool) string {
 func hexToBytes(value string) ([]byte, error) {
 	cleaned := strings.TrimSpace(strings.ReplaceAll(value, "-", ""))
 	return hex.DecodeString(cleaned)
+}
+
+// splitAddressPort separates a trailing port from an address.
+//
+// It is deliberately conservative: a bare IPv6 literal is full of colons and
+// must never be read as a host and a port, or every IPv6 node would be handed a
+// truncated address and a nonsense port. Only a bracketed literal, or a name
+// with exactly one colon followed by digits, is split.
+func splitAddressPort(address string) (string, int, bool) {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return "", 0, false
+	}
+	host, portText := "", ""
+	if strings.HasPrefix(address, "[") {
+		closing := strings.LastIndex(address, "]")
+		if closing < 0 || closing+1 >= len(address) || address[closing+1] != ':' {
+			return "", 0, false
+		}
+		host, portText = address[:closing+1], address[closing+2:]
+	} else {
+		if strings.Count(address, ":") != 1 {
+			return "", 0, false
+		}
+		host, portText, _ = strings.Cut(address, ":")
+	}
+	if host == "" || portText == "" {
+		return "", 0, false
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return "", 0, false
+	}
+	return host, port, true
 }
