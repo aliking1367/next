@@ -112,21 +112,32 @@ func TestConfigLocationsListsSharedConfigNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := db.Exec(`CREATE TABLE nodes (id INTEGER PRIMARY KEY, name TEXT, address TEXT, public_address TEXT, status TEXT, xray_config_mode TEXT);
+	if _, err := db.Exec(`CREATE TABLE nodes (id INTEGER PRIMARY KEY, name TEXT, address TEXT, public_address TEXT, tunnel_address TEXT, status TEXT, xray_config_mode TEXT);
 INSERT INTO nodes VALUES
- (1, 'Germany', '203.0.113.10', NULL, 'connected', 'default'),
- (2, 'Finland', '203.0.113.20', '  ', 'error', NULL),
- (3, 'custom box', '203.0.113.30', NULL, 'connected', 'custom'),
- (4, 'old', '203.0.113.40', NULL, 'deleted', 'default'),
- (5, 'off', '203.0.113.50', NULL, 'disabled', 'default'),
- (6, 'no address', '  ', NULL, 'connected', 'default'),
- (7, 'Turkey', '203.0.113.60', 'tr.example.com', 'connected', 'default');`); err != nil {
+ (1, 'Germany', '203.0.113.10', NULL, NULL, 'connected', 'default'),
+ (2, 'Finland', '203.0.113.20', '  ', NULL, 'error', NULL),
+ (3, 'custom box', '203.0.113.30', NULL, NULL, 'connected', 'custom'),
+ (4, 'old', '203.0.113.40', NULL, NULL, 'deleted', 'default'),
+ (5, 'off', '203.0.113.50', NULL, NULL, 'disabled', 'default'),
+ (6, 'no address', '  ', NULL, NULL, 'connected', 'default'),
+ (7, 'Turkey', '203.0.113.60', 'tr.example.com', 'tr.tunnel.example.ir', 'connected', 'default');`); err != nil {
 		t.Fatal(err)
 	}
 	locations := Repository{db: db}.configLocations(context.Background())
 	var got []string
 	for _, location := range locations {
 		got = append(got, location.Name+"@"+location.Address)
+	}
+	// Only node 7 bought a tunnel; the rest must come back without one so a
+	// {TUNNEL} host skips them.
+	for _, location := range locations {
+		want := ""
+		if location.Address == "tr.example.com" {
+			want = "tr.tunnel.example.ir"
+		}
+		if location.TunnelAddress != want {
+			t.Fatalf("%s tunnel address = %q, want %q", location.Name, location.TunnelAddress, want)
+		}
 	}
 	// Node 7 shows its public address (a domain) instead of its IP.
 	if strings.Join(got, ",") != "🇩🇪 Germany@203.0.113.10,🇫🇮 Finland@203.0.113.20,🇹🇷 Turkey@tr.example.com" {

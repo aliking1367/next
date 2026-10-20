@@ -51,6 +51,7 @@ export const NodeSchema = z
 		// Optional address users see in their configs; the panel keeps using
 		// `address` to reach the node.
 		public_address: z.string().max(256).nullable().optional(),
+		tunnel_address: z.string().max(256).nullable().optional(),
 		port: z
 			.number()
 			.min(1)
@@ -193,6 +194,7 @@ export const NodeFormSchema = NodeSchema.innerType()
 		note: true,
 		address: true,
 		public_address: true,
+		tunnel_address: true,
 		port: true,
 		api_port: true,
 		usage_coefficient: true,
@@ -246,6 +248,7 @@ export const getNodeDefaultValues = (): NodeType => ({
 	note: "",
 	address: "",
 	public_address: "",
+	tunnel_address: "",
 	port: 62050,
 	api_port: 62051,
 	xray_version: "",

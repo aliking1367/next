@@ -32,8 +32,11 @@ type NodeCreate struct {
 	Note *string `json:"note"`
 	// Address is where the panel reaches the node. PublicAddress, when set,
 	// is what user configs advertise instead (usually a domain).
-	Address          string          `json:"address"`
-	PublicAddress    *string         `json:"public_address"`
+	Address       string  `json:"address"`
+	PublicAddress *string `json:"public_address"`
+	// TunnelAddress is where users reach this node through a tunnel. A host
+	// whose address is {TUNNEL} is offered once per node that has one.
+	TunnelAddress    *string         `json:"tunnel_address"`
 	Port             int             `json:"port"`
 	ControlPort      int             `json:"control_port"`
 	APIPort          int             `json:"api_port"`
@@ -61,6 +64,7 @@ type NodeModify struct {
 	Note             *string         `json:"note"`
 	Address          *string         `json:"address"`
 	PublicAddress    *string         `json:"public_address"`
+	TunnelAddress    *string         `json:"tunnel_address"`
 	Port             *int64          `json:"port"`
 	ControlPort      *int64          `json:"control_port"`
 	APIPort          *int64          `json:"api_port"`
@@ -84,6 +88,7 @@ type NodeResponse struct {
 	Note                   *string  `json:"note"`
 	Address                string   `json:"address"`
 	PublicAddress          *string  `json:"public_address"`
+	TunnelAddress          *string  `json:"tunnel_address"`
 	Port                   int64    `json:"port"`
 	ControlPort            int64    `json:"control_port"`
 	APIPort                int64    `json:"api_port"`

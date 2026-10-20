@@ -240,6 +240,7 @@ func newNodeTestDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT COLLATE NOCASE UNIQUE,
 			public_address TEXT NULL,
+			tunnel_address TEXT NULL,
 			note TEXT NULL,
 			address TEXT NOT NULL,
 			port INTEGER NOT NULL,

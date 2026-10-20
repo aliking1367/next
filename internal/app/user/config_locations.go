@@ -13,6 +13,10 @@ import (
 type ConfigLocation struct {
 	Name    string
 	Address string
+	// TunnelAddress is where users reach this node when it is fronted by a
+	// tunnel. Empty means the node has none, and a host pointing at {TUNNEL}
+	// then skips it rather than handing out a config that reaches nothing.
+	TunnelAddress string
 }
 
 // configLocations lists the nodes that run the shared config, in node order.
@@ -20,7 +24,7 @@ type ConfigLocation struct {
 // (for example an older schema) yields no locations, which keeps the classic
 // single-address links.
 func (r Repository) configLocations(ctx context.Context) []ConfigLocation {
-	rows, err := r.db.QueryContext(ctx, `SELECT COALESCE(name, ''), COALESCE(NULLIF(TRIM(COALESCE(public_address, '')), ''), address) FROM nodes
+	rows, err := r.db.QueryContext(ctx, `SELECT COALESCE(name, ''), COALESCE(NULLIF(TRIM(COALESCE(public_address, '')), ''), address), COALESCE(tunnel_address, '') FROM nodes
 WHERE TRIM(COALESCE(address, '')) != ''
   AND LOWER(COALESCE(status, '')) NOT IN ('deleted', 'disabled', 'limited')
   AND LOWER(COALESCE(xray_config_mode, 'default')) <> 'custom'
@@ -31,15 +35,19 @@ ORDER BY id`)
 	defer rows.Close()
 	var locations []ConfigLocation
 	for rows.Next() {
-		var name, address string
-		if err := rows.Scan(&name, &address); err != nil {
+		var name, address, tunnelAddress string
+		if err := rows.Scan(&name, &address, &tunnelAddress); err != nil {
 			return nil
 		}
 		address = strings.TrimSpace(address)
 		if address == "" {
 			continue
 		}
-		locations = append(locations, ConfigLocation{Name: locationLabel(name, address), Address: address})
+		locations = append(locations, ConfigLocation{
+			Name:          locationLabel(name, address),
+			Address:       address,
+			TunnelAddress: strings.TrimSpace(tunnelAddress),
+		})
 	}
 	if rows.Err() != nil {
 		return nil
@@ -50,11 +58,23 @@ ORDER BY id`)
 // hostUsesServerIP reports whether a host points at the node address
 // placeholder; only those hosts are repeated per location.
 func hostUsesServerIP(host Host) bool {
-	if strings.Contains(strings.ToUpper(host.Address), "{SERVER_IP}") {
+	return hostUsesPlaceholder(host, "{SERVER_IP}")
+}
+
+// hostUsesTunnel reports whether a host points at the tunnel placeholder. Such
+// a host is repeated once per node that has a tunnel address, and skips the
+// rest: a tunnel is bought per node, so a node without one has nowhere for
+// that config to go.
+func hostUsesTunnel(host Host) bool {
+	return hostUsesPlaceholder(host, "{TUNNEL}")
+}
+
+func hostUsesPlaceholder(host Host, placeholder string) bool {
+	if strings.Contains(strings.ToUpper(host.Address), placeholder) {
 		return true
 	}
 	for _, option := range host.AddressOptions {
-		if strings.Contains(strings.ToUpper(option), "{SERVER_IP}") {
+		if strings.Contains(strings.ToUpper(option), placeholder) {
 			return true
 		}
 	}

@@ -1101,6 +1101,7 @@
 	"nodes.agentHealth": "عامل نود",
 	"nodes.xrayHealth": "هسته Xray",
 	"nodes.nodePublicAddress": "آدرس عمومی (اختیاری)",
+	"nodes.nodeTunnelAddress": "آدرس تونل (اختیاری)",
 	"nodes.nodeAddress": "آدرس",
 	"nodes.nodeNameLocationHint": "اسم هر نود را کشورش بگذارید (مثلاً Germany یا آلمان). با چند نود، هر کاربر هر کانفیگ را برای هر نود جدا می‌گیرد، با پرچم و اسم همان نود. اگر «آدرس عمومی» را پر کنید، کانفیگ کاربر دامنه را نشان می‌دهد و پنل همچنان با آدرس اصلی به نود وصل می‌شود.",
 	"nodes.nodeName": "نام",

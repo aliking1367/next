@@ -222,17 +222,30 @@ type hostLocationVariant struct {
 // points at {SERVER_IP}, otherwise once as before. The location name goes in
 // front of the remark unless the remark places {LOCATION} itself.
 func hostLocationVariants(locations []ConfigLocation, host Host, variables map[string]string) []hostLocationVariant {
-	if len(locations) < 2 || !hostUsesServerIP(host) {
+	usesTunnel := hostUsesTunnel(host)
+	// A tunnel host is always expanded, even with a single node: the address is
+	// a placeholder, and leaving it unsubstituted would hand the user the word
+	// "{TUNNEL}" as a hostname.
+	if !usesTunnel && (len(locations) < 2 || !hostUsesServerIP(host)) {
 		single := cloneFormatVariables(variables)
 		if len(locations) == 1 {
 			single["LOCATION"], single["NODE_NAME"] = locations[0].Name, locations[0].Name
+			single["TUNNEL"], single["tunnel"] = locations[0].TunnelAddress, locations[0].TunnelAddress
 		}
 		return []hostLocationVariant{{variables: single}}
 	}
 	variants := make([]hostLocationVariant, 0, len(locations))
 	for _, location := range locations {
+		// A tunnel is bought per node. A node without one has nowhere for this
+		// config to go, so it is left out rather than given a config that
+		// reaches nothing -- which a user cannot tell from one that is merely
+		// blocked.
+		if usesTunnel && location.TunnelAddress == "" {
+			continue
+		}
 		values := cloneFormatVariables(variables)
 		values["SERVER_IP"], values["server_ip"] = location.Address, location.Address
+		values["TUNNEL"], values["tunnel"] = location.TunnelAddress, location.TunnelAddress
 		values["LOCATION"], values["NODE_NAME"] = location.Name, location.Name
 		prefix := location.Name
 		if hostRemarkNamesLocation(host) {
@@ -695,6 +708,8 @@ func configFormatVariables(item ConfigLinkUser) map[string]string {
 		"SERVER_IPV6":        "",
 		"LOCATION":           "",
 		"NODE_NAME":          "",
+		"TUNNEL":             "",
+		"tunnel":             "",
 	}
 	if strings.TrimSpace(item.ServerIP) != "" {
 		values["server_ip"] = strings.TrimSpace(item.ServerIP)

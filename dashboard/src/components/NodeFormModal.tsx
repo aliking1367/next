@@ -226,6 +226,7 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 		note: data.note ?? "",
 		address: data.address,
 		public_address: (data.public_address ?? "").trim(),
+		tunnel_address: (data.tunnel_address ?? "").trim(),
 		control_port: Number(data.port),
 		api_port: Number(data.api_port),
 		usage_coefficient: Number(data.usage_coefficient),
@@ -862,6 +863,14 @@ export const NodeFormModal: FC<NodeFormModalProps> = ({
 									maxLength={256}
 									{...form.register("public_address")}
 									error={getInputError(form.formState?.errors?.public_address)}
+								/>
+								<Input
+									label={t("nodes.nodeTunnelAddress")}
+									size="sm"
+									placeholder="tr.tunnel.example.ir"
+									maxLength={256}
+									{...form.register("tunnel_address")}
+									error={getInputError(form.formState?.errors?.tunnel_address)}
 								/>
 							</SimpleGrid>
 							<FormControl isInvalid={Boolean(form.formState?.errors?.note)}>
