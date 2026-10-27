@@ -1,0 +1,74 @@
+//go:build cgo
+
+package xrayconfig
+
+import (
+	"context"
+	"strings"
+	"testing"
+)
+
+func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{
+		{Port: 1082, Name: "Germany", Code: "DE", Address: "10.0.0.1"},
+		{Port: 1095, Name: "Turkey", Code: "TR", Address: "10.0.0.1"},
+	}
+
+	first, err := repo.ApplyTSin(ctx, countries, nil)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(first) != 2 || !first[0].Created || first[0].Port == first[1].Port {
+		t.Fatalf("first apply = %#v", first)
+	}
+	// Applying again keeps the same inbounds and ports: users' links must not move.
+	second, err := repo.ApplyTSin(ctx, countries, nil)
+	if err != nil {
+		t.Fatalf("re-apply: %v", err)
+	}
+	if second[0].Created || second[0].Port != first[0].Port || second[1].Port != first[1].Port {
+		t.Fatalf("re-apply changed the inbounds: %#v vs %#v", first, second)
+	}
+
+	config, err := repo.MasterRawConfig(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := interfaceSlice(mapValue(config["routing"])["rules"])
+	if len(rules) < 2 || stringValue(mapValue(rules[0])["outboundTag"]) != "tsin-out-1082" {
+		t.Fatalf("rules = %#v", rules)
+	}
+	if len(listOfMaps(config["outbounds"])) < 2 {
+		t.Fatalf("outbounds = %#v", config["outbounds"])
+	}
+
+	var remark string
+	if err := db.QueryRow(`SELECT remark FROM hosts WHERE inbound_tag = 'tsin-germany'`).Scan(&remark); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(remark, "\U0001F1E9\U0001F1EA") || !strings.Contains(remark, "Germany") {
+		t.Fatalf("remark = %q", remark)
+	}
+
+	// Dropping a country retires its inbound and its rule, and leaves the other.
+	if _, err := repo.ApplyTSin(ctx, countries[:1], nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetInbound(ctx, "tsin-turkey"); err == nil {
+		t.Fatal("tsin-turkey was not retired")
+	}
+	if err := repo.RemoveTSin(ctx); err != nil {
+		t.Fatal(err)
+	}
+	config, _ = repo.MasterRawConfig(ctx)
+	for _, outbound := range listOfMaps(config["outbounds"]) {
+		if strings.HasPrefix(stringValue(outbound["tag"]), TSinOutboundPrefix) {
+			t.Fatalf("outbound left behind: %#v", outbound)
+		}
+	}
+	if _, err := repo.GetInbound(ctx, "tsin-germany"); err == nil {
+		t.Fatal("tsin-germany was not removed")
+	}
+}

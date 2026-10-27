@@ -47,6 +47,7 @@ import { PanelSelect as Select } from "components/common/PanelSelect";
 import { SearchInput } from "components/common/SearchInput";
 import { Input } from "components/Input";
 import { AppDialog } from "components/dialogs/AppDialog";
+import { TSinDialog } from "components/TSinDialog";
 import { ConfirmDialog } from "components/dialogs/ConfirmDialog";
 import {
 	DataTable,
@@ -916,6 +917,7 @@ const ServicesPage: FC = () => {
 	const autoConfigureDisclosure = useDisclosure();
 	const cdnHostsDisclosure = useDisclosure();
 	const cdnAutomationDisclosure = useDisclosure();
+	const tsinDisclosure = useDisclosure();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
@@ -2207,6 +2209,19 @@ const ServicesPage: FC = () => {
 							<Button
 								variant="outline"
 								colorScheme="primary"
+								onClick={tsinDisclosure.onOpen}
+								size="sm"
+								h="36px"
+								px={3}
+								borderRadius="4px"
+							>
+								T.Sin
+							</Button>
+						)}
+						{isSudoOrAbove && (
+							<Button
+								variant="outline"
+								colorScheme="primary"
 								onClick={openCdnAutomation}
 								size="sm"
 								h="36px"
@@ -2779,6 +2794,12 @@ const ServicesPage: FC = () => {
 					)}
 				</Stack>
 			</AppDialog>
+
+			<TSinDialog
+				isOpen={tsinDisclosure.isOpen}
+				onClose={tsinDisclosure.onClose}
+				onChanged={() => void Promise.all([fetchServices(), fetchHosts()])}
+			/>
 
 			<AppDialog
 				isOpen={cdnAutomationDisclosure.isOpen}
