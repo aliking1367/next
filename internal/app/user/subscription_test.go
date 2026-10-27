@@ -2483,8 +2483,8 @@ func TestSubscriptionClientAliasesAndAppUserAgents(t *testing.T) {
 			{Pattern: `(?i)^passwall`, Result: "passwall"},
 			{Pattern: `(?i)^thron(e)?`, Result: "throne"},
 			{Pattern: `^(SS|SSR|SSD|SSS|Outline|Shadowsocks|SSconf)`, Result: "outline"},
-			{Pattern: `^v2rayN/(?:6\.[4-9]\d*|[7-9]\.\d+|[1-9]\d{1,}\.\d+)`, Result: "v2ray-json"},
-			{Pattern: `(?i)^v2rayng/\d+\.\d+`, Result: "v2ray-json"},
+			{Pattern: `^v2rayN/(?:6\.[4-9]\d*|[7-9]\.\d+|[1-9]\d{1,}\.\d+)`, Result: "v2ray"},
+			{Pattern: `(?i)^v2rayng/\d+\.\d+`, Result: "v2ray"},
 			{Pattern: `^Happ/(?:1\.63\.[1-9]|1\.6[4-9]\d*|1\.[7-9]\d*|[2-9]\.\d+)`, Result: "happ"},
 			{Pattern: `(?i)^incy`, Result: "incy"},
 			{Pattern: `^Streisand`, Result: "v2ray-json"},
@@ -2501,6 +2501,9 @@ func TestSubscriptionClientAliasesAndAppUserAgents(t *testing.T) {
 		"Incy/2.0":           "incy",
 		"HiddifyNext/2.5.7":  "hiddify",
 		"HiddifyNextX/2.5.7": "hiddify",
+		"v2rayNG/1.10.28":    "v2ray",
+		"v2rayN/7.0":         "v2ray",
+		"Streisand/1.6":      "v2ray-json",
 	} {
 		if got := selectSubscriptionClientType(ua, settings); got != expected {
 			t.Fatalf("selectSubscriptionClientType(%q) = %q, want %q", ua, got, expected)
