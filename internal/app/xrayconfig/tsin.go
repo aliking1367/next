@@ -75,12 +75,24 @@ func tsinHostRemark(country TSinCountry) string {
 	return strings.TrimSpace(TSinFlag(country.Code) + " " + name)
 }
 
-// ApplyTSin makes the master config serve exactly the given countries.
-func (r Repository) ApplyTSin(ctx context.Context, countries []TSinCountry, portBusy func(int) bool) ([]TSinInbound, error) {
+// ApplyTSin makes the given target serve exactly the given countries. The
+// target is "master" or "node:<id>"; the tunnel the exits sit behind has to
+// exist on whichever machine runs that target's Xray.
+func (r Repository) ApplyTSin(ctx context.Context, target string, countries []TSinCountry, portBusy func(int) bool) ([]TSinInbound, error) {
 	if len(countries) == 0 {
 		return nil, errors.New("choose at least one country")
 	}
-	config, err := r.readMasterConfigForPlanning(ctx)
+	target, err := normalizeTargetID(firstNonEmptyString(target, MasterTargetID))
+	if err != nil {
+		return nil, err
+	}
+	// Routing on every other target goes first, while its inbounds still exist:
+	// a config left with no inbounds is rejected, and the rules must not outlive
+	// the exits they point at.
+	if err := r.stripTSinRouting(ctx, target); err != nil {
+		return nil, err
+	}
+	config, err := r.GetTargetRawConfig(ctx, target)
 	if err != nil {
 		return nil, err
 	}
@@ -88,16 +100,31 @@ func (r Repository) ApplyTSin(ctx context.Context, countries []TSinCountry, port
 	for _, country := range countries {
 		wanted[TSinInboundTag(country.Name)] = true
 	}
-	for _, inbound := range listOfMaps(config["inbounds"]) {
-		tag := stringValue(inbound["tag"])
-		if strings.HasPrefix(tag, TSinInboundPrefix) && !wanted[tag] {
-			if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
-				return nil, fmt.Errorf("retire %s: %w", tag, err)
-			}
+	// Every T.Sin inbound anywhere that is not wanted on this target goes: a
+	// country dropped from the list, or one left on the machine the service
+	// used to run on. Keeping a stale copy would leave a config pointing at an
+	// exit that no longer exists there.
+	all, err := r.CollectInboundTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for tag := range all {
+		if !strings.HasPrefix(tag, TSinInboundPrefix) {
+			continue
+		}
+		direct, err := r.directTargetsForInbound(ctx, tag)
+		if err != nil {
+			return nil, err
+		}
+		if wanted[tag] && len(direct) == 1 && direct[0] == target {
+			continue
+		}
+		if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
+			return nil, fmt.Errorf("retire %s: %w", tag, err)
 		}
 	}
 	// Re-read so ports freed above are counted as free and the others as taken.
-	if config, err = r.readMasterConfigForPlanning(ctx); err != nil {
+	if config, err = r.GetTargetRawConfig(ctx, target); err != nil {
 		return nil, err
 	}
 	used, ranges := extractUsedPorts(config)
@@ -126,6 +153,7 @@ func (r Repository) ApplyTSin(ctx context.Context, countries []TSinCountry, port
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", country.Name, err)
 			}
+			payload["targets"] = []any{target}
 			if _, err := r.CreateInbound(ctx, payload); err != nil {
 				return nil, fmt.Errorf("%s: %w", country.Name, err)
 			}
@@ -137,34 +165,32 @@ func (r Repository) ApplyTSin(ctx context.Context, countries []TSinCountry, port
 		result = append(result, entry)
 	}
 
-	master, err := r.MasterRawConfig(ctx)
+	config, err = r.GetTargetRawConfig(ctx, target)
 	if err != nil {
 		return nil, err
 	}
-	setTSinRouting(master, countries)
-	if _, err := r.SaveTargetRawConfig(ctx, MasterTargetID, master); err != nil {
+	setTSinRouting(config, countries)
+	if _, err := r.SaveTargetRawConfig(ctx, target, config); err != nil {
 		return nil, fmt.Errorf("save routing: %w", err)
 	}
 	return result, nil
 }
 
 // RemoveTSin takes every inbound, outbound and routing rule the panel made
-// for T.Sin out of the master config.
+// for T.Sin out of every config.
 //
 // Routing goes first: a config with no inbounds left is rejected as invalid,
 // and on a panel whose only inbounds are T.Sin's the last deletion would
 // otherwise leave the rules behind with nothing able to save the config.
 func (r Repository) RemoveTSin(ctx context.Context) error {
-	master, err := r.MasterRawConfig(ctx)
+	if err := r.stripTSinRouting(ctx, ""); err != nil {
+		return err
+	}
+	all, err := r.CollectInboundTags(ctx)
 	if err != nil {
 		return err
 	}
-	setTSinRouting(master, nil)
-	if _, err := r.SaveTargetRawConfig(ctx, MasterTargetID, master); err != nil {
-		return err
-	}
-	for _, inbound := range listOfMaps(master["inbounds"]) {
-		tag := stringValue(inbound["tag"])
+	for tag := range all {
 		if strings.HasPrefix(tag, TSinInboundPrefix) {
 			if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
 				return fmt.Errorf("remove %s: %w", tag, err)
@@ -172,6 +198,43 @@ func (r Repository) RemoveTSin(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// stripTSinRouting removes the T.Sin outbounds and rules from every config
+// that holds its own, except keep ("" keeps none). A node that follows the
+// master has no config of its own: saving one would pin it to a copy, so only
+// the master is touched on its behalf.
+func (r Repository) stripTSinRouting(ctx context.Context, keep string) error {
+	targets, err := r.ListConfigTargets(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range targets {
+		if item.ID == keep || (item.Type == "node" && item.Mode != ConfigModeCustom) {
+			continue
+		}
+		config, err := r.GetTargetRawConfig(ctx, item.ID)
+		if err != nil {
+			return err
+		}
+		if !hasTSinRouting(config) {
+			continue
+		}
+		setTSinRouting(config, nil)
+		if _, err := r.SaveTargetRawConfig(ctx, item.ID, config); err != nil {
+			return fmt.Errorf("clean %s: %w", item.ID, err)
+		}
+	}
+	return nil
+}
+
+func hasTSinRouting(config map[string]any) bool {
+	for _, outbound := range interfaceSlice(config["outbounds"]) {
+		if strings.HasPrefix(stringValue(mapValue(outbound)["tag"]), TSinOutboundPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // setTSinRouting replaces the panel's T.Sin outbounds and rules in config.

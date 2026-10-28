@@ -16,7 +16,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 		{Port: 1095, Name: "Turkey", Code: "TR", Address: "10.0.0.1"},
 	}
 
-	first, err := repo.ApplyTSin(ctx, countries, nil)
+	first, err := repo.ApplyTSin(ctx, "master", countries, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 		t.Fatalf("first apply = %#v", first)
 	}
 	// Applying again keeps the same inbounds and ports: users' links must not move.
-	second, err := repo.ApplyTSin(ctx, countries, nil)
+	second, err := repo.ApplyTSin(ctx, "master", countries, nil)
 	if err != nil {
 		t.Fatalf("re-apply: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 	}
 
 	// Dropping a country retires its inbound and its rule, and leaves the other.
-	if _, err := repo.ApplyTSin(ctx, countries[:1], nil); err != nil {
+	if _, err := repo.ApplyTSin(ctx, "master", countries[:1], nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.GetInbound(ctx, "tsin-turkey"); err == nil {
@@ -70,5 +70,52 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 	}
 	if _, err := repo.GetInbound(ctx, "tsin-germany"); err == nil {
 		t.Fatal("tsin-germany was not removed")
+	}
+}
+
+func TestApplyTSinCanMoveToANodeAndLeavesNothingBehind(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{{Port: 1082, Name: "Germany", Code: "DE"}}
+
+	if _, err := repo.ApplyTSin(ctx, "master", countries, nil); err != nil {
+		t.Fatalf("apply on master: %v", err)
+	}
+	moved, err := repo.ApplyTSin(ctx, "node:7", countries, nil)
+	if err != nil {
+		t.Fatalf("apply on node: %v", err)
+	}
+	if len(moved) != 1 || !moved[0].Created {
+		t.Fatalf("the inbound was not rebuilt on the node: %#v", moved)
+	}
+
+	direct, err := repo.directTargetsForInbound(ctx, "tsin-germany")
+	if err != nil || len(direct) != 1 || direct[0] != "node:7" {
+		t.Fatalf("targets = %v, err = %v", direct, err)
+	}
+	master, err := repo.MasterRawConfig(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasTSinRouting(master) {
+		t.Fatalf("master still routes T.Sin after the move: %#v", master["outbounds"])
+	}
+	node, err := repo.GetTargetRawConfig(ctx, "node:7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasTSinRouting(node) {
+		t.Fatalf("the node has no T.Sin routing: %#v", node["outbounds"])
+	}
+
+	if err := repo.RemoveTSin(ctx); err != nil {
+		t.Fatal(err)
+	}
+	node, _ = repo.GetTargetRawConfig(ctx, "node:7")
+	if hasTSinRouting(node) {
+		t.Fatal("removal left routing on the node")
+	}
+	if _, err := repo.GetInbound(ctx, "tsin-germany"); err == nil {
+		t.Fatal("the inbound survived removal")
 	}
 }

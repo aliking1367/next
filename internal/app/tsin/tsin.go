@@ -404,3 +404,74 @@ func tail(out []byte, err error) string {
 	}
 	return text
 }
+
+// NodeScript is what an admin runs on a node to bring the tunnel up there.
+//
+// The panel cannot run commands on a node, and the tunnel has to exist on the
+// machine whose Xray uses it. The script asks for the token itself, so the
+// token is typed on the node and is never part of the text the panel shows.
+// It rebuilds the WireGuard profile from validated fields for the same reason
+// BuildConfig does: wg-quick runs PostUp as root and honours a default route.
+func NodeScript(dc string) string {
+	if !ValidDC(dc) {
+		dc = "dc1"
+	}
+	return strings.ReplaceAll(nodeScriptTemplate, "@DC@", dc)
+}
+
+const nodeScriptTemplate = `#!/bin/bash
+# Brings up the T.Sin tunnel (interface tsin0) on this server. Run as root.
+set -euo pipefail
+DC=@DC@
+read -rs -p "T.Sin token: " TOKEN </dev/tty; echo
+if [[ ! "$TOKEN" =~ ^[A-Za-z0-9._~-]{6,200}$ ]]; then echo "That does not look like a T.Sin token"; exit 1; fi
+if ! command -v wg-quick >/dev/null || ! command -v python3 >/dev/null; then
+  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools python3 >/dev/null
+fi
+REG=$(mktemp); trap 'shred -u "$REG" 2>/dev/null || rm -f "$REG"' EXIT
+curl -fsS -m 25 "http://$DC.sin-kabir.ir:8080/register?token=$TOKEN" -o "$REG"
+unset TOKEN
+REG="$REG" python3 - <<'PY'
+import os, json, base64, ipaddress, sys
+d = json.load(open(os.environ["REG"]))
+if d.get("status") != "success":
+    sys.exit("T.Sin refused the registration: " + str(d.get("message", d.get("status"))))
+f, sec = {}, ""
+for line in d["wg_conf"].splitlines():
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    if line.startswith("["):
+        sec = line.strip("[] ").lower()
+        continue
+    k, _, v = line.partition("=")
+    f[sec + "." + k.strip().lower()] = v.strip()
+def key(v):
+    if len(base64.b64decode(v, validate=True)) != 32:
+        raise ValueError("bad key")
+    return v
+priv, pub = key(f["interface.privatekey"]), key(f["peer.publickey"])
+addr = ipaddress.ip_interface(f["interface.address"])
+assert addr.ip.version == 4 and addr.ip.is_private, "unexpected interface address"
+host, _, port = f["peer.endpoint"].rpartition(":")
+ep = ipaddress.ip_address(host)
+assert ep.version == 4 and 0 < int(port) < 65536, "unexpected endpoint"
+al = ipaddress.ip_network(f["peer.allowedips"], strict=True)
+assert al.version == 4 and al.prefixlen == 32 and al.network_address.is_private, "profile would route more than the proxy address"
+os.umask(0o077)
+os.makedirs("/etc/wireguard", exist_ok=True)
+open("/etc/wireguard/tsin0.conf", "w").write(
+    "[Interface]\nPrivateKey = %s\nAddress = %s/32\n\n[Peer]\nPublicKey = %s\nEndpoint = %s:%s\nAllowedIPs = %s\nPersistentKeepalive = 25\n"
+    % (priv, addr.ip, pub, ep, port, al))
+print("profile written")
+PY
+wg-quick down tsin0 2>/dev/null || true
+systemctl enable wg-quick@tsin0 >/dev/null 2>&1 || true
+systemctl restart wg-quick@tsin0
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  HS=$(wg show tsin0 latest-handshakes | awk '{print $2}')
+  if [ -n "$HS" ] && [ "$HS" != "0" ]; then echo "Tunnel is up (handshake completed)"; exit 0; fi
+  sleep 1
+done
+echo "No handshake yet: check that outbound UDP to the provider is not blocked on this server"; exit 1
+`

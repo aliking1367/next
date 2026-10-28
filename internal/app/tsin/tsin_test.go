@@ -129,3 +129,20 @@ func TestTunnelWritesAPrivateProfileAndRestartsTheUnit(t *testing.T) {
 		t.Fatalf("down: err=%v exists=%v", err, tunnel.ConfigExists())
 	}
 }
+
+func TestNodeScriptNeverCarriesTheTokenAndPinsTheDatacenter(t *testing.T) {
+	script := NodeScript("dc3")
+	if !strings.Contains(script, "DC=dc3") || strings.Contains(script, "@DC@") {
+		t.Fatalf("datacenter not applied:\n%s", script)
+	}
+	if !strings.Contains(NodeScript("evil;rm -rf /"), "DC=dc1") {
+		t.Fatal("an arbitrary datacenter reached the script")
+	}
+	// The token is typed on the node; the script must read it, not embed one.
+	if !strings.Contains(script, "read -rs") || strings.Contains(script, "token=ey") {
+		t.Fatal("the script does not ask for the token itself")
+	}
+	if strings.Contains(script, "`") {
+		t.Fatal("a backtick would break the Go raw string and the shell quoting")
+	}
+}

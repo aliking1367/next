@@ -37,6 +37,9 @@ type tsinSettings struct {
 	RegisteredTokenSum string
 	LastAppliedAt      sql.NullTime
 	LastDetail         string
+	// Target is the Xray config the countries are served from: "master" (this
+	// panel's own machine) or "node:<id>".
+	Target string
 }
 
 type tsinRequest struct {
@@ -44,6 +47,8 @@ type tsinRequest struct {
 	Token     *string  `json:"token"`
 	DC        string   `json:"dc"`
 	Countries []string `json:"countries"`
+	// Target is "master" or "node:<id>". Empty keeps the one already chosen.
+	Target string `json:"target"`
 }
 
 func tokenSum(token string) string {
@@ -52,11 +57,11 @@ func tokenSum(token string) string {
 }
 
 func (s *Server) loadTSinSettings(ctx context.Context) (tsinSettings, error) {
-	settings := tsinSettings{DC: "dc1"}
-	var token, dc, countries, registeredDC, registeredSum, detail sql.NullString
+	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID}
+	var token, dc, countries, registeredDC, registeredSum, detail, target sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT token, dc, countries, registered_dc, registered_token_hash,
-last_applied_at, last_detail FROM tsin_settings ORDER BY id LIMIT 1`).
-		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail)
+last_applied_at, last_detail, target FROM tsin_settings ORDER BY id LIMIT 1`).
+		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings, nil
 	}
@@ -71,6 +76,9 @@ last_applied_at, last_detail FROM tsin_settings ORDER BY id LIMIT 1`).
 	settings.RegisteredDC = registeredDC.String
 	settings.RegisteredTokenSum = registeredSum.String
 	settings.LastDetail = detail.String
+	if strings.TrimSpace(target.String) != "" {
+		settings.Target = target.String
+	}
 	return settings, nil
 }
 
@@ -78,9 +86,9 @@ func (s *Server) saveTSinSettings(ctx context.Context, settings tsinSettings) er
 	countries, _ := json.Marshal(settings.Countries)
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE tsin_settings SET token = ?, dc = ?, countries = ?,
-registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?`,
+registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target)
 		if err != nil {
 			return err
 		}
@@ -88,9 +96,9 @@ registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail =
 			return nil
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO tsin_settings
-(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target)
 		return err
 	})
 }
@@ -125,6 +133,11 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"applied":      len(settings.Countries) > 0 && settings.LastAppliedAt.Valid,
 		"last_detail":  settings.LastDetail,
 		"service_name": tsinServiceName,
+		"target":       settings.Target,
+		"node_script":  tsin.NodeScript(settings.DC),
+	}
+	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
+		view["targets"] = targets
 	}
 	if settings.LastAppliedAt.Valid {
 		view["last_applied_at"] = settings.LastAppliedAt.Time.UTC().Format(time.RFC3339)
@@ -207,48 +220,64 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, err := normalizeTSinTarget(firstNonEmpty(request.Target, settings.Target))
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	onPanelHost := target == xrayconfig.MasterTargetID
+
 	tunnel := tsin.NewTunnel()
-	sum := tokenSum(settings.Token)
-	needRegister := settings.RegisteredDC != settings.DC || settings.RegisteredTokenSum != sum || !tunnel.ConfigExists()
-	conf := ""
-	if needRegister {
-		registration, err := client.Register(ctx, settings.DC, settings.Token)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-		if conf, err = tsin.BuildConfig(registration); err != nil {
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-		if err := tunnel.Up(ctx, conf); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		settings.RegisteredDC, settings.RegisteredTokenSum = settings.DC, sum
-	} else {
-		conf, err = tunnel.ReadConfig()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if _, up := tunnel.Handshake(ctx); !up {
+	address := ""
+	tunnelUp := false
+	var portBusy func(int) bool
+	if onPanelHost {
+		// The tunnel is made here, on the machine the panel runs on.
+		portBusy = localPortBusy
+		sum := tokenSum(settings.Token)
+		needRegister := settings.RegisteredDC != settings.DC || settings.RegisteredTokenSum != sum || !tunnel.ConfigExists()
+		conf := ""
+		if needRegister {
+			registration, err := client.Register(ctx, settings.DC, settings.Token)
+			if err != nil {
+				writeError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			if conf, err = tsin.BuildConfig(registration); err != nil {
+				writeError(w, http.StatusBadGateway, err.Error())
+				return
+			}
 			if err := tunnel.Up(ctx, conf); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
+			settings.RegisteredDC, settings.RegisteredTokenSum = settings.DC, sum
+		} else {
+			conf, err = tunnel.ReadConfig()
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if _, up := tunnel.Handshake(ctx); !up {
+				if err := tunnel.Up(ctx, conf); err != nil {
+					writeError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
 		}
+		tunnelUp = tunnel.WaitHandshake(ctx, 12*time.Second)
+		address = tsin.ProxyAddress(conf)
 	}
-	tunnelUp := tunnel.WaitHandshake(ctx, 12*time.Second)
+	// On a node the tunnel is made there by the script the dashboard shows; the
+	// panel registers nothing for it, because the profile belongs to the node.
 
-	address := tsin.ProxyAddress(conf)
 	countries := make([]xrayconfig.TSinCountry, 0, len(proxies))
 	for _, proxy := range proxies {
 		countries = append(countries, xrayconfig.TSinCountry{
 			Port: proxy.Port, Name: proxy.Country, Code: tsinCountryCode(proxy.Country), Address: address,
 		})
 	}
-	inbounds, err := s.configRepo.ApplyTSin(ctx, countries, localPortBusy)
+	inbounds, err := s.configRepo.ApplyTSin(ctx, target, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return
@@ -259,33 +288,60 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to attach the countries to a service: "+err.Error())
 		return
 	}
+	if !onPanelHost && tunnel.ConfigExists() {
+		// The countries moved away: a tunnel left here would be an orphan that
+		// still holds the account's one peer slot.
+		if err := tunnel.Down(ctx); err != nil {
+			logging.Warnf(logging.ComponentNode, "t.sin: could not remove the old local tunnel: %v", err)
+		}
+		settings.RegisteredDC, settings.RegisteredTokenSum = "", ""
+	}
 
+	settings.Target = target
 	settings.Countries = make([]string, 0, len(proxies))
 	for _, proxy := range proxies {
 		settings.Countries = append(settings.Countries, proxy.Country)
 	}
 	settings.LastAppliedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	settings.LastDetail = "applied"
-	if !tunnelUp {
+	switch {
+	case !onPanelHost:
+		settings.LastDetail = "applied to " + target + "; the tunnel script must be run on that node"
+	case !tunnelUp:
 		settings.LastDetail = "applied, but the tunnel has not completed a handshake yet"
+	default:
+		settings.LastDetail = "applied"
 	}
 	if err := s.saveTSinSettings(ctx, settings); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	logging.Infof(logging.ComponentNode, "t.sin: applied %d countries on %s", len(countries), settings.DC)
+	logging.Infof(logging.ComponentNode, "t.sin: applied %d countries on %s to %s", len(countries), settings.DC, target)
 
 	response := map[string]any{
-		"inbounds":     inbounds,
-		"service_id":   serviceID,
-		"service_name": tsinServiceName,
-		"tunnel_up":    tunnelUp,
-		"detail":       settings.LastDetail,
+		"inbounds":          inbounds,
+		"service_id":        serviceID,
+		"service_name":      tsinServiceName,
+		"target":            target,
+		"tunnel_up":         tunnelUp,
+		"needs_node_script": !onPanelHost,
+		"detail":            settings.LastDetail,
 	}
-	if !tunnelUp {
+	if onPanelHost && !tunnelUp {
 		response["warning"] = "The tunnel has not completed a handshake. Check that UDP to the provider is not blocked from this server."
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+// normalizeTSinTarget accepts "master" or "node:<id>" and nothing else.
+func normalizeTSinTarget(value string) (string, error) {
+	_, nodeID, err := xrayconfig.ParseTargetID(strings.TrimSpace(value))
+	if err != nil {
+		return "", errors.New("choose the panel server or one of the nodes")
+	}
+	if nodeID == nil {
+		return xrayconfig.MasterTargetID, nil
+	}
+	return xrayconfig.NodeTargetID(*nodeID), nil
 }
 
 func (s *Server) tsinRemove(w http.ResponseWriter, r *http.Request) {

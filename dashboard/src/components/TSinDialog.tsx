@@ -14,6 +14,8 @@ import {
 	SimpleGrid,
 	Stack,
 	Text,
+	Textarea,
+	useClipboard,
 	useToast,
 } from "@chakra-ui/react";
 import { PanelSelect as Select } from "components/common/PanelSelect";
@@ -41,7 +43,17 @@ type TSinAccount = {
 	proxies: TSinProxy[];
 };
 
+type TSinTarget = {
+	id: string;
+	type: string;
+	name: string;
+	status?: string;
+};
+
 type TSinView = {
+	target: string;
+	targets?: TSinTarget[];
+	node_script: string;
 	dc: string;
 	datacenters: string[];
 	preferred: string[];
@@ -57,6 +69,7 @@ type TSinView = {
 };
 
 type TSinApplyResponse = {
+	needs_node_script?: boolean;
 	service_name: string;
 	tunnel_up: boolean;
 	warning?: string;
@@ -99,9 +112,11 @@ export const TSinDialog: FC<{
 	const [busy, setBusy] = useState(false);
 	const [token, setToken] = useState("");
 	const [dc, setDc] = useState("dc1");
+	const [target, setTarget] = useState("master");
 	const [selected, setSelected] = useState<string[]>([]);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
+	const script = useClipboard(view?.node_script ?? "");
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the dialog loads once each time it opens, not whenever the toast or translator changes identity
 	const load = useCallback(async () => {
@@ -110,6 +125,7 @@ export const TSinDialog: FC<{
 			const data = await fetch<TSinView>("/core/tsin");
 			setView(data);
 			setDc(data.dc);
+			setTarget(data.target || "master");
 			setSelected(
 				data.countries?.length ? data.countries : (data.preferred ?? []),
 			);
@@ -148,7 +164,11 @@ export const TSinDialog: FC<{
 		if (busy) return;
 		setBusy(true);
 		try {
-			const body: Record<string, unknown> = { dc, countries: selected };
+			const body: Record<string, unknown> = {
+				dc,
+				target,
+				countries: selected,
+			};
 			if (token.trim()) body.token = token.trim();
 			const response = await fetch<TSinApplyResponse>("/core/tsin/apply", {
 				method: "POST",
@@ -254,10 +274,39 @@ export const TSinDialog: FC<{
 						<AlertDescription>
 							{tt(
 								"tsin.scope",
-								"This works on the server the panel itself runs on. Other nodes keep their normal configs.",
+								"The T.Sin tunnel lives on one server, and the countries are served by the Xray on that server. Pick the panel server, or a node you run the traffic on.",
 							)}
 						</AlertDescription>
 					</Alert>
+
+					<FormControl>
+						<FormLabel>
+							{tt("tsin.target", "Serve the countries from")}
+						</FormLabel>
+						<Select
+							value={target}
+							onChange={(event) => setTarget(event.target.value)}
+						>
+							<option value="master">
+								{tt("tsin.targetMaster", "This server (the panel)")}
+							</option>
+							{(view?.targets ?? [])
+								.filter((item) => item.type === "node")
+								.map((item) => (
+									<option key={item.id} value={item.id}>
+										{item.name} {item.status ? `(${item.status})` : ""}
+									</option>
+								))}
+						</Select>
+						{target !== "master" && (
+							<FormHelperText>
+								{tt(
+									"tsin.targetNodeHelp",
+									"The node switches to its own Xray config (a copy of the shared one made now). Later changes to the shared config will not reach it.",
+								)}
+							</FormHelperText>
+						)}
+					</FormControl>
 
 					<FormControl>
 						<FormLabel>{tt("tsin.token", "T.Sin token")}</FormLabel>
@@ -336,7 +385,7 @@ export const TSinDialog: FC<{
 						</Box>
 					)}
 
-					{view?.applied && (
+					{view?.applied && view.target === "master" && (
 						<HStack fontSize="sm">
 							<Badge colorScheme={view.tunnel.up ? "green" : "orange"}>
 								{view.tunnel.up
@@ -373,6 +422,33 @@ export const TSinDialog: FC<{
 							</Text>
 						)}
 					</Box>
+
+					{target !== "master" && view && (
+						<Box borderWidth="1px" borderRadius="6px" p={3}>
+							<Text fontWeight="semibold" mb={1}>
+								{tt("tsin.scriptTitle", "Run this on the node, as root")}
+							</Text>
+							<Text fontSize="sm" mb={2}>
+								{tt(
+									"tsin.scriptHelp",
+									"After pressing Apply, run this script on the node's server. It asks for the token itself, so the token is never shown here, and it only brings up the tunnel.",
+								)}
+							</Text>
+							<Textarea
+								value={view.node_script}
+								isReadOnly
+								rows={8}
+								fontFamily="mono"
+								fontSize="xs"
+								dir="ltr"
+							/>
+							<Button size="sm" mt={2} onClick={script.onCopy}>
+								{script.hasCopied
+									? tt("tsin.copied", "Copied")
+									: tt("tsin.copy", "Copy script")}
+							</Button>
+						</Box>
+					)}
 
 					{result && (
 						<Alert
