@@ -426,7 +426,7 @@ export const TSinDialog: FC<{
 					{target !== "master" && view && (
 						<Box borderWidth="1px" borderRadius="6px" p={3}>
 							<Text fontWeight="semibold" mb={1}>
-								{tt("tsin.scriptTitle", "Run this on the node, as root")}
+								{tt("tsin.scriptTitle", "Run this on the node")}
 							</Text>
 							<Text fontSize="sm" mb={2}>
 								{tt(

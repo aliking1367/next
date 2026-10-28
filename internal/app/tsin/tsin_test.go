@@ -142,6 +142,10 @@ func TestNodeScriptNeverCarriesTheTokenAndPinsTheDatacenter(t *testing.T) {
 	if !strings.Contains(script, "read -rs") || strings.Contains(script, "token=ey") {
 		t.Fatal("the script does not ask for the token itself")
 	}
+	if !strings.HasPrefix(script, "sudo tee /tmp/tsin-node.sh") ||
+		!strings.Contains(script, "\nTSIN_SCRIPT_END\nsudo bash /tmp/tsin-node.sh") {
+		t.Fatalf("the script is not wrapped, so it would run inside the admin's own shell:\n%s", script[:120])
+	}
 	if strings.Contains(script, "`") {
 		t.Fatal("a backtick would break the Go raw string and the shell quoting")
 	}

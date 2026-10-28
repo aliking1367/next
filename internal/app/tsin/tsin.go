@@ -416,7 +416,13 @@ func NodeScript(dc string) string {
 	if !ValidDC(dc) {
 		dc = "dc1"
 	}
-	return strings.ReplaceAll(nodeScriptTemplate, "@DC@", dc)
+	script := strings.ReplaceAll(nodeScriptTemplate, "@DC@", dc)
+	// Pasted straight into a shell, "set -e" in the script would apply to the
+	// admin's own login shell and close the SSH session at the first failed
+	// command. Wrapping it in a file keeps the script's strictness inside the
+	// script.
+	return "sudo tee /tmp/tsin-node.sh >/dev/null <<'TSIN_SCRIPT_END'\n" + script +
+		"TSIN_SCRIPT_END\nsudo bash /tmp/tsin-node.sh; sudo rm -f /tmp/tsin-node.sh\n"
 }
 
 const nodeScriptTemplate = `#!/bin/bash
