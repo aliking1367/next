@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-d26253f",
-  "updated_at": "2026-10-28T12:08:55Z",
+  "latest": "dev-81df816",
+  "updated_at": "2026-10-29T15:07:55Z",
   "builds": [
+    {
+      "tag": "dev-81df816",
+      "sha": "81df816b9ae203d6249bad98dedd1a3bca2b0345",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "40897452781",
+      "run_number": "132",
+      "created_at": "2026-10-29T15:07:55Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-81df816.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-81df816.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-81df816.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-81df816.zip"
+        }
+      }
+    },
     {
       "tag": "dev-d26253f",
       "sha": "d26253f19d7abe307c97a32b9cd18c06d574d93b",
