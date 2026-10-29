@@ -27,6 +27,12 @@ import (
 
 const tsinServiceName = "T.Sin Countries"
 
+// tsinProviderStatus answers a failure that came from T.Sin rather than from
+// this panel. It is deliberately not 502 or 504: behind Cloudflare those are
+// replaced by Cloudflare's own error page, which hid the provider's actual
+// reason ("token in use on another server") behind a generic message.
+const tsinProviderStatus = http.StatusFailedDependency
+
 var tsinApplyMu sync.Mutex
 
 type tsinSettings struct {
@@ -211,7 +217,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	client := tsin.NewClient()
 	status, err := client.Status(ctx, settings.DC, settings.Token)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeError(w, tsinProviderStatus, err.Error())
 		return
 	}
 	proxies, missing := status.Resolve(names)
@@ -240,11 +246,11 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		if needRegister {
 			registration, err := client.Register(ctx, settings.DC, settings.Token)
 			if err != nil {
-				writeError(w, http.StatusBadGateway, err.Error())
+				writeError(w, tsinProviderStatus, err.Error())
 				return
 			}
 			if conf, err = tsin.BuildConfig(registration); err != nil {
-				writeError(w, http.StatusBadGateway, err.Error())
+				writeError(w, tsinProviderStatus, err.Error())
 				return
 			}
 			if err := tunnel.Up(ctx, conf); err != nil {

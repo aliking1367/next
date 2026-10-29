@@ -111,8 +111,11 @@ func (c Client) get(ctx context.Context, dc, path, token string, out any) error 
 }
 
 type RegisterResult struct {
-	Status     string `json:"status"`
-	Message    string `json:"message"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	// Error is the key T.Sin uses for refusals ({"error": "..."}); only some
+	// answers carry "message".
+	Error      string `json:"error"`
 	ClientName string `json:"client_name"`
 	WGConf     string `json:"wg_conf"`
 	ServerWGIP string `json:"server_wg_ip"`
@@ -124,7 +127,7 @@ func (c Client) Register(ctx context.Context, dc, token string) (RegisterResult,
 		return result, err
 	}
 	if result.Status != "success" {
-		return result, fmt.Errorf("T.Sin refused the registration: %s", firstNonEmpty(result.Message, result.Status, "no reason given"))
+		return result, fmt.Errorf("T.Sin refused the registration: %s", firstNonEmpty(result.Error, result.Message, result.Status, "no reason given"))
 	}
 	return result, nil
 }
@@ -150,6 +153,7 @@ func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
 	var raw struct {
 		Status            string          `json:"status"`
 		Message           string          `json:"message"`
+		Error             string          `json:"error"`
 		ClientName        string          `json:"client_name"`
 		DataUsedGB        float64         `json:"data_used_gb"`
 		DataLimitGB       float64         `json:"data_limit_gb"`
@@ -162,7 +166,7 @@ func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
 		return Status{}, err
 	}
 	if raw.Status != "success" {
-		return Status{}, fmt.Errorf("T.Sin refused the token: %s", firstNonEmpty(raw.Message, raw.Status, "no reason given"))
+		return Status{}, fmt.Errorf("T.Sin refused the token: %s", firstNonEmpty(raw.Error, raw.Message, raw.Status, "no reason given"))
 	}
 	status := Status{
 		ClientName:        raw.ClientName,

@@ -150,3 +150,20 @@ func TestNodeScriptNeverCarriesTheTokenAndPinsTheDatacenter(t *testing.T) {
 		t.Fatal("a backtick would break the Go raw string and the shell quoting")
 	}
 }
+
+func TestRefusalReasonIsReadFromTheErrorKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"error": "Token is currently in use on another online server. Stop it first to switch IPs."}`))
+	}))
+	defer server.Close()
+	client := Client{HTTP: server.Client(), BaseURL: func(string) string { return server.URL }}
+
+	_, err := client.Status(context.Background(), "dc1", "secret-token")
+	if err == nil || !strings.Contains(err.Error(), "in use on another online server") {
+		t.Fatalf("the provider's reason was lost: %v", err)
+	}
+	_, err = client.Register(context.Background(), "dc1", "secret-token")
+	if err == nil || !strings.Contains(err.Error(), "in use on another online server") {
+		t.Fatalf("the provider's reason was lost on register: %v", err)
+	}
+}
