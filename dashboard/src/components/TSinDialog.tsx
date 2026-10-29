@@ -52,6 +52,7 @@ type TSinTarget = {
 
 type TSinView = {
 	target: string;
+	transport?: string;
 	targets?: TSinTarget[];
 	node_script: string;
 	dc: string;
@@ -113,6 +114,7 @@ export const TSinDialog: FC<{
 	const [token, setToken] = useState("");
 	const [dc, setDc] = useState("dc1");
 	const [target, setTarget] = useState("master");
+	const [transport, setTransport] = useState("xhttp");
 	const [selected, setSelected] = useState<string[]>([]);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
@@ -126,6 +128,7 @@ export const TSinDialog: FC<{
 			setView(data);
 			setDc(data.dc);
 			setTarget(data.target || "master");
+			setTransport(data.applied ? data.transport || "tcp" : "xhttp");
 			setSelected(
 				data.countries?.length ? data.countries : (data.preferred ?? []),
 			);
@@ -167,6 +170,7 @@ export const TSinDialog: FC<{
 			const body: Record<string, unknown> = {
 				dc,
 				target,
+				transport,
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -306,6 +310,25 @@ export const TSinDialog: FC<{
 								)}
 							</FormHelperText>
 						)}
+					</FormControl>
+
+					<FormControl>
+						<FormLabel>{tt("tsin.transport", "Connection type")}</FormLabel>
+						<Select
+							value={transport}
+							onChange={(event) => setTransport(event.target.value)}
+						>
+							<option value="xhttp">
+								{tt("tsin.transportXhttp", "XHTTP (recommended)")}
+							</option>
+							<option value="tcp">{tt("tsin.transportTcp", "TCP")}</option>
+						</Select>
+						<FormHelperText>
+							{tt(
+								"tsin.transportHelp",
+								"XHTTP held up on Iranian networks where TCP connections kept being cut every few minutes. Changing this rebuilds the country configs on new ports, so users must update their subscription.",
+							)}
+						</FormHelperText>
 					</FormControl>
 
 					<FormControl>

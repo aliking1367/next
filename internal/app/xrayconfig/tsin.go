@@ -29,10 +29,33 @@ type TSinCountry struct {
 }
 
 type TSinInbound struct {
-	Tag     string `json:"tag"`
-	Port    int    `json:"port"`
-	Country string `json:"country"`
-	Created bool   `json:"created"`
+	Tag       string `json:"tag"`
+	Port      int    `json:"port"`
+	Country   string `json:"country"`
+	Transport string `json:"transport"`
+	Created   bool   `json:"created"`
+}
+
+// Country inbounds are VLESS over REALITY on one of two transports. TCP is
+// the classic one; XHTTP is HTTP-shaped and in practice survived on Iranian
+// networks where long TCP-REALITY connections kept being cut every few
+// minutes.
+const (
+	TSinTransportTCP   = "tcp"
+	TSinTransportXHTTP = "xhttp"
+)
+
+// NormalizeTSinTransport maps anything unknown to TCP, which is what every
+// panel used before the choice existed.
+func NormalizeTSinTransport(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), TSinTransportXHTTP) {
+		return TSinTransportXHTTP
+	}
+	return TSinTransportTCP
+}
+
+func tsinInboundTransport(inbound map[string]any) string {
+	return NormalizeTSinTransport(stringValue(mapValue(inbound["streamSettings"])["network"]))
 }
 
 // TSinInboundTag is the inbound that serves one country.
@@ -78,10 +101,11 @@ func tsinHostRemark(country TSinCountry) string {
 // ApplyTSin makes the given target serve exactly the given countries. The
 // target is "master" or "node:<id>"; the tunnel the exits sit behind has to
 // exist on whichever machine runs that target's Xray.
-func (r Repository) ApplyTSin(ctx context.Context, target string, countries []TSinCountry, portBusy func(int) bool) ([]TSinInbound, error) {
+func (r Repository) ApplyTSin(ctx context.Context, target, transport string, countries []TSinCountry, portBusy func(int) bool) ([]TSinInbound, error) {
 	if len(countries) == 0 {
 		return nil, errors.New("choose at least one country")
 	}
+	transport = NormalizeTSinTransport(transport)
 	target, err := normalizeTargetID(firstNonEmptyString(target, MasterTargetID))
 	if err != nil {
 		return nil, err
@@ -138,7 +162,15 @@ func (r Repository) ApplyTSin(ctx context.Context, target string, countries []TS
 		if err != nil && !errors.Is(err, ErrInboundNotFound) {
 			return nil, err
 		}
-		entry := TSinInbound{Tag: tag, Country: country.Name}
+		entry := TSinInbound{Tag: tag, Country: country.Name, Transport: transport}
+		if existing != nil && tsinInboundTransport(existing) != transport {
+			// Switching transport changes the link itself, so the inbound is
+			// rebuilt rather than edited in place.
+			if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
+				return nil, fmt.Errorf("rebuild %s: %w", tag, err)
+			}
+			existing = nil
+		}
 		if existing != nil {
 			entry.Port, _ = parseConfigPort(existing["port"])
 		} else {
@@ -147,7 +179,11 @@ func (r Repository) ApplyTSin(ctx context.Context, target string, countries []TS
 				return nil, err
 			}
 			used[port] = true
-			payload, err := buildAutoRealityVision(autoProvisionBuild{
+			build := buildAutoRealityVision
+			if transport == TSinTransportXHTTP {
+				build = buildAutoRealityXHTTP
+			}
+			payload, err := build(autoProvisionBuild{
 				tag: tag, port: port, catalog: catalog, usedDests: usedDests, usedPorts: used,
 			})
 			if err != nil {

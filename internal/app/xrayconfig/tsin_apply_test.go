@@ -16,7 +16,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 		{Port: 1095, Name: "Turkey", Code: "TR", Address: "10.0.0.1"},
 	}
 
-	first, err := repo.ApplyTSin(ctx, "master", countries, nil)
+	first, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 		t.Fatalf("first apply = %#v", first)
 	}
 	// Applying again keeps the same inbounds and ports: users' links must not move.
-	second, err := repo.ApplyTSin(ctx, "master", countries, nil)
+	second, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil)
 	if err != nil {
 		t.Fatalf("re-apply: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 	}
 
 	// Dropping a country retires its inbound and its rule, and leaves the other.
-	if _, err := repo.ApplyTSin(ctx, "master", countries[:1], nil); err != nil {
+	if _, err := repo.ApplyTSin(ctx, "master", "tcp", countries[:1], nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.GetInbound(ctx, "tsin-turkey"); err == nil {
@@ -78,10 +78,10 @@ func TestApplyTSinCanMoveToANodeAndLeavesNothingBehind(t *testing.T) {
 	ctx := context.Background()
 	countries := []TSinCountry{{Port: 1082, Name: "Germany", Code: "DE"}}
 
-	if _, err := repo.ApplyTSin(ctx, "master", countries, nil); err != nil {
+	if _, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil); err != nil {
 		t.Fatalf("apply on master: %v", err)
 	}
-	moved, err := repo.ApplyTSin(ctx, "node:7", countries, nil)
+	moved, err := repo.ApplyTSin(ctx, "node:7", "tcp", countries, nil)
 	if err != nil {
 		t.Fatalf("apply on node: %v", err)
 	}
@@ -117,5 +117,34 @@ func TestApplyTSinCanMoveToANodeAndLeavesNothingBehind(t *testing.T) {
 	}
 	if _, err := repo.GetInbound(ctx, "tsin-germany"); err == nil {
 		t.Fatal("the inbound survived removal")
+	}
+}
+
+func TestApplyTSinSwitchesTransportByRebuilding(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{{Port: 1082, Name: "Germany", Code: "DE"}}
+
+	if _, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil); err != nil {
+		t.Fatal(err)
+	}
+	switched, err := repo.ApplyTSin(ctx, "master", "xhttp", countries, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !switched[0].Created || switched[0].Transport != "xhttp" {
+		t.Fatalf("the inbound was not rebuilt on XHTTP: %#v", switched)
+	}
+	inbound, err := repo.GetInbound(ctx, "tsin-germany")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream := mapValue(inbound["streamSettings"])
+	if stringValue(stream["network"]) != "xhttp" || stringValue(stream["security"]) != "reality" {
+		t.Fatalf("stream = %#v", stream)
+	}
+	again, err := repo.ApplyTSin(ctx, "master", "xhttp", countries, nil)
+	if err != nil || again[0].Created || again[0].Port != switched[0].Port {
+		t.Fatalf("re-applying the same transport moved the inbound: %#v %v", again, err)
 	}
 }
