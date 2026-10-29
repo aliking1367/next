@@ -222,6 +222,7 @@ type hostLocationVariant struct {
 // points at {SERVER_IP}, otherwise once as before. The location name goes in
 // front of the remark unless the remark places {LOCATION} itself.
 func hostLocationVariants(locations []ConfigLocation, host Host, variables map[string]string) []hostLocationVariant {
+	locations = servingLocations(locations, host.InboundTag)
 	usesTunnel := hostUsesTunnel(host)
 	// A tunnel host is always expanded, even with a single node: the address is
 	// a placeholder, and leaving it unsubstituted would hand the user the word
@@ -231,6 +232,11 @@ func hostLocationVariants(locations []ConfigLocation, host Host, variables map[s
 		if len(locations) == 1 {
 			single["LOCATION"], single["NODE_NAME"] = locations[0].Name, locations[0].Name
 			single["TUNNEL"], single["tunnel"] = locations[0].TunnelAddress, locations[0].TunnelAddress
+			if locations[0].onlyTags != nil {
+				// The default address is the first ordinary node's, and this
+				// inbound is not on that node.
+				single["SERVER_IP"], single["server_ip"] = locations[0].Address, locations[0].Address
+			}
 		}
 		return []hostLocationVariant{{variables: single}}
 	}

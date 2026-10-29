@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/aliking1367/next/internal/app/countryflag"
@@ -17,6 +18,22 @@ type ConfigLocation struct {
 	// tunnel. Empty means the node has none, and a host pointing at {TUNNEL}
 	// then skips it rather than handing out a config that reaches nothing.
 	TunnelAddress string
+
+	// onlyTags limits a node on its own Xray config to the inbounds that exist
+	// only there. Nil means the node follows the shared config.
+	onlyTags map[string]bool
+	// skipTags are inbounds that exist only on some node's own config. A node
+	// following the shared config does not have them, so it must not be offered
+	// for them: the config would point at a port nothing listens on.
+	skipTags map[string]bool
+}
+
+// serves reports whether this node actually runs the inbound with this tag.
+func (l ConfigLocation) serves(tag string) bool {
+	if l.onlyTags != nil {
+		return l.onlyTags[tag]
+	}
+	return !l.skipTags[tag]
 }
 
 // configLocations lists the nodes that run the shared config, in node order.
@@ -52,7 +69,100 @@ ORDER BY id`)
 	if rows.Err() != nil {
 		return nil
 	}
-	return locations
+	return r.withNodeOnlyLocations(ctx, locations)
+}
+
+// withNodeOnlyLocations adds the nodes on their own Xray config, for the
+// inbounds that exist only there.
+//
+// Such nodes used to be left out entirely, which is right for inbounds they
+// share with the master config but wrong for ones only they run: those hosts
+// then took the address of the first ordinary node, and every config pointed
+// at a server where nothing listened on that port. T.Sin countries applied to
+// a node are exactly this case.
+//
+// Anything unreadable here leaves the list as it was, so an older schema keeps
+// the previous behaviour.
+func (r Repository) withNodeOnlyLocations(ctx context.Context, locations []ConfigLocation) []ConfigLocation {
+	var masterRaw []byte
+	if err := r.db.QueryRowContext(ctx, `SELECT data FROM xray_config WHERE id = 1`).Scan(&masterRaw); err != nil {
+		return locations
+	}
+	masterTags := xrayInboundTags(masterRaw)
+	rows, err := r.db.QueryContext(ctx, `SELECT COALESCE(name, ''), COALESCE(NULLIF(TRIM(COALESCE(public_address, '')), ''), address), COALESCE(tunnel_address, ''), xray_config FROM nodes
+WHERE TRIM(COALESCE(address, '')) != ''
+  AND LOWER(COALESCE(status, '')) NOT IN ('deleted', 'disabled', 'limited')
+  AND LOWER(COALESCE(xray_config_mode, 'default')) = 'custom'
+ORDER BY id`)
+	if err != nil {
+		return locations
+	}
+	defer rows.Close()
+	var extra []ConfigLocation
+	exclusive := map[string]bool{}
+	for rows.Next() {
+		var name, address, tunnelAddress string
+		var raw []byte
+		if err := rows.Scan(&name, &address, &tunnelAddress, &raw); err != nil {
+			return locations
+		}
+		address = strings.TrimSpace(address)
+		if address == "" {
+			continue
+		}
+		only := map[string]bool{}
+		for tag := range xrayInboundTags(raw) {
+			if !masterTags[tag] {
+				only[tag] = true
+				exclusive[tag] = true
+			}
+		}
+		if len(only) == 0 {
+			continue
+		}
+		extra = append(extra, ConfigLocation{
+			Name:          locationLabel(name, address),
+			Address:       address,
+			TunnelAddress: strings.TrimSpace(tunnelAddress),
+			onlyTags:      only,
+		})
+	}
+	if rows.Err() != nil || len(extra) == 0 {
+		return locations
+	}
+	for i := range locations {
+		locations[i].skipTags = exclusive
+	}
+	return append(locations, extra...)
+}
+
+func xrayInboundTags(raw []byte) map[string]bool {
+	var config struct {
+		Inbounds []struct {
+			Tag string `json:"tag"`
+		} `json:"inbounds"`
+	}
+	tags := map[string]bool{}
+	if json.Unmarshal(raw, &config) != nil {
+		return tags
+	}
+	for _, inbound := range config.Inbounds {
+		if tag := strings.TrimSpace(inbound.Tag); tag != "" {
+			tags[tag] = true
+		}
+	}
+	return tags
+}
+
+// servingLocations keeps the nodes that run this inbound.
+func servingLocations(locations []ConfigLocation, tag string) []ConfigLocation {
+	out := make([]ConfigLocation, 0, len(locations))
+	for _, location := range locations {
+		if location.serves(tag) {
+			out = append(out, location)
+		}
+	}
+	return out
 }
 
 // hostUsesServerIP reports whether a host points at the node address
