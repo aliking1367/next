@@ -135,8 +135,16 @@ export const TSinDialog: FC<{
 			setTransport(data.applied ? data.transport || "tcp" : "xhttp");
 			setGateHost(data.gate_host ?? "");
 			setGatePort(String(data.gate_port || 2087));
+			// A country the account no longer offers would stay selected with no
+			// checkbox to clear it, and the server refuses the whole apply.
+			const offered = new Set(
+				(data.account?.proxies ?? []).map((proxy) => proxy.country),
+			);
+			const wanted = data.countries?.length
+				? data.countries
+				: (data.preferred ?? []);
 			setSelected(
-				data.countries?.length ? data.countries : (data.preferred ?? []),
+				offered.size ? wanted.filter((name) => offered.has(name)) : wanted,
 			);
 			setToken("");
 		} catch (error: any) {

@@ -240,8 +240,11 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	proxies, missing := status.Resolve(names)
-	if len(missing) > 0 {
-		writeError(w, http.StatusUnprocessableEntity, "this account has no proxy for: "+strings.Join(missing, ", "))
+	// A renewed or different subscription can offer fewer countries. Refusing
+	// the whole apply over that left admins stuck, so the missing ones are
+	// skipped and reported; their configs are retired with the rest.
+	if len(proxies) == 0 {
+		writeError(w, http.StatusUnprocessableEntity, "this account offers none of the chosen countries")
 		return
 	}
 
@@ -363,6 +366,14 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if onPanelHost && !tunnelUp {
 		response["warning"] = "The tunnel has not completed a handshake. Check that UDP to the provider is not blocked from this server."
+	}
+	if len(missing) > 0 {
+		response["skipped"] = missing
+		note := "Skipped, not offered by this account: " + strings.Join(missing, ", ")
+		if existing, ok := response["warning"].(string); ok {
+			note = existing + " " + note
+		}
+		response["warning"] = note
 	}
 	writeJSON(w, http.StatusOK, response)
 }
