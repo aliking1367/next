@@ -439,7 +439,12 @@ if ! command -v wg-quick >/dev/null || ! command -v python3 >/dev/null; then
   apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools python3 >/dev/null
 fi
 REG=$(mktemp); trap 'shred -u "$REG" 2>/dev/null || rm -f "$REG"' EXIT
-curl -fsS -m 25 "http://$DC.sin-kabir.ir:8080/register?token=$TOKEN" -o "$REG"
+CODE=$(curl -sS -m 25 -o "$REG" -w '%{http_code}' "http://$DC.sin-kabir.ir:8080/register?token=$TOKEN" || echo 000)
+if [ "$CODE" != "200" ]; then
+  echo "T.Sin refused the registration (HTTP $CODE):"; head -c 300 "$REG" 2>/dev/null; echo
+  echo "If it says the token is in use on another server: stop the tunnel there, call /disconnect, wait a few minutes and run this again."
+  exit 1
+fi
 unset TOKEN
 REG="$REG" python3 - <<'PY'
 import os, json, base64, ipaddress, sys
