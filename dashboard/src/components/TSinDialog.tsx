@@ -132,7 +132,12 @@ export const TSinDialog: FC<{
 			setView(data);
 			setDc(data.dc);
 			setTarget(data.target || "master");
-			setTransport(data.applied ? data.transport || "tcp" : "xhttp");
+			// The stored choice wins whenever there is one: falling back to XHTTP
+			// just because the last apply failed rebuilt every country on the
+			// next Apply and silently dropped the path-mode gate.
+			setTransport(
+				data.applied || data.gate_host ? data.transport || "tcp" : "xhttp",
+			);
 			setGateHost(data.gate_host ?? "");
 			setGatePort(String(data.gate_port || 2087));
 			// A country the account no longer offers would stay selected with no
