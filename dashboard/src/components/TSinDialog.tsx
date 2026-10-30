@@ -53,6 +53,8 @@ type TSinTarget = {
 type TSinView = {
 	target: string;
 	transport?: string;
+	gate_host?: string;
+	gate_port?: number;
 	targets?: TSinTarget[];
 	node_script: string;
 	dc: string;
@@ -115,6 +117,8 @@ export const TSinDialog: FC<{
 	const [dc, setDc] = useState("dc1");
 	const [target, setTarget] = useState("master");
 	const [transport, setTransport] = useState("xhttp");
+	const [gateHost, setGateHost] = useState("");
+	const [gatePort, setGatePort] = useState("2087");
 	const [selected, setSelected] = useState<string[]>([]);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
@@ -129,6 +133,8 @@ export const TSinDialog: FC<{
 			setDc(data.dc);
 			setTarget(data.target || "master");
 			setTransport(data.applied ? data.transport || "tcp" : "xhttp");
+			setGateHost(data.gate_host ?? "");
+			setGatePort(String(data.gate_port || 2087));
 			setSelected(
 				data.countries?.length ? data.countries : (data.preferred ?? []),
 			);
@@ -171,6 +177,8 @@ export const TSinDialog: FC<{
 				dc,
 				target,
 				transport,
+				gate_host: gateHost.trim(),
+				gate_port: Number.parseInt(gatePort, 10) || 2087,
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -322,6 +330,12 @@ export const TSinDialog: FC<{
 								{tt("tsin.transportXhttp", "XHTTP (recommended)")}
 							</option>
 							<option value="tcp">{tt("tsin.transportTcp", "TCP")}</option>
+							<option value="path">
+								{tt(
+									"tsin.transportPath",
+									"One domain on port 443, by path (Cloudflare)",
+								)}
+							</option>
 						</Select>
 						<FormHelperText>
 							{tt(
@@ -330,6 +344,42 @@ export const TSinDialog: FC<{
 							)}
 						</FormHelperText>
 					</FormControl>
+
+					{transport === "path" && (
+						<Box borderWidth="1px" borderRadius="6px" p={3}>
+							<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={3}>
+								<FormControl>
+									<FormLabel>
+										{tt("tsin.gateHost", "Cloudflare domain")}
+									</FormLabel>
+									<Input
+										value={gateHost}
+										onChange={(event) => setGateHost(event.target.value)}
+										placeholder="g1.example.com"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+								</FormControl>
+								<FormControl>
+									<FormLabel>{tt("tsin.gatePort", "Origin port")}</FormLabel>
+									<Input
+										value={gatePort}
+										onChange={(event) => setGatePort(event.target.value)}
+										placeholder="2087"
+										dir="ltr"
+										inputMode="numeric"
+									/>
+								</FormControl>
+							</SimpleGrid>
+							<Text fontSize="xs" opacity={0.8} mt={2}>
+								{tt(
+									"tsin.gateHelp",
+									"In Cloudflare: an A record for this domain pointing at the node's IP, proxied (orange). SSL/TLS mode Full. An Origin Rule for this hostname that rewrites the destination port to the origin port above. Every country is then this domain on port 443, told apart by path.",
+								)}
+							</Text>
+						</Box>
+					)}
 
 					<FormControl>
 						<FormLabel>{tt("tsin.token", "T.Sin token")}</FormLabel>

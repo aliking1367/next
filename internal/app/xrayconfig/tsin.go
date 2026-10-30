@@ -43,19 +43,105 @@ type TSinInbound struct {
 const (
 	TSinTransportTCP   = "tcp"
 	TSinTransportXHTTP = "xhttp"
+	// TSinTransportPath puts every country behind one TLS gate on one domain,
+	// told apart by URL path. Fronted by Cloudflare, each user config is the
+	// same domain on port 443 with a different path, and the server's own IP
+	// never appears in it.
+	TSinTransportPath = "path"
+
+	// TSinGateTag is the inbound that receives every country's traffic in
+	// path mode and hands it to that country's inbound by path.
+	TSinGateTag = "tsin-gate"
+	// DefaultTSinGatePort is where Cloudflare reaches the gate; an Origin Rule
+	// maps the domain's 443 to it.
+	DefaultTSinGatePort = 2087
 )
 
 // NormalizeTSinTransport maps anything unknown to TCP, which is what every
 // panel used before the choice existed.
 func NormalizeTSinTransport(value string) string {
-	if strings.EqualFold(strings.TrimSpace(value), TSinTransportXHTTP) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case TSinTransportXHTTP:
 		return TSinTransportXHTTP
+	case TSinTransportPath, "ws":
+		return TSinTransportPath
 	}
 	return TSinTransportTCP
 }
 
 func tsinInboundTransport(inbound map[string]any) string {
 	return NormalizeTSinTransport(stringValue(mapValue(inbound["streamSettings"])["network"]))
+}
+
+func tsinInboundPath(inbound map[string]any) string {
+	return stringValue(mapValue(mapValue(inbound["streamSettings"])["wsSettings"])["path"])
+}
+
+// TSinGate is where path mode is reached: the Cloudflare-proxied domain and
+// the origin port the gate listens on.
+type TSinGate struct {
+	Host string
+	Port int
+}
+
+// buildTSinPathInbound is one country in path mode: VLESS over WebSocket on
+// loopback only. Nothing reaches it except the gate's fallback for its path.
+func buildTSinPathInbound(in autoProvisionBuild) (map[string]any, error) {
+	path, err := randomXHTTPPath()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"tag":      in.tag,
+		"listen":   "127.0.0.1",
+		"port":     in.port,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"clients":    []any{},
+			"decryption": "none",
+		},
+		"streamSettings": map[string]any{
+			"network":    "ws",
+			"security":   "none",
+			"wsSettings": map[string]any{"path": path},
+		},
+		"sniffing": autoProvisionSniffing(),
+	}, nil
+}
+
+// buildTSinGate is the public side of path mode: VLESS over TLS whose only
+// job is its fallbacks. It has no users, so every connection falls back and
+// Xray picks the country inbound by the request path. The certificate is
+// self-signed because only Cloudflare sees it (SSL mode Full accepts that);
+// users see Cloudflare's own valid certificate.
+func buildTSinGate(gate TSinGate, fallbacks []any) (map[string]any, error) {
+	certLines, keyLines, err := generateSelfSignedCertLines(gate.Host, gate.Host)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"tag":      TSinGateTag,
+		"listen":   "::",
+		"port":     gate.Port,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"clients":    []any{},
+			"decryption": "none",
+			"fallbacks":  fallbacks,
+		},
+		"streamSettings": map[string]any{
+			"network":  "tcp",
+			"security": "tls",
+			"tlsSettings": map[string]any{
+				"serverName": gate.Host,
+				"alpn":       []any{"http/1.1"},
+				"minVersion": "1.2",
+				"certificates": []any{
+					map[string]any{"certificate": certLines, "key": keyLines},
+				},
+			},
+		},
+	}, nil
 }
 
 // TSinInboundTag is the inbound that serves one country.
@@ -101,11 +187,24 @@ func tsinHostRemark(country TSinCountry) string {
 // ApplyTSin makes the given target serve exactly the given countries. The
 // target is "master" or "node:<id>"; the tunnel the exits sit behind has to
 // exist on whichever machine runs that target's Xray.
-func (r Repository) ApplyTSin(ctx context.Context, target, transport string, countries []TSinCountry, portBusy func(int) bool) ([]TSinInbound, error) {
+func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gate TSinGate, countries []TSinCountry, portBusy func(int) bool) ([]TSinInbound, error) {
 	if len(countries) == 0 {
 		return nil, errors.New("choose at least one country")
 	}
 	transport = NormalizeTSinTransport(transport)
+	if transport == TSinTransportPath {
+		host, err := NormalizeCDNDomain(gate.Host)
+		if err != nil || host == "" {
+			return nil, errors.New("path mode needs the Cloudflare domain the countries are served on, for example g1.example.com")
+		}
+		gate.Host = host
+		if gate.Port <= 0 {
+			gate.Port = DefaultTSinGatePort
+		}
+		if gate.Port > 65535 {
+			return nil, errors.New("the gate port must be between 1 and 65535")
+		}
+	}
 	target, err := normalizeTargetID(firstNonEmptyString(target, MasterTargetID))
 	if err != nil {
 		return nil, err
@@ -140,6 +239,10 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, cou
 		if err != nil {
 			return nil, err
 		}
+		if tag == TSinGateTag {
+			// Rebuilt below on every apply, since its fallbacks follow the countries.
+			continue
+		}
 		if wanted[tag] && len(direct) == 1 && direct[0] == target {
 			continue
 		}
@@ -152,6 +255,9 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, cou
 		return nil, err
 	}
 	used, ranges := extractUsedPorts(config)
+	if transport == TSinTransportPath {
+		used[gate.Port] = true
+	}
 	catalog := r.loadCatalog(ctx)
 	usedDests := map[string]bool{}
 
@@ -180,8 +286,11 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, cou
 			}
 			used[port] = true
 			build := buildAutoRealityVision
-			if transport == TSinTransportXHTTP {
+			switch transport {
+			case TSinTransportXHTTP:
 				build = buildAutoRealityXHTTP
+			case TSinTransportPath:
+				build = buildTSinPathInbound
 			}
 			payload, err := build(autoProvisionBuild{
 				tag: tag, port: port, catalog: catalog, usedDests: usedDests, usedPorts: used,
@@ -195,12 +304,15 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, cou
 			}
 			entry.Port, entry.Created = port, true
 		}
-		if _, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ? WHERE inbound_tag = ?`, tsinHostRemark(country), tag); err != nil {
+		if err := r.setTSinHost(ctx, tag, tsinHostRemark(country), transport, gate); err != nil {
 			return nil, err
 		}
 		result = append(result, entry)
 	}
 
+	if err := r.applyTSinGate(ctx, target, transport, gate, result); err != nil {
+		return nil, err
+	}
 	config, err = r.GetTargetRawConfig(ctx, target)
 	if err != nil {
 		return nil, err
@@ -320,4 +432,63 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 	}
 	config["outbounds"] = outbounds
 	config["routing"] = routing
+}
+
+// setTSinHost points a country's host row at where users reach it. In path
+// mode that is the gate's domain on 443 over TLS; otherwise the node's own
+// address with the inbound's own settings, which also undoes path mode.
+func (r Repository) setTSinHost(ctx context.Context, tag, remark, transport string, gate TSinGate) error {
+	if transport == TSinTransportPath {
+		_, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = 443, sni = ?, host = ?,
+security = 'tls', alpn = 'http/1.1', fingerprint = 'chrome' WHERE inbound_tag = ?`,
+			remark, gate.Host, gate.Host, gate.Host, tag)
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = '{SERVER_IP}', port = NULL, sni = NULL, host = NULL,
+security = 'inbound_default', alpn = 'none', fingerprint = 'none' WHERE inbound_tag = ?`, remark, tag)
+	return err
+}
+
+// applyTSinGate rebuilds the gate for the countries just applied, or removes
+// it when path mode is off.
+func (r Repository) applyTSinGate(ctx context.Context, target, transport string, gate TSinGate, countries []TSinInbound) error {
+	if _, err := r.DeleteInbound(ctx, TSinGateTag); err != nil && !errors.Is(err, ErrInboundNotFound) {
+		return fmt.Errorf("retire %s: %w", TSinGateTag, err)
+	}
+	if transport != TSinTransportPath {
+		return nil
+	}
+	fallbacks := make([]any, 0, len(countries))
+	for _, country := range countries {
+		inbound, err := r.GetInbound(ctx, country.Tag)
+		if err != nil {
+			return err
+		}
+		path := tsinInboundPath(inbound)
+		if path == "" {
+			return fmt.Errorf("%s has no path", country.Tag)
+		}
+		fallbacks = append(fallbacks, map[string]any{"path": path, "dest": country.Port, "xver": 0})
+	}
+	current, err := r.GetTargetRawConfig(ctx, target)
+	if err != nil {
+		return err
+	}
+	for _, inbound := range listOfMaps(current["inbounds"]) {
+		if port, _ := parseConfigPort(inbound["port"]); port == gate.Port {
+			return fmt.Errorf("port %d is already used by %q on this server; choose another gate port", gate.Port, stringValue(inbound["tag"]))
+		}
+	}
+	payload, err := buildTSinGate(gate, fallbacks)
+	if err != nil {
+		return err
+	}
+	payload["targets"] = []any{target}
+	if _, err := r.CreateInbound(ctx, payload); err != nil {
+		return fmt.Errorf("%s: %w", TSinGateTag, err)
+	}
+	// The gate is not something a user connects to by itself: with no users
+	// it only forwards, so it gets no host of its own.
+	_, err = r.db.ExecContext(ctx, `DELETE FROM hosts WHERE inbound_tag = ?`, TSinGateTag)
+	return err
 }

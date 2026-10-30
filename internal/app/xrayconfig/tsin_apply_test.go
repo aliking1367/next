@@ -4,6 +4,7 @@ package xrayconfig
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 		{Port: 1095, Name: "Turkey", Code: "TR", Address: "10.0.0.1"},
 	}
 
-	first, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil)
+	first, err := repo.ApplyTSin(ctx, "master", "tcp", TSinGate{}, countries, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -24,7 +25,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 		t.Fatalf("first apply = %#v", first)
 	}
 	// Applying again keeps the same inbounds and ports: users' links must not move.
-	second, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil)
+	second, err := repo.ApplyTSin(ctx, "master", "tcp", TSinGate{}, countries, nil)
 	if err != nil {
 		t.Fatalf("re-apply: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestApplyTSinCreatesOneInboundPerCountryAndRoutesIt(t *testing.T) {
 	}
 
 	// Dropping a country retires its inbound and its rule, and leaves the other.
-	if _, err := repo.ApplyTSin(ctx, "master", "tcp", countries[:1], nil); err != nil {
+	if _, err := repo.ApplyTSin(ctx, "master", "tcp", TSinGate{}, countries[:1], nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.GetInbound(ctx, "tsin-turkey"); err == nil {
@@ -78,10 +79,10 @@ func TestApplyTSinCanMoveToANodeAndLeavesNothingBehind(t *testing.T) {
 	ctx := context.Background()
 	countries := []TSinCountry{{Port: 1082, Name: "Germany", Code: "DE"}}
 
-	if _, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil); err != nil {
+	if _, err := repo.ApplyTSin(ctx, "master", "tcp", TSinGate{}, countries, nil); err != nil {
 		t.Fatalf("apply on master: %v", err)
 	}
-	moved, err := repo.ApplyTSin(ctx, "node:7", "tcp", countries, nil)
+	moved, err := repo.ApplyTSin(ctx, "node:7", "tcp", TSinGate{}, countries, nil)
 	if err != nil {
 		t.Fatalf("apply on node: %v", err)
 	}
@@ -125,10 +126,10 @@ func TestApplyTSinSwitchesTransportByRebuilding(t *testing.T) {
 	ctx := context.Background()
 	countries := []TSinCountry{{Port: 1082, Name: "Germany", Code: "DE"}}
 
-	if _, err := repo.ApplyTSin(ctx, "master", "tcp", countries, nil); err != nil {
+	if _, err := repo.ApplyTSin(ctx, "master", "tcp", TSinGate{}, countries, nil); err != nil {
 		t.Fatal(err)
 	}
-	switched, err := repo.ApplyTSin(ctx, "master", "xhttp", countries, nil)
+	switched, err := repo.ApplyTSin(ctx, "master", "xhttp", TSinGate{}, countries, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +144,83 @@ func TestApplyTSinSwitchesTransportByRebuilding(t *testing.T) {
 	if stringValue(stream["network"]) != "xhttp" || stringValue(stream["security"]) != "reality" {
 		t.Fatalf("stream = %#v", stream)
 	}
-	again, err := repo.ApplyTSin(ctx, "master", "xhttp", countries, nil)
+	again, err := repo.ApplyTSin(ctx, "master", "xhttp", TSinGate{}, countries, nil)
 	if err != nil || again[0].Created || again[0].Port != switched[0].Port {
 		t.Fatalf("re-applying the same transport moved the inbound: %#v %v", again, err)
+	}
+}
+
+func TestApplyTSinPathModeBuildsOneGateWithAFallbackPerCountry(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{
+		{Port: 1082, Name: "Germany", Code: "DE"},
+		{Port: 1095, Name: "Turkey", Code: "TR"},
+	}
+	gate := TSinGate{Host: "g1.example.com"}
+
+	applied, err := repo.ApplyTSin(ctx, "master", "path", gate, countries, nil)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(applied) != 2 {
+		t.Fatalf("applied = %#v", applied)
+	}
+	gateInbound, err := repo.GetInbound(ctx, TSinGateTag)
+	if err != nil {
+		t.Fatalf("gate: %v", err)
+	}
+	if port, _ := parseConfigPort(gateInbound["port"]); port != DefaultTSinGatePort {
+		t.Fatalf("gate port = %v", gateInbound["port"])
+	}
+	fallbacks := listOfMaps(mapValue(gateInbound["settings"])["fallbacks"])
+	if len(fallbacks) != 2 {
+		t.Fatalf("fallbacks = %#v", gateInbound["settings"])
+	}
+	for i, country := range applied {
+		inbound, err := repo.GetInbound(ctx, country.Tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stringValue(inbound["listen"]) != "127.0.0.1" || tsinInboundTransport(inbound) != "path" {
+			t.Fatalf("%s is not a loopback WebSocket inbound: %#v", country.Tag, inbound)
+		}
+		if stringValue(fallbacks[i]["path"]) != tsinInboundPath(inbound) {
+			t.Fatalf("fallback %d path %v != inbound path %q", i, fallbacks[i]["path"], tsinInboundPath(inbound))
+		}
+		if port, _ := parseConfigPort(fallbacks[i]["dest"]); port != country.Port {
+			t.Fatalf("fallback %d goes to %v, inbound is on %d", i, fallbacks[i]["dest"], country.Port)
+		}
+	}
+
+	var address, sni, security string
+	var port sql.NullInt64
+	if err := db.QueryRow(`SELECT address, port, sni, security FROM hosts WHERE inbound_tag = 'tsin-germany'`).Scan(&address, &port, &sni, &security); err != nil {
+		t.Fatal(err)
+	}
+	if address != "g1.example.com" || port.Int64 != 443 || sni != "g1.example.com" || security != "tls" {
+		t.Fatalf("country host = %s:%d sni=%s security=%s", address, port.Int64, sni, security)
+	}
+	var gateHosts int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM hosts WHERE inbound_tag = ?`, TSinGateTag).Scan(&gateHosts); err != nil || gateHosts != 0 {
+		t.Fatalf("the gate must not have a host of its own: %d %v", gateHosts, err)
+	}
+
+	// Leaving path mode removes the gate and points the hosts back at the node.
+	if _, err := repo.ApplyTSin(ctx, "master", "xhttp", TSinGate{}, countries, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetInbound(ctx, TSinGateTag); err == nil {
+		t.Fatal("the gate survived leaving path mode")
+	}
+	if err := db.QueryRow(`SELECT address, security FROM hosts WHERE inbound_tag = 'tsin-germany'`).Scan(&address, &security); err != nil {
+		t.Fatal(err)
+	}
+	if address != "{SERVER_IP}" || security != "inbound_default" {
+		t.Fatalf("host was not restored: %s %s", address, security)
+	}
+
+	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "not a domain"}, countries, nil); err == nil {
+		t.Fatal("path mode accepted a bad domain")
 	}
 }

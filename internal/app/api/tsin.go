@@ -48,6 +48,10 @@ type tsinSettings struct {
 	Target string
 	// Transport is "tcp" or "xhttp" for the country inbounds.
 	Transport string
+	// GateHost and GatePort are where path mode is reached: the Cloudflare
+	// domain in every country config, and the origin port of its gate.
+	GateHost string
+	GatePort int
 }
 
 type tsinRequest struct {
@@ -59,6 +63,10 @@ type tsinRequest struct {
 	Target string `json:"target"`
 	// Transport is "tcp" or "xhttp". Empty keeps the one already chosen.
 	Transport string `json:"transport"`
+	// GateHost and GatePort configure path mode. Empty or zero keeps the stored
+	// values.
+	GateHost string `json:"gate_host"`
+	GatePort int    `json:"gate_port"`
 }
 
 func tokenSum(token string) string {
@@ -67,11 +75,12 @@ func tokenSum(token string) string {
 }
 
 func (s *Server) loadTSinSettings(ctx context.Context) (tsinSettings, error) {
-	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID, Transport: xrayconfig.TSinTransportTCP}
-	var token, dc, countries, registeredDC, registeredSum, detail, target, transport sql.NullString
+	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID, Transport: xrayconfig.TSinTransportTCP, GatePort: xrayconfig.DefaultTSinGatePort}
+	var token, dc, countries, registeredDC, registeredSum, detail, target, transport, gateHost sql.NullString
+	var gatePort sql.NullInt64
 	err := s.db.QueryRowContext(ctx, `SELECT token, dc, countries, registered_dc, registered_token_hash,
-last_applied_at, last_detail, target, transport FROM tsin_settings ORDER BY id LIMIT 1`).
-		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport)
+last_applied_at, last_detail, target, transport, gate_host, gate_port FROM tsin_settings ORDER BY id LIMIT 1`).
+		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings, nil
 	}
@@ -90,6 +99,8 @@ last_applied_at, last_detail, target, transport FROM tsin_settings ORDER BY id L
 		settings.Target = target.String
 	}
 	settings.Transport = xrayconfig.NormalizeTSinTransport(transport.String)
+	settings.GateHost = gateHost.String
+	settings.GatePort = int(gatePort.Int64)
 	return settings, nil
 }
 
@@ -97,9 +108,9 @@ func (s *Server) saveTSinSettings(ctx context.Context, settings tsinSettings) er
 	countries, _ := json.Marshal(settings.Countries)
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE tsin_settings SET token = ?, dc = ?, countries = ?,
-registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?`,
+registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort)
 		if err != nil {
 			return err
 		}
@@ -107,9 +118,9 @@ registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail =
 			return nil
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO tsin_settings
-(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort)
 		return err
 	})
 }
@@ -146,6 +157,8 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"service_name": tsinServiceName,
 		"target":       settings.Target,
 		"transport":    settings.Transport,
+		"gate_host":    settings.GateHost,
+		"gate_port":    settings.GatePort,
 		"node_script":  tsin.NodeScript(settings.DC),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
@@ -241,6 +254,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(request.Transport) != "" {
 		settings.Transport = xrayconfig.NormalizeTSinTransport(request.Transport)
 	}
+	if strings.TrimSpace(request.GateHost) != "" {
+		settings.GateHost = strings.TrimSpace(request.GateHost)
+	}
+	if request.GatePort > 0 {
+		settings.GatePort = request.GatePort
+	}
 
 	tunnel := tsin.NewTunnel()
 	address := ""
@@ -292,7 +311,8 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			Port: proxy.Port, Name: proxy.Country, Code: tsinCountryCode(proxy.Country), Address: address,
 		})
 	}
-	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport, countries, portBusy)
+	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
+		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return
