@@ -25,7 +25,54 @@ import (
 // Applying is limited to the master config and to the host this panel runs on,
 // because the tunnel lives on one machine and so must the Xray that uses it.
 
-const tsinServiceName = "T.Sin Countries"
+// tsinServiceName is only the name a new service starts with. The admin may
+// rename it to anything -- admins who create users should not see the
+// provider's name -- so the service is found by the country hosts it holds,
+// never by its name.
+const tsinServiceName = "Countries"
+
+// tsinLegacyServiceName is what earlier versions called it, still matched so
+// an existing setup is picked up instead of getting a second service.
+const tsinLegacyServiceName = "T.Sin Countries"
+
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// findTSinServiceID returns the service holding the country hosts, or the one
+// with the old fixed name, or 0 when there is none yet.
+func findTSinServiceID(ctx context.Context, q rowQuerier) (int64, error) {
+	var id int64
+	err := q.QueryRowContext(ctx, `SELECT sh.service_id FROM service_hosts sh
+JOIN hosts h ON h.id = sh.host_id
+WHERE h.inbound_tag LIKE 'tsin-%'
+GROUP BY sh.service_id
+ORDER BY COUNT(*) DESC, sh.service_id
+LIMIT 1`).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	err = q.QueryRowContext(ctx, `SELECT id FROM services WHERE name = ?`, tsinLegacyServiceName).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return id, err
+}
+
+func (s *Server) tsinServiceName(ctx context.Context) string {
+	id, err := findTSinServiceID(ctx, s.db)
+	if err != nil || id == 0 {
+		return tsinServiceName
+	}
+	var name string
+	if err := s.db.QueryRowContext(ctx, `SELECT name FROM services WHERE id = ?`, id).Scan(&name); err != nil {
+		return tsinServiceName
+	}
+	return name
+}
 
 // tsinProviderStatus answers a failure that came from T.Sin rather than from
 // this panel. It is deliberately not 502 or 504: behind Cloudflare those are
@@ -154,7 +201,7 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"countries":    settings.Countries,
 		"applied":      len(settings.Countries) > 0 && settings.LastAppliedAt.Valid,
 		"last_detail":  settings.LastDetail,
-		"service_name": tsinServiceName,
+		"service_name": s.tsinServiceName(r.Context()),
 		"target":       settings.Target,
 		"transport":    settings.Transport,
 		"gate_host":    settings.GateHost,
@@ -358,7 +405,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{
 		"inbounds":          inbounds,
 		"service_id":        serviceID,
-		"service_name":      tsinServiceName,
+		"service_name":      s.tsinServiceName(ctx),
 		"target":            target,
 		"tunnel_up":         tunnelUp,
 		"needs_node_script": !onPanelHost,
@@ -483,18 +530,16 @@ func (s *Server) attachTSinService(ctx context.Context, inbounds []xrayconfig.TS
 }
 
 func findOrCreateTSinServiceTx(ctx context.Context, tx *sql.Tx) (int64, error) {
-	var id int64
-	err := tx.QueryRowContext(ctx, `SELECT id FROM services WHERE name = ?`, tsinServiceName).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, err
+	id, err := findTSinServiceID(ctx, tx)
+	if err != nil || id != 0 {
+		return id, err
 	}
 	now := dbTimestamp(time.Now().UTC())
+	// The description stays empty: admins see it, and it should not name the
+	// provider either.
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO services (name, description, used_traffic, lifetime_used_traffic, users_usage, created_at, updated_at) VALUES (?, ?, 0, 0, 0, ?, ?)`,
-		tsinServiceName, "Created by the T.Sin integration: one config per exit country.", now, now)
+		tsinServiceName, "", now, now)
 	if err != nil {
 		return 0, err
 	}
