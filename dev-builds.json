@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-3202a56",
-  "updated_at": "2026-11-01T11:50:09Z",
+  "latest": "dev-d25dba1",
+  "updated_at": "2026-11-01T12:46:22Z",
   "builds": [
+    {
+      "tag": "dev-d25dba1",
+      "sha": "d25dba163e19c9642ddf25c7328c36fd222df8f2",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "41307715941",
+      "run_number": "154",
+      "created_at": "2026-11-01T12:46:22Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-d25dba1.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-d25dba1.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-d25dba1.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-d25dba1.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-3202a56",
       "sha": "3202a56322fd091bc978aee59934aa1a87ada560",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-acb9c02.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-acb9c02.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-0a8b6ab",
-      "sha": "0a8b6ab65dd86e131cd38cbda9f82f9b200a04b9",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "35744789698",
-      "run_number": "43",
-      "created_at": "2026-09-22T15:09:20Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-0a8b6ab.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-0a8b6ab.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-0a8b6ab.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-0a8b6ab.tar.gz"
         }
       }
     }
