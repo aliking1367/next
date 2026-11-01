@@ -2188,6 +2188,26 @@ img.apple-emoji {
   border-radius: 8px;
 }
 
+/* Arad restricted to Persian and Arabic script (letters, digits, ZWNJ). The
+   Aurora stack lists it first so Persian keeps Arad while Latin letters and
+   digits fall through to Inter or the system UI face, whose Latin glyphs are
+   much easier to read at small sizes than Arad's. */
+@font-face {
+  font-family: 'Arad Script';
+  src: url('/statics/fonts/Arad-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+}
+
+@font-face {
+  font-family: 'Arad Script';
+  src: url('/statics/fonts/Arad-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+}
+
 /* ---------- "Aurora" panel style ----------
    Picked per browser from the theme menu (rb-style). It only swaps colour
    tokens and paints the backdrop, so every component keeps its layout. The
@@ -2204,8 +2224,8 @@ img.apple-emoji {
   --rb-panel-border: #232b55;
   --rb-panel-border-strong: #313a6b;
   --rb-panel-text: #eef0ff;
-  --rb-panel-text-secondary: #b9c0e2;
-  --rb-panel-text-muted: #8a93bb;
+  --rb-panel-text-secondary: #c9cdea;
+  --rb-panel-text-muted: #a1a8cd;
   --rb-panel-row-hover: #151b3b;
   --rb-panel-row-selected: #121834;
   --rb-aurora-a: rgba(124, 92, 255, 0.40);
@@ -2229,8 +2249,8 @@ img.apple-emoji {
   --rb-panel-border: #dde1f2;
   --rb-panel-border-strong: #c6cce6;
   --rb-panel-text: #151933;
-  --rb-panel-text-secondary: #474f74;
-  --rb-panel-text-muted: #7880a3;
+  --rb-panel-text-secondary: #333a5c;
+  --rb-panel-text-muted: #596185;
   --rb-panel-row-hover: #f1f2fc;
   --rb-panel-row-selected: #ffffff;
   --rb-aurora-a: rgba(124, 92, 255, 0.16);
@@ -2245,6 +2265,15 @@ img.apple-emoji {
 
 .rb-style-aurora .rb-app-shell main {
   background: transparent !important;
+}
+
+/* Chakra declares its font variables on [data-theme], which html and body
+   both carry, so the override needs the attribute too to win. */
+.rb-style-aurora,
+.rb-style-aurora[data-theme] {
+  --rb-font-stack: "Arad Script", "Inter", "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --chakra-fonts-body: var(--rb-font-stack);
+  --chakra-fonts-heading: var(--rb-font-stack);
 }
 
 .rb-style-aurora {
