@@ -60,6 +60,7 @@ const USER_ONLY_TEMPLATE: PermissionTemplate = {
 		[AdminSudoScope.Backups]: false,
 		[AdminSudoScope.Maintenance]: false,
 		[AdminSudoScope.PHPMyAdmin]: false,
+		[AdminSudoScope.ChangeConfig]: false,
 	},
 };
 
@@ -111,6 +112,7 @@ const SUDO_TEMPLATE: PermissionTemplate = {
 		[AdminSudoScope.Backups]: true,
 		[AdminSudoScope.Maintenance]: true,
 		[AdminSudoScope.PHPMyAdmin]: true,
+		[AdminSudoScope.ChangeConfig]: true,
 	},
 };
 
@@ -162,6 +164,7 @@ const FULL_ACCESS_TEMPLATE: PermissionTemplate = {
 		[AdminSudoScope.Backups]: true,
 		[AdminSudoScope.Maintenance]: true,
 		[AdminSudoScope.PHPMyAdmin]: true,
+		[AdminSudoScope.ChangeConfig]: true,
 	},
 };
 

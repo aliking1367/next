@@ -39,6 +39,10 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "Invalid request origin")
 			return
 		}
+		if configChangeBlocked(principal, r) {
+			writeError(w, http.StatusForbidden, "This account can restart and run tests, but cannot change settings")
+			return
+		}
 		ctx := context.WithValue(r.Context(), adminContextKey, principal)
 		if batchID := recentActionBatchID(r); batchID != "" {
 			ctx = context.WithValue(ctx, recentActionBatchContextKey, batchID)
@@ -157,6 +161,60 @@ func sudoScopeAllowed(scopes adminapp.SudoPermissionSettings, path string) bool 
 	default:
 		return false
 	}
+}
+
+// configPathPrefixes are the routes that change how traffic is served: Xray
+// config and inbounds, nodes, hosts and services.
+var configPathPrefixes = []string{
+	"/api/core", "/api/xray", "/api/inbounds", "/api/panel/xray",
+	"/api/node", "/api/nodes", "/api/hosts", "/api/v2/services",
+	"/xray", "/inbounds",
+}
+
+// supportPaths are the actions a support account may still run: restarts,
+// resyncs and tests, which bring a service back without changing its setup.
+var supportPaths = map[string]bool{
+	"/api/core/restart":                  true,
+	"/api/core/verify-protocols":         true,
+	"/api/panel/xray/testOutbound":       true,
+	"/api/panel/xray/testOutbounds":      true,
+	"/api/panel/xray/routeTest":          true,
+	"/api/hosts/certificate-fingerprint": true,
+	"/api/core/access/operators":         true,
+}
+
+var supportNodeActions = []string{"/reconnect", "/restart", "/sync", "/service/restart"}
+
+// configChangeBlocked reports whether a sudo admin without the change_config
+// permission is trying to change Xray, node, host or service setup. Reads
+// are always allowed, as are the actions in supportPaths and node restarts.
+func configChangeBlocked(principal adminPrincipal, r *http.Request) bool {
+	if principal.Role != string(adminapp.RoleSudo) || principal.Context.Admin.Permissions.Sudo.ChangeConfig {
+		return false
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	path := r.URL.Path
+	isConfig := false
+	for _, prefix := range configPathPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			isConfig = true
+			break
+		}
+	}
+	if !isConfig || supportPaths[path] {
+		return false
+	}
+	if strings.HasPrefix(path, "/api/node/") && r.Method == http.MethodPost {
+		for _, action := range supportNodeActions {
+			if strings.HasSuffix(path, action) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func bearerToken(r *http.Request) string {

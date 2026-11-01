@@ -2361,6 +2361,8 @@
 	"admins.sudo.backups": "عملیات پشتیبان‌گیری",
 	"admins.sudo.maintenance": "عملیات نگهداری",
 	"admins.sudo.phpmyadmin": "phpMyAdmin",
+	"admins.sudo.changeConfig": "تغییر تنظیمات Xray، نودها، هاست‌ها و سرویس‌ها",
+	"admins.sudo.changeConfigHint": "خاموش = حساب پشتیبان: همه‌چیز را می‌بیند، هسته و نود را ری‌استارت می‌کند و تست می‌گیرد، ولی نمی‌تواند تنظیمی را تغییر دهد.",
 	"admins.security.action": "سشن‌ها و 2FA",
 	"admins.security.title": "امنیت {{username}}",
 	"admins.security.remove2FA": "حذف 2FA",

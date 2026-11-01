@@ -66,6 +66,7 @@ export enum AdminSudoScope {
 	Backups = "backups",
 	Maintenance = "maintenance",
 	PHPMyAdmin = "phpmyadmin",
+	ChangeConfig = "change_config",
 }
 
 export type UserPermissionSettings = Record<UserPermissionToggle, boolean> & {

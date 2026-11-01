@@ -85,6 +85,10 @@ type SudoPermissionSettings struct {
 	Backups       bool `json:"backups"`
 	Maintenance   bool `json:"maintenance"`
 	PHPMyAdmin    bool `json:"phpmyadmin"`
+	// ChangeConfig lets a sudo admin change Xray, node, host and service
+	// setup. Without it the admin can still read all of it and restart the
+	// core or a node, resync, and run tests: a support account.
+	ChangeConfig bool `json:"change_config"`
 }
 
 type SectionPermissionSettings struct {

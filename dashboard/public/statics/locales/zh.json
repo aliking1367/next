@@ -917,5 +917,7 @@
 	"services.tools.countries": "Countries",
 	"services.tools.countriesHint": "One config per exit country",
 	"services.tools.cdnHostsHint": "Gives each node its own CDN address",
-	"services.tools.cdnAutoHint": "Keeps the Cloudflare records up to date"
+	"services.tools.cdnAutoHint": "Keeps the Cloudflare records up to date",
+	"admins.sudo.changeConfig": "Change Xray, node, host and service setup",
+	"admins.sudo.changeConfigHint": "Off: a support account. It can see everything, restart the core and nodes and run tests, but cannot change settings."
 }

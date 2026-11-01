@@ -137,6 +137,7 @@ const adminPermissionsSchema: z.ZodType<AdminPermissions> = z.object({
 		backups: z.boolean(),
 		maintenance: z.boolean(),
 		phpmyadmin: z.boolean(),
+		change_config: z.boolean(),
 	}),
 });
 

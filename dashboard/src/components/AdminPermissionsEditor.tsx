@@ -144,6 +144,7 @@ const sudoPermissionKeys: Array<{ key: AdminSudoScope; label: string }> = [
 	{ key: AdminSudoScope.Backups, label: "admins.sudo.backups" },
 	{ key: AdminSudoScope.Maintenance, label: "admins.sudo.maintenance" },
 	{ key: AdminSudoScope.PHPMyAdmin, label: "admins.sudo.phpmyadmin" },
+	{ key: AdminSudoScope.ChangeConfig, label: "admins.sudo.changeConfig" },
 ];
 
 type PermissionKeyMap = {
@@ -302,6 +303,9 @@ export const AdminPermissionsEditor = ({
 							</HStack>
 						))}
 					</SimpleGrid>
+					<Text fontSize="xs" color="panel.textMuted">
+						{t("admins.sudo.changeConfigHint")}
+					</Text>
 				</Stack>
 			)}
 			{!hideExtendedSections && (

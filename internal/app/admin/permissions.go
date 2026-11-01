@@ -114,7 +114,7 @@ func defaultSelfPermissions() map[string]bool {
 func allSudoPermissions() SudoPermissionSettings {
 	return SudoPermissionSettings{
 		Nodes: true, Xray: true, Settings: true, Subscriptions: true,
-		Backups: true, Maintenance: true, PHPMyAdmin: true,
+		Backups: true, Maintenance: true, PHPMyAdmin: true, ChangeConfig: true,
 	}
 }
 

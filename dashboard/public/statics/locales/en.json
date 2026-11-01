@@ -2375,6 +2375,8 @@
 	"admins.sudo.backups": "Backup operations",
 	"admins.sudo.maintenance": "Maintenance operations",
 	"admins.sudo.phpmyadmin": "phpMyAdmin",
+	"admins.sudo.changeConfig": "Change Xray, node, host and service setup",
+	"admins.sudo.changeConfigHint": "Off: a support account. It can see everything, restart the core and nodes and run tests, but cannot change settings.",
 	"admins.security.action": "Sessions and 2FA",
 	"admins.security.title": "Security for {{username}}",
 	"admins.security.remove2FA": "Remove 2FA",
