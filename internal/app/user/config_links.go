@@ -649,6 +649,7 @@ func configFormatVariables(item ConfigLinkUser) map[string]string {
 	now := time.Now().UTC()
 	dataLimit := "\u221e"
 	dataLeft := "\u221e"
+	dataBar := "\u221e"
 	if item.DataLimit != nil && *item.DataLimit > 0 {
 		dataLimit = formatBytes(*item.DataLimit)
 		remaining := *item.DataLimit - item.UsedTraffic
@@ -656,6 +657,7 @@ func configFormatVariables(item ConfigLinkUser) map[string]string {
 			remaining = 0
 		}
 		dataLeft = formatBytes(remaining)
+		dataBar = remainingBar(remaining, *item.DataLimit)
 	}
 
 	daysLeft := "\u221e"
@@ -713,6 +715,7 @@ func configFormatVariables(item ConfigLinkUser) map[string]string {
 		"DATA_USAGE":         formatBytes(item.UsedTraffic),
 		"DATA_LIMIT":         dataLimit,
 		"DATA_LEFT":          dataLeft,
+		"DATA_BAR":           dataBar,
 		"REMAINING_DATA":     dataLeft,
 		"DAYS_LEFT":          daysLeft,
 		"EXPIRE_DATE":        expireDate,
@@ -2655,4 +2658,28 @@ func splitAddressPort(address string) (string, int, bool) {
 		return "", 0, false
 	}
 	return host, port, true
+}
+
+// remainingBar draws the share of traffic left as ten squares, green while
+// plenty is left, then yellow and red, so the state reads at a glance in a
+// config list where a number alone is easy to skip.
+func remainingBar(remaining, limit int64) string {
+	if limit <= 0 {
+		return "\u221e"
+	}
+	filled := int((remaining*10 + limit - 1) / limit)
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > 10 {
+		filled = 10
+	}
+	block := "\U0001F7E9"
+	switch {
+	case filled <= 2:
+		block = "\U0001F7E5"
+	case filled <= 5:
+		block = "\U0001F7E8"
+	}
+	return strings.Repeat(block, filled) + strings.Repeat("\u2B1C", 10-filled)
 }

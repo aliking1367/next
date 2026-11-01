@@ -521,3 +521,24 @@ func stringFromMap(values map[string]any, key string) (string, bool) {
 		return fmt.Sprint(typed), true
 	}
 }
+
+// normalizeInfoRemarks keeps one remark per line, drops blank lines and caps
+// the list: each line becomes an entry in every user's app, so a stray paste
+// must not fill the list with dozens of fake configs.
+func normalizeInfoRemarks(value string) string {
+	lines := []string{}
+	for _, line := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if len([]rune(line)) > 120 {
+			line = string([]rune(line)[:120])
+		}
+		lines = append(lines, line)
+		if len(lines) == 6 {
+			break
+		}
+	}
+	return strings.Join(lines, "\n")
+}

@@ -170,7 +170,7 @@ func (s Service) RenderSubscription(ctx context.Context, req SubscriptionRenderR
 		return SubscriptionHTTPResponse{}, clientError(404, "Unsupported client type")
 	}
 	config.AutoCurrent = req.ClientType == "" && config.Format == "v2ray-json"
-	body, err := s.generateSubscriptionConfig(ctx, user, config, placeholderRemark)
+	body, err := s.generateSubscriptionConfig(ctx, user, config, placeholderRemark, subscriptionInfoLinks(user, settings, config.Format))
 	if err != nil {
 		return SubscriptionHTTPResponse{}, err
 	}
@@ -457,7 +457,7 @@ func (s Service) effectiveSettings(ctx context.Context, adminID, serviceID *int6
 	return applyServicePlaceholderPolicy(effectiveSubscriptionSettings(settings, admin), s.repo.servicePlaceholderPolicy(ctx, serviceID), admin.SubscriptionSettings, serviceID)
 }
 
-func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail, config SubscriptionClientConfig, placeholderRemark string) (string, error) {
+func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail, config SubscriptionClientConfig, placeholderRemark string, infoLinks []string) (string, error) {
 	connectable := ConfigLinksResponse{}
 	if placeholderRemark != "" {
 		connectable = ConfigLinksResponse{Links: []string{subscriptionPlaceholderLink(placeholderRemark, config.Format)}, Metadata: []ConfigLinkMetadata{{}}}
@@ -468,6 +468,12 @@ func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail
 		}
 		connectable = connectableConfigLinks(links)
 		connectable = appendExtraLinks(connectable, user.ExtraLinks)
+		if len(infoLinks) > 0 {
+			connectable = ConfigLinksResponse{
+				Links:    append(append([]string{}, infoLinks...), connectable.Links...),
+				Metadata: append(make([]ConfigLinkMetadata, len(infoLinks)), connectable.Metadata...),
+			}
+		}
 	}
 	raw := connectable.Links
 	switch config.Format {

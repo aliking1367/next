@@ -149,8 +149,8 @@ export interface NextBackupImportResponse {
 }
 
 export type ClientRoutingRule = {
-  pattern: string;
-  result: string;
+	pattern: string;
+	result: string;
 };
 
 export interface SubscriptionTemplateSettings {
@@ -177,6 +177,8 @@ export interface SubscriptionTemplateSettings {
 	client_routing_rules?: ClientRoutingRule[];
 	subscription_placeholder_enabled: boolean;
 	subscription_placeholder_remark: string;
+	subscription_info_enabled?: boolean;
+	subscription_info_remarks?: string;
 }
 
 export type SubscriptionTemplateSettingsUpdatePayload =

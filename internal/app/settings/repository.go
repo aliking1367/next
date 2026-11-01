@@ -195,6 +195,12 @@ func (r Repository) UpdateSubscriptionSettings(ctx context.Context, raw map[stri
 			add(key, normalizeSupportURL(rawStringDefault(value, "")))
 		case "subscription_profile_title", "subscription_update_interval":
 			add(key, strings.TrimSpace(rawStringDefault(value, "")))
+		case "subscription_placeholder_enabled", "subscription_info_enabled":
+			// The placeholder toggle used to be dropped here, so turning it on
+			// in the dashboard silently did nothing.
+			add(key, rawBoolDefault(value, false))
+		case "subscription_info_remarks":
+			add(key, normalizeInfoRemarks(rawStringDefault(value, "")))
 		case "subscription_placeholder_remark":
 			remark := strings.TrimSpace(rawStringDefault(value, ""))
 			if remark == "" {
@@ -474,13 +480,17 @@ COALESCE(subscription_backup_prefixes, '[]'),
 subscription_ports,
 COALESCE(client_routing_rules, '[]'),
 COALESCE(subscription_placeholder_enabled, 0),
-COALESCE(subscription_placeholder_remark, '')
+COALESCE(subscription_placeholder_remark, ''),
+COALESCE(subscription_info_enabled, 0),
+COALESCE(subscription_info_remarks, '')
 FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 	var result SubscriptionSettings
 	var customDir sql.NullString
 	var aliasesRaw, backupPrefixesRaw, portsRaw, clientRoutingRulesRaw sql.NullString
 	var placeholderEnabled sql.NullBool
 	var placeholderRemark sql.NullString
+	var infoEnabled sql.NullBool
+	var infoRemarks sql.NullString
 	if err := row.Scan(
 		&result.SubscriptionURLPrefix,
 		&result.SubscriptionProfileTitle,
@@ -505,6 +515,8 @@ FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 		&clientRoutingRulesRaw,
 		&placeholderEnabled,
 		&placeholderRemark,
+		&infoEnabled,
+		&infoRemarks,
 	); err != nil {
 		return SubscriptionSettings{}, err
 	}
@@ -515,6 +527,8 @@ FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 	if placeholderRemark.Valid {
 		result.SubscriptionPlaceholderRemark = placeholderRemark.String
 	}
+	result.SubscriptionInfoEnabled = infoEnabled.Valid && infoEnabled.Bool
+	result.SubscriptionInfoRemarks = infoRemarks.String
 	result.SubscriptionURLPrefix = normalizePrefix(result.SubscriptionURLPrefix)
 	result.SubscriptionSupportURL = normalizeSupportURL(result.SubscriptionSupportURL)
 	result.SubscriptionPath = normalizePath(result.SubscriptionPath)

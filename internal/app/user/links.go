@@ -99,6 +99,8 @@ func effectiveSubscriptionSettings(base SubscriptionSettings, admin AdminLinkSet
 		ClientRoutingRules:             append([]ClientRoutingRule{}, base.ClientRoutingRules...), // <--- این خط حتماً باید اضافه شود
 		SubscriptionPlaceholderEnabled: base.SubscriptionPlaceholderEnabled,
 		SubscriptionPlaceholderRemark:  firstNonEmptyString(base.SubscriptionPlaceholderRemark, "disabled"),
+		SubscriptionInfoEnabled:        base.SubscriptionInfoEnabled,
+		SubscriptionInfoRemarks:        base.SubscriptionInfoRemarks,
 		RawPanelSettings:               base.RawPanelSettings,
 		RawSubscriptionSettings:        base.RawSubscriptionSettings,
 	}
@@ -150,6 +152,12 @@ func effectiveSubscriptionSettings(base SubscriptionSettings, admin AdminLinkSet
 		case "subscription_placeholder_remark":
 			if text, ok := coerceString(value); ok && strings.TrimSpace(text) != "" {
 				effective.SubscriptionPlaceholderRemark = strings.TrimSpace(text)
+			}
+		case "subscription_info_enabled":
+			effective.SubscriptionInfoEnabled = truthy(value)
+		case "subscription_info_remarks":
+			if text, ok := coerceString(value); ok && strings.TrimSpace(text) != "" {
+				effective.SubscriptionInfoRemarks = text
 			}
 		}
 	}

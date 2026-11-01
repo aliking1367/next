@@ -72,6 +72,12 @@ type SubscriptionSettings struct {
 	ClientRoutingRules             []ClientRoutingRule `json:"client_routing_rules"`
 	SubscriptionPlaceholderEnabled bool                `json:"subscription_placeholder_enabled"`
 	SubscriptionPlaceholderRemark  string              `json:"subscription_placeholder_remark"`
+	// SubscriptionInfoEnabled puts informational entries at the top of every
+	// active user's subscription; SubscriptionInfoRemarks holds one remark
+	// template per line ({USERNAME}, {DATA_LEFT}, {DAYS_LEFT}, ...). Empty
+	// uses the built-in lines.
+	SubscriptionInfoEnabled bool   `json:"subscription_info_enabled"`
+	SubscriptionInfoRemarks string `json:"subscription_info_remarks"`
 }
 
 type SubscriptionSettingsUpdate struct {
@@ -98,6 +104,8 @@ type SubscriptionSettingsUpdate struct {
 	ClientRoutingRules             *[]ClientRoutingRule `json:"client_routing_rules,omitempty"`
 	SubscriptionPlaceholderEnabled *bool                `json:"subscription_placeholder_enabled,omitempty"`
 	SubscriptionPlaceholderRemark  *string              `json:"subscription_placeholder_remark,omitempty"`
+	SubscriptionInfoEnabled        *bool                `json:"subscription_info_enabled,omitempty"`
+	SubscriptionInfoRemarks        *string              `json:"subscription_info_remarks,omitempty"`
 }
 
 type AdminSubscriptionSettings struct {
