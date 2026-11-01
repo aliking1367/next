@@ -50,6 +50,12 @@ import {
 	UserGroupIcon,
 	WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
+import {
+	BriefcaseIcon as BriefcaseSolidIcon,
+	HomeIcon as HomeSolidIcon,
+	UserCircleIcon as UserCircleSolidIcon,
+	UserGroupIcon as UserGroupSolidIcon,
+} from "@heroicons/react/24/solid";
 import { motion } from "framer-motion";
 import useGetUser from "hooks/useGetUser";
 import {
@@ -93,6 +99,26 @@ const HomeIcon = chakra(HeroHomeIcon, iconProps);
 const UsersIcon = chakra(UserGroupIcon, iconProps);
 const AdminsIcon = chakra(BriefcaseIcon, iconProps);
 const SettingsIcon = chakra(Cog6ToothIcon, iconProps);
+// The phone dock draws the open tab with a filled icon, one size up.
+const dockIconProps = { baseStyle: { w: 5, h: 5 } };
+const DOCK_ICONS: Record<string, [ElementType, ElementType]> = {
+	dashboard: [
+		chakra(HeroHomeIcon, dockIconProps),
+		chakra(HomeSolidIcon, dockIconProps),
+	],
+	users: [
+		chakra(UserGroupIcon, dockIconProps),
+		chakra(UserGroupSolidIcon, dockIconProps),
+	],
+	admins: [
+		chakra(BriefcaseIcon, dockIconProps),
+		chakra(BriefcaseSolidIcon, dockIconProps),
+	],
+	myaccount: [
+		chakra(UserCircleIcon, dockIconProps),
+		chakra(UserCircleSolidIcon, dockIconProps),
+	],
+};
 const MasterSettingsIcon = chakra(Cog8ToothIcon, iconProps);
 const XraySettingsIcon = chakra(WrenchScrewdriverIcon, iconProps);
 const ServicesIcon = chakra(Squares2X2Icon, iconProps);
@@ -788,6 +814,7 @@ export function AppLayout() {
 				<ThemeSelector minimal trigger="icon" />
 			</Box>
 			<Flex
+				className="rb-app-shell"
 				minH="100vh"
 				maxH="100vh"
 				overflow="hidden"
@@ -872,12 +899,21 @@ export function AppLayout() {
 									flexShrink={0}
 									onClick={() => navigate("/")}
 									_hover={{ color: "panel.text" }}
+									display={{
+										base: locationTrail.length > 1 ? "none" : "inline-flex",
+										md: "inline-flex",
+									}}
 								>
 									dashboard
 								</Button>
 								{locationTrail.length > 1 && (
 									<>
-										<Text color="panel.textSecondary">→</Text>
+										<Text
+											color="panel.textSecondary"
+											display={{ base: "none", md: "block" }}
+										>
+											→
+										</Text>
 										<Button
 											variant="link"
 											fontSize={{ base: "xs", md: "sm" }}
@@ -906,8 +942,28 @@ export function AppLayout() {
 							</HStack>
 						</HStack>
 						<HStack spacing={2} alignItems="center" flexShrink={0}>
-							<HeaderCalendar />
-							<GitHubStars />
+							{/* Calendar and stars share one capsule, so the header reads as
+							    two controls (tools, account) instead of a row of buttons. */}
+							<HStack
+								className="rb-header-capsule"
+								spacing={1}
+								p="2px"
+								borderWidth="1px"
+								borderColor={shellBorder}
+								borderRadius="full"
+								bg={headerButtonBg}
+								sx={{
+									"& > *": { borderRadius: "full" },
+									"& button, & a": {
+										borderWidth: "0 !important",
+										bg: "transparent !important",
+										borderRadius: "full !important",
+									},
+								}}
+							>
+								<HeaderCalendar />
+								<GitHubStars />
+							</HStack>
 
 							{/* User Menu */}
 							{getUserIsSuccess && userData.username && (
@@ -1255,7 +1311,7 @@ export function AppLayout() {
 								maxW="min(520px, 100%)"
 								mx="auto"
 								position="relative"
-								overflow="hidden"
+								overflow="visible"
 							>
 								<HStack
 									justify="space-between"
@@ -1279,19 +1335,60 @@ export function AppLayout() {
 											isSettingsItem && activeSettingsItem?.label
 												? activeSettingsItem.label
 												: item.label;
-										const icon =
-											item.key === "dashboard" ? (
-												<HomeIcon />
-											) : item.key === "users" ? (
-												<UsersIcon />
-											) : item.key === "admins" ? (
-												<AdminsIcon />
-											) : item.key === "settings" ? (
-												<SettingsNavIcon />
-											) : (
-												<UserIcon />
-											);
-										const navContent = (
+										const dockIcons = DOCK_ICONS[item.key];
+										const DockIcon = dockIcons
+											? dockIcons[isSelected || isActive ? 1 : 0]
+											: null;
+										const icon = DockIcon ? (
+											<DockIcon />
+										) : (
+											<SettingsNavIcon w={5} h={5} />
+										);
+										const isHub = item.key === "dashboard";
+										// Dashboard is the hub of the dock: a raised accent disc in
+										// the middle, the one bold element of the phone layout.
+										const navContent = isHub ? (
+											<Box
+												w="full"
+												display="flex"
+												flexDirection="column"
+												alignItems="center"
+												minW="0"
+											>
+												<Box
+													className="rb-dock-hub"
+													data-active={
+														isSelected || isActive ? "true" : "false"
+													}
+													w="50px"
+													h="50px"
+													mt="-26px"
+													mb="2px"
+													borderRadius="full"
+													display="grid"
+													placeItems="center"
+													color="white"
+													bg="primary.500"
+													bgImage="var(--rb-solid-sheen)"
+													borderWidth="4px"
+													borderColor={menuBg}
+													boxShadow="0 10px 22px -8px var(--rb-panel-accent)"
+												>
+													{icon}
+												</Box>
+												<Text
+													fontSize="10px"
+													lineHeight="1.1"
+													fontWeight="semibold"
+													textAlign="center"
+													noOfLines={1}
+													maxW="100%"
+													px="1"
+												>
+													{item.label}
+												</Text>
+											</Box>
+										) : (
 											<Box
 												w="full"
 												display="flex"
@@ -1309,7 +1406,7 @@ export function AppLayout() {
 													maxW="100%"
 													w="fit-content"
 												>
-													{isSelected && (
+													{isSelected && !isHub && (
 														<motion.div
 															layoutId="mobile-bottom-nav-active-pill"
 															transition={{

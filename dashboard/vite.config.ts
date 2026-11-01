@@ -47,6 +47,9 @@ const getApiProxyConfig = (baseAPI?: string) => {
 			options: {
 				target,
 				changeOrigin: true,
+				// Passes the dev server's host as X-Forwarded-Host, so the API's
+				// same-origin check accepts the login form behind this proxy.
+				xfwd: true,
 				secure: true,
 				rewrite,
 			},

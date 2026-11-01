@@ -530,6 +530,7 @@
 	"nodes.toggleAvailability": "Toggle node availability",
 	"nodes.totalLabel": "Total",
 	"nodes.totalTraffic": "Total",
+	"nodes.summaryTraffic": "Traffic",
 	"nodes.trafficOverviewTooltip": "Total usage per node over the chosen range.",
 	"nodes.unknownNode": "Unknown",
 	"nodes.updateAllNodesCore": "Update core on all nodes",
@@ -908,5 +909,12 @@
 	"nodes.nodeUpdateAvailable": "Доступно обновление",
 	"settings.telegram.backupScope": "Область резервного копирования",
 	"total": "Всего",
-	"loadAverage": "Средняя загрузка"
+	"loadAverage": "Средняя загрузка",
+	"services.tools": "Tools",
+	"services.tools.verifyHint": "Tests every config from the server",
+	"services.tools.autoConfigureHint": "Builds the best protocols for your nodes",
+	"services.tools.countries": "Countries",
+	"services.tools.countriesHint": "One config per exit country",
+	"services.tools.cdnHostsHint": "Gives each node its own CDN address",
+	"services.tools.cdnAutoHint": "Keeps the Cloudflare records up to date"
 }

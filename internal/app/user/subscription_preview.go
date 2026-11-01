@@ -27,9 +27,9 @@ func RenderSubscriptionPagePreview(content string) (string, error) {
 	user.SubscriptionURLs.Set("key@backup.example.net", "https://backup.example.net/sub/demo")
 	user.SubscriptionURLs.Set("key@7f3a9c1e.example.com", "https://7f3a9c1e.example.com/sub/demo")
 	links := []string{
-		"vless://00000000-0000-4000-8000-000000000000@203.0.113.10:443?security=reality&type=tcp&flow=xtls-rprx-vision#Germany%20Vision",
-		"vless://00000000-0000-4000-8000-000000000000@203.0.113.10:8443?security=reality&type=xhttp#Germany%20XHTTP",
-		"hysteria2://demo@203.0.113.20:45927/?alpn=h3#Netherlands%20Hysteria2",
+		"vless://00000000-0000-4000-8000-000000000000@203.0.113.10:443?security=reality&type=tcp&flow=xtls-rprx-vision#%F0%9F%87%A9%F0%9F%87%AA%20Germany%20Vision",
+		"vless://00000000-0000-4000-8000-000000000000@203.0.113.10:8443?security=reality&type=xhttp#%F0%9F%87%A9%F0%9F%87%AA%20Germany%20XHTTP",
+		"hysteria2://demo@203.0.113.20:45927/?alpn=h3#%F0%9F%87%B3%F0%9F%87%B1%20Netherlands%20Hysteria2",
 		"trojan://demo@cdn.example.com:2096?security=tls&type=ws#CDN%20Trojan",
 	}
 	vpn := map[string]any{

@@ -401,6 +401,22 @@ const sharedThemeConfig = {
 		},
 		Button: {
 			variants: {
+				// Aurora style paints solid primary buttons with a gradient
+				// through --rb-solid-sheen and white text; the classic style
+				// leaves both variables unset, so the defaults apply.
+				solid: (props: StyleFunctionProps) =>
+					props.colorScheme === "primary"
+						? {
+								// No fallback inside var(): Chakra reads a comma here as gradient
+								// stops. index.scss sets the variable to none for the classic style.
+								bgImage: "var(--rb-solid-sheen)",
+								color: mode(
+									"var(--rb-solid-ink, white)",
+									"var(--rb-solid-ink, var(--chakra-colors-gray-800))",
+								)(props),
+								_hover: { filter: "var(--rb-solid-hover-filter, none)" },
+							}
+						: {},
 				outline: (props: StyleFunctionProps) => ({
 					borderColor: mode("blackAlpha.300", "whiteAlpha.300")(props),
 					_hover: {

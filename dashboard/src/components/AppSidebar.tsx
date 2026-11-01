@@ -475,7 +475,7 @@ export const AppSidebar: FC<AppSidebarProps> = ({
 							borderRadius="md"
 							bg={sidebarPanelBg}
 						>
-							<LogoIcon src={logoUrl} alt="Next" />
+							<LogoIcon className="rb-logo" src={logoUrl} alt="Next" />
 							<Text fontSize="lg" fontWeight="bold" color={logoTextColor}>
 								{t("menu")}
 							</Text>
@@ -491,7 +491,7 @@ export const AppSidebar: FC<AppSidebarProps> = ({
 							py={2}
 						>
 							<Tooltip label="Next" placement="right" hasArrow>
-								<LogoIcon src={logoUrl} alt="Next" />
+								<LogoIcon className="rb-logo" src={logoUrl} alt="Next" />
 							</Tooltip>
 						</HStack>
 					)}

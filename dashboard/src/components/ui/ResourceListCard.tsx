@@ -47,6 +47,7 @@ export const ResourceListCard: FC<ResourceListCardProps> = ({
 
 	return (
 		<Stack
+			className="rb-list-card"
 			spacing={4}
 			w="full"
 			borderWidth="1px"

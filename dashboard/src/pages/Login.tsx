@@ -591,7 +591,7 @@ export const Login: FC = () => {
 											animation: `${logoPulse} 2.6s ease-in-out infinite`,
 										}}
 									>
-										<LogoIcon alt={t("menu")} src={logoUrl} />
+										<LogoIcon className="rb-logo" alt={t("menu")} src={logoUrl} />
 									</Box>
 									<Text fontSize="lg" fontWeight="800" noOfLines={1}>
 										Next

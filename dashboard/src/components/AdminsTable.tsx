@@ -854,8 +854,8 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 				header: t("admins.details.activeLabel"),
 				sortable: true,
 				priority: "high",
-				width: "92px",
-				maxWidth: "104px",
+				width: "108px",
+				maxWidth: "124px",
 				headerAlign: "center",
 				mobilePriority: 3,
 				mobileMetaLabel: t("admins.details.activeLabel"),
@@ -868,6 +868,14 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 							sx={{ unicodeBidi: "isolate" }}
 						>
 							{formatCount(admin.active_users ?? 0, locale)}
+							{/* Active out of all the admin's users, so a full list of
+							    expired users does not read as an idle admin. */}
+							{admin.users_count != null && (
+								<Text as="span" color="panel.textMuted" fontWeight="normal">
+									{" / "}
+									{formatCount(admin.users_count, locale)}
+								</Text>
+							)}
 						</Text>
 					);
 				},

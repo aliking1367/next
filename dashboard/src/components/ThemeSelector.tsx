@@ -38,8 +38,10 @@ const THEME_KEY = "rb-theme";
 const CHAKRA_THEME_KEY = "chakra-ui-color-mode";
 const ACCENT_KEY = "rb-accent";
 const CUSTOM_THEMES_KEY = "rb-custom-themes";
+const STYLE_KEY = "rb-style";
 
 type ThemeMode = "dark" | "light";
+type PanelStyle = "classic" | "aurora";
 
 type AccentOption = {
 	key: string;
@@ -97,6 +99,25 @@ const ACCENT_OPTIONS: AccentOption[] = [
 	{ key: "purple", label: "Purple", color: "#7c3aed", hover: "#8b5cf6" },
 	{ key: "orange", label: "Orange", color: "#ea580c", hover: "#f97316" },
 	{ key: "indigo", label: "Indigo", color: "#6366f1", hover: "#7f82f4" },
+	{ key: "aurora", label: "Aurora", color: "#7c5cff", hover: "#8f74ff" },
+];
+
+const STYLE_OPTIONS: Array<{
+	key: PanelStyle;
+	label: string;
+	preview: string;
+}> = [
+	{
+		key: "classic",
+		label: "Classic",
+		preview: "linear-gradient(135deg, #2b2b2b, #111111)",
+	},
+	{
+		key: "aurora",
+		label: "Aurora",
+		preview:
+			"radial-gradient(circle at 15% 10%, #7c5cff 0, transparent 55%), radial-gradient(circle at 95% 20%, #22d3ee 0, transparent 50%), radial-gradient(circle at 60% 120%, #f472b6 0, transparent 55%), #0a0e22",
+	},
 ];
 
 const THEME_OPTIONS: Array<{
@@ -234,6 +255,23 @@ const getStoredAccent = () => {
 	}
 };
 
+export const normalizePanelStyle = (value?: string | null): PanelStyle =>
+	value === "aurora" ? "aurora" : "classic";
+
+const getStoredStyle = (): PanelStyle => {
+	try {
+		return normalizePanelStyle(localStorage.getItem(STYLE_KEY));
+	} catch {
+		return "classic";
+	}
+};
+
+export const applyPanelStyle = (style: PanelStyle) => {
+	[document.documentElement, document.body].forEach((target) => {
+		target?.classList.toggle("rb-style-aurora", style === "aurora");
+	});
+};
+
 const applyAccent = (accentKey: string) => {
 	const accent =
 		ACCENT_OPTIONS.find((option) => option.key === accentKey) ??
@@ -244,6 +282,13 @@ const applyAccent = (accentKey: string) => {
 	Object.entries(generatePalette(accent.color)).forEach(([key, value]) => {
 		root.style.setProperty(key, value);
 	});
+};
+
+// Applies the stored style and accent before the first paint, so pages that
+// render no theme menu (the login page) use them too.
+export const applyStoredAppearance = () => {
+	applyPanelStyle(getStoredStyle());
+	applyAccent(getStoredAccent());
 };
 
 const applyThemeMode = (theme: ThemeMode) => {
@@ -282,6 +327,7 @@ export const ThemeSelector: FC<ThemeSelectorProps> = ({
 	const themeMenu = useDisclosure();
 	const activeTheme = normalizeTheme(colorMode);
 	const [activeAccent, setActiveAccent] = useState(getStoredAccent);
+	const [activeStyle, setActiveStyle] = useState(getStoredStyle);
 	const menuBg = useColorModeValue("panel.surface", "panel.surface");
 	const menuBorder = useColorModeValue("panel.border", "panel.border");
 	const menuHover = useColorModeValue("panel.elevated", "panel.elevated");
@@ -333,6 +379,22 @@ export const ThemeSelector: FC<ThemeSelectorProps> = ({
 			localStorage.setItem(ACCENT_KEY, activeAccent);
 		} catch {}
 	}, [activeAccent]);
+
+	useEffect(() => {
+		applyPanelStyle(activeStyle);
+		try {
+			localStorage.setItem(STYLE_KEY, activeStyle);
+		} catch {}
+	}, [activeStyle]);
+
+	// Each style brings its own accent, unless the admin picked another one.
+	const selectStyle = (style: PanelStyle) => {
+		setActiveStyle(style);
+		if (style === "aurora" && activeAccent === "crimson")
+			setActiveAccent("aurora");
+		if (style === "classic" && activeAccent === "aurora")
+			setActiveAccent("crimson");
+	};
 
 	const selectTheme = (theme: ThemeMode) => {
 		if (theme !== activeTheme) setColorMode(theme);
@@ -421,6 +483,62 @@ export const ThemeSelector: FC<ThemeSelectorProps> = ({
 					</SimpleGrid>
 				</Box>
 
+				<Box>
+					<Text
+						fontSize="xs"
+						fontWeight="700"
+						color={secondaryText}
+						textTransform="uppercase"
+						mb={2}
+					>
+						{t("theme.style")}
+					</Text>
+					<SimpleGrid columns={2} spacing={2}>
+						{STYLE_OPTIONS.map((style) => {
+							const selected = activeStyle === style.key;
+							return (
+								<Button
+									key={style.key}
+									variant="outline"
+									h="64px"
+									p={1.5}
+									borderRadius="10px"
+									borderColor={selected ? "panel.accent" : "panel.border"}
+									borderWidth={selected ? "2px" : "1px"}
+									bg="transparent"
+									_hover={{ borderColor: "panel.accent" }}
+									onClick={() => selectStyle(style.key)}
+									position="relative"
+								>
+									<Box
+										w="full"
+										h="full"
+										borderRadius="7px"
+										bg={style.preview}
+										display="flex"
+										alignItems="flex-end"
+										p={1.5}
+									>
+										<Text fontSize="xs" fontWeight="700" color="white">
+											{t(`theme.style.${style.key}`, style.label)}
+										</Text>
+									</Box>
+									{selected ? (
+										<Box
+											position="absolute"
+											top="2"
+											insetInlineEnd="2"
+											color="white"
+										>
+											<CheckIconChakra />
+										</Box>
+									) : null}
+								</Button>
+							);
+						})}
+					</SimpleGrid>
+				</Box>
+
 				{!minimal ? <MenuDivider borderColor={menuBorder} /> : null}
 
 				<Box>
@@ -433,7 +551,7 @@ export const ThemeSelector: FC<ThemeSelectorProps> = ({
 					>
 						{t("theme.accent")}
 					</Text>
-					<SimpleGrid columns={{ base: 5 }} spacing={2}>
+					<SimpleGrid columns={{ base: 7 }} spacing={2}>
 						{ACCENT_OPTIONS.map((accent) => {
 							const selected = activeAccent === accent.key;
 							return (

@@ -1744,6 +1744,12 @@ export const NodesPage: FC = () => {
 			total: items.length,
 			connected: items.filter((node) => node.status === "connected").length,
 			disabled: items.filter((node) => node.status === "disabled").length,
+			traffic: items.reduce((sum, node) => sum + getNodeUsage(node), 0),
+			upload: items.reduce((sum, node) => sum + (node.upload_speed ?? 0), 0),
+			download: items.reduce(
+				(sum, node) => sum + (node.download_speed ?? 0),
+				0,
+			),
 		};
 	}, [nodes]);
 
@@ -2695,6 +2701,15 @@ export const NodesPage: FC = () => {
 							</Tag>
 							<Tag size="sm" colorScheme="gray" variant="subtle">
 								{t("nodes.disabled")}: {nodeSummary.disabled}
+							</Tag>
+							{/* Totals are summed from the node rows already on screen. */}
+							<Tag size="sm" colorScheme="blue" variant="subtle">
+								{t("nodes.summaryTraffic")}:{" "}
+								{formatBytes(nodeSummary.traffic, 2)}
+							</Tag>
+							<Tag size="sm" colorScheme="purple" variant="subtle" dir="ltr">
+								↑ {formatNodeSpeed(nodeSummary.upload)} · ↓{" "}
+								{formatNodeSpeed(nodeSummary.download)}
 							</Tag>
 						</HStack>
 					</VStack>

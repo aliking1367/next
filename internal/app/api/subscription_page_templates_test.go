@@ -31,7 +31,7 @@ func TestSubscriptionPageTemplateGalleryListsAndPreviews(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"subscription/index.html": false, "subscription/midnight.html": false, "subscription/pearl.html": false, "subscription/ember.html": false}
+	want := map[string]bool{"subscription/index.html": false, "subscription/midnight.html": false, "subscription/pearl.html": false, "subscription/ember.html": false, "subscription/aurora.html": false}
 	for _, name := range list.Templates {
 		if _, ok := want[name]; ok {
 			want[name] = true

@@ -6,6 +6,7 @@ import RelativeTime from "dayjs/plugin/relativeTime";
 import Timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
 import "locales/i18n";
+import { applyStoredAppearance } from "components/ThemeSelector";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClientProvider } from "react-query";
@@ -59,6 +60,8 @@ const applyInitialThemeMode = (mode: ThemeMode) => {
 };
 
 applyInitialThemeMode(getInitialThemeMode());
+
+applyStoredAppearance();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 	<React.StrictMode>

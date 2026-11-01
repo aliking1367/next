@@ -12,9 +12,14 @@ import {
 	FormLabel,
 	HStack,
 	IconButton,
+	Menu,
+	MenuButton,
+	MenuItem,
+	MenuList,
 	Modal,
 	ModalCloseButton,
 	ModalOverlay,
+	Portal,
 	Radio,
 	RadioGroup,
 	SimpleGrid,
@@ -37,10 +42,17 @@ import {
 	ArrowDownIcon,
 	ArrowPathIcon,
 	ArrowUpIcon,
+	ChevronDownIcon,
+	CloudIcon,
 	EyeIcon,
+	GlobeAltIcon,
+	MapPinIcon,
 	PencilSquareIcon,
 	PlusIcon,
+	SignalIcon,
+	SparklesIcon,
 	TrashIcon,
+	WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { AppleEmojiText } from "components/common/AppleEmojiText";
 import { PanelSelect as Select } from "components/common/PanelSelect";
@@ -2165,71 +2177,102 @@ const ServicesPage: FC = () => {
 				title={t("services.listHeader")}
 				summaryItems={serviceSummaryItems}
 				actions={
-					<HStack spacing={2}>
+					<HStack spacing={2} w={{ base: "full", xl: "auto" }}>
 						{isSudoOrAbove && (
-							<Button
-								variant="ghost"
-								onClick={handleVerifyProtocols}
-								isLoading={isVerifying}
-								size="sm"
-								h="36px"
-								px={3}
-								borderRadius="4px"
-							>
-								{t("services.verifyProtocols.button")}
-							</Button>
-						)}
-						{isSudoOrAbove && (
-							<Button
-								variant="outline"
-								colorScheme="primary"
-								onClick={openAutoConfigure}
-								size="sm"
-								h="36px"
-								px={3}
-								borderRadius="4px"
-							>
-								{t("services.autoConfigure.button")}
-							</Button>
-						)}
-						{isSudoOrAbove && (
-							<Button
-								variant="outline"
-								colorScheme="primary"
-								onClick={cdnHostsDisclosure.onOpen}
-								size="sm"
-								h="36px"
-								px={3}
-								borderRadius="4px"
-							>
-								{t("services.cdnHosts.open")}
-							</Button>
-						)}
-						{isSudoOrAbove && (
-							<Button
-								variant="outline"
-								colorScheme="primary"
-								onClick={tsinDisclosure.onOpen}
-								size="sm"
-								h="36px"
-								px={3}
-								borderRadius="4px"
-							>
-								T.Sin
-							</Button>
-						)}
-						{isSudoOrAbove && (
-							<Button
-								variant="outline"
-								colorScheme="primary"
-								onClick={openCdnAutomation}
-								size="sm"
-								h="36px"
-								px={3}
-								borderRadius="4px"
-							>
-								{t("services.cdnAuto.open")}
-							</Button>
+							// The integrations live in one menu so the header stays
+							// two buttons wide on a phone instead of wrapping into a
+							// wall of long labels.
+							<Menu placement="bottom-end" isLazy>
+								<MenuButton
+									as={Button}
+									variant="outline"
+									colorScheme="primary"
+									leftIcon={<WrenchScrewdriverIcon width={18} />}
+									rightIcon={<ChevronDownIcon width={14} />}
+									isLoading={isVerifying}
+									size="sm"
+									h="36px"
+									px={3}
+									borderRadius="4px"
+									flex={{ base: 1, xl: "none" }}
+								>
+									{t("services.tools")}
+								</MenuButton>
+								<Portal>
+									<MenuList
+										minW="260px"
+										maxW="calc(100vw - 32px)"
+										bg="panel.surface"
+										borderColor="panel.border"
+										zIndex={1500}
+										py={1}
+									>
+										{[
+											{
+												key: "verify",
+												icon: SignalIcon,
+												label: t("services.verifyProtocols.button"),
+												hint: t("services.tools.verifyHint"),
+												onClick: handleVerifyProtocols,
+											},
+											{
+												key: "auto",
+												icon: SparklesIcon,
+												label: t("services.autoConfigure.button"),
+												hint: t("services.tools.autoConfigureHint"),
+												onClick: openAutoConfigure,
+											},
+											{
+												key: "countries",
+												icon: MapPinIcon,
+												label: t("services.tools.countries"),
+												hint: t("services.tools.countriesHint"),
+												onClick: tsinDisclosure.onOpen,
+											},
+											{
+												key: "cdnHosts",
+												icon: GlobeAltIcon,
+												label: t("services.cdnHosts.open"),
+												hint: t("services.tools.cdnHostsHint"),
+												onClick: cdnHostsDisclosure.onOpen,
+											},
+											{
+												key: "cdnAuto",
+												icon: CloudIcon,
+												label: t("services.cdnAuto.open"),
+												hint: t("services.tools.cdnAutoHint"),
+												onClick: openCdnAutomation,
+											},
+										].map((item) => (
+											<MenuItem
+												key={item.key}
+												onClick={() => void item.onClick()}
+												bg="transparent"
+												_hover={{ bg: "panel.elevated" }}
+												_focus={{ bg: "panel.elevated" }}
+												py={2.5}
+												alignItems="flex-start"
+												icon={
+													<Box
+														as={item.icon}
+														w="18px"
+														h="18px"
+														mt="2px"
+														color="primary.400"
+													/>
+												}
+											>
+												<Text fontSize="sm" fontWeight="semibold">
+													{item.label}
+												</Text>
+												<Text fontSize="xs" color="panel.textMuted" noOfLines={2}>
+													{item.hint}
+												</Text>
+											</MenuItem>
+										))}
+									</MenuList>
+								</Portal>
+							</Menu>
 						)}
 						<Button
 							leftIcon={<PlusIcon width={18} />}
@@ -2239,6 +2282,7 @@ const ServicesPage: FC = () => {
 							h="36px"
 							px={3}
 							borderRadius="4px"
+							flex={{ base: 1, xl: "none" }}
 						>
 							{t("services.addService")}
 						</Button>

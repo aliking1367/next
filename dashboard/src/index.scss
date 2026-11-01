@@ -41,6 +41,7 @@
   --rb-panel-row-hover: #1b1b1b;
   --rb-panel-row-selected: #181818;
   --rb-sidebar-offset: 0px;
+  --rb-solid-sheen: none;
   --primary-50: #ffe6ed;
   --primary-100: #ffb8c9;
   --primary-200: #ff88a5;
@@ -2185,4 +2186,143 @@ img.apple-emoji {
 /* skeleton loading rows: match the rounded look */
 .rb-users-section .chakra-skeleton {
   border-radius: 8px;
+}
+
+/* ---------- "Aurora" panel style ----------
+   Picked per browser from the theme menu (rb-style). It only swaps colour
+   tokens and paints the backdrop, so every component keeps its layout. The
+   aurora is plain gradients on one fixed layer: no blur filters, cheap on
+   phones. */
+.rb-style-aurora.rb-theme-dark,
+.rb-style-aurora .rb-theme-dark,
+.rb-style-aurora.chakra-ui-dark {
+  --rb-panel-bg: #070a1a;
+  --rb-panel-main: #0a0e22;
+  --rb-panel-sidebar: #0f1430;
+  --rb-panel-surface: #121834;
+  --rb-panel-elevated: #1a2145;
+  --rb-panel-border: #232b55;
+  --rb-panel-border-strong: #313a6b;
+  --rb-panel-text: #eef0ff;
+  --rb-panel-text-secondary: #b9c0e2;
+  --rb-panel-text-muted: #8a93bb;
+  --rb-panel-row-hover: #151b3b;
+  --rb-panel-row-selected: #121834;
+  --rb-aurora-a: rgba(124, 92, 255, 0.40);
+  --rb-aurora-b: rgba(34, 211, 238, 0.22);
+  --rb-aurora-c: rgba(244, 114, 182, 0.18);
+  /* Older components still read these. */
+  --bg-light: var(--rb-panel-bg);
+  --bg-dark: var(--rb-panel-bg);
+  --surface-light: var(--rb-panel-surface);
+  --surface-dark: var(--rb-panel-surface);
+}
+
+.rb-style-aurora.rb-theme-light,
+.rb-style-aurora .rb-theme-light,
+.rb-style-aurora.chakra-ui-light {
+  --rb-panel-bg: #f3f4fb;
+  --rb-panel-main: #f6f7fd;
+  --rb-panel-sidebar: #ffffff;
+  --rb-panel-surface: #ffffff;
+  --rb-panel-elevated: #eef0fb;
+  --rb-panel-border: #dde1f2;
+  --rb-panel-border-strong: #c6cce6;
+  --rb-panel-text: #151933;
+  --rb-panel-text-secondary: #474f74;
+  --rb-panel-text-muted: #7880a3;
+  --rb-panel-row-hover: #f1f2fc;
+  --rb-panel-row-selected: #ffffff;
+  --rb-aurora-a: rgba(124, 92, 255, 0.16);
+  --rb-aurora-b: rgba(34, 211, 238, 0.12);
+  --rb-aurora-c: rgba(244, 114, 182, 0.08);
+  /* Older components still read these. */
+  --bg-light: var(--rb-panel-bg);
+  --bg-dark: var(--rb-panel-bg);
+  --surface-light: var(--rb-panel-surface);
+  --surface-dark: var(--rb-panel-surface);
+}
+
+.rb-style-aurora .rb-app-shell main {
+  background: transparent !important;
+}
+
+.rb-style-aurora {
+  --rb-solid-ink: #ffffff;
+  --rb-solid-sheen: linear-gradient(135deg, var(--primary-400) 0%, var(--primary-500) 45%, #3fb8e8 130%);
+  --rb-solid-hover-filter: brightness(1.08);
+}
+
+.rb-style-aurora .rb-app-shell {
+  background:
+    radial-gradient(900px 520px at 12% -8%, var(--rb-aurora-a), transparent 70%),
+    radial-gradient(760px 480px at 100% 0%, var(--rb-aurora-b), transparent 70%),
+    radial-gradient(900px 600px at 60% 110%, var(--rb-aurora-c), transparent 70%),
+    var(--rb-panel-bg) !important;
+  background-attachment: fixed;
+}
+
+.rb-style-aurora .rb-list-card {
+  border-radius: 20px !important;
+}
+
+
+/* ---------- Phone dialogs as bottom sheets ----------
+   Dialogs rise from the bottom with a grab handle and stop below the top
+   edge, so the page behind stays visible. useSheetDrag lets the handle drag
+   them closed. Confirm dialogs keep their centred card. */
+@media (max-width: 768px) {
+  .chakra-modal__content-container:not(:has(.rb-confirm-dialog-content)) {
+    align-items: flex-end !important;
+  }
+
+  .chakra-modal__content:not(.rb-confirm-dialog-content) {
+    height: auto !important;
+    max-height: calc(var(--rb-dialog-viewport-height) - 2.5rem) !important;
+    border-radius: 22px 22px 0 0 !important;
+    border-bottom-width: 0 !important;
+    padding-top: 14px;
+    animation: rb-sheet-up 260ms var(--rb-ease-out) backwards;
+    touch-action: pan-y;
+  }
+
+  .chakra-modal__content:not(.rb-confirm-dialog-content)::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: 40px;
+    height: 5px;
+    margin-left: -20px;
+    border-radius: 999px;
+    background: var(--rb-panel-border-strong);
+    z-index: 2;
+  }
+
+  .chakra-modal__content.rb-sheet-dragging {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .chakra-modal__content.rb-sheet-settling {
+    transition: transform 220ms var(--rb-ease-out) !important;
+  }
+}
+
+@keyframes rb-sheet-up {
+  from {
+    transform: translateY(40%);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chakra-modal__content {
+    animation: none !important;
+  }
+}
+
+/* The logo artwork is crimson; in Aurora it is turned to the violet accent. */
+.rb-style-aurora .rb-logo {
+  filter: hue-rotate(-78deg) saturate(1.1);
 }
