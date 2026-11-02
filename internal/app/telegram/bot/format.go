@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+var statusNames = map[string]string{
+	"active":   "فعال",
+	"expired":  "زمانش تمام شده",
+	"limited":  "حجمش تمام شده",
+	"disabled": "غیرفعال",
+	"on_hold":  "منتظر اولین اتصال",
+}
+
 var statusEmoji = map[string]string{
 	"active":   "✅",
 	"expired":  "🕰",
@@ -42,16 +50,67 @@ func formatBytes(value int64) string {
 
 func formatOptionalBytes(value *int64) string {
 	if value == nil || *value <= 0 {
-		return "Unlimited"
+		return "نامحدود"
 	}
 	return formatBytes(*value)
 }
 
+// formatExpire shows an expiry as a Solar Hijri date in Tehran time, the way
+// the admins reading the bot write dates.
 func formatExpire(value *int64) string {
 	if value == nil || *value <= 0 {
-		return "Never"
+		return "بدون انقضا"
 	}
-	return time.Unix(*value, 0).UTC().Format("2006-01-02")
+	year, month, day := gregorianToJalali(time.Unix(*value, 0).In(tehran).Date())
+	return persianDigits(fmt.Sprintf("%04d/%02d/%02d", year, month, day))
+}
+
+// tehran is Iran's offset; Iran has kept +03:30 all year since 2022.
+var tehran = time.FixedZone("Asia/Tehran", 3*3600+30*60)
+
+// gregorianToJalali is the same conversion the subscription page uses
+// (user.gregorianToJalali), kept here so the bot stays free of that package.
+func gregorianToJalali(gy int, gm time.Month, gd int) (int, int, int) {
+	gDaysInMonth := []int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+	jDaysInMonth := []int{31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29}
+	gy -= 1600
+	gmInt := int(gm) - 1
+	gd--
+	gDayNo := 365*gy + (gy+3)/4 - (gy+99)/100 + (gy+399)/400
+	for i := 0; i < gmInt; i++ {
+		gDayNo += gDaysInMonth[i]
+	}
+	if gmInt > 1 && ((gy+1600)%4 == 0 && ((gy+1600)%100 != 0 || (gy+1600)%400 == 0)) {
+		gDayNo++
+	}
+	gDayNo += gd
+	jDayNo := gDayNo - 79
+	jNP := jDayNo / 12053
+	jDayNo %= 12053
+	jy := 979 + 33*jNP + 4*(jDayNo/1461)
+	jDayNo %= 1461
+	if jDayNo >= 366 {
+		jy += (jDayNo - 1) / 365
+		jDayNo = (jDayNo - 1) % 365
+	}
+	jm := 0
+	for jm < 11 && jDayNo >= jDaysInMonth[jm] {
+		jDayNo -= jDaysInMonth[jm]
+		jm++
+	}
+	return jy, jm + 1, jDayNo + 1
+}
+
+// daysLeft is the whole days until expiry, or "-" for no expiry.
+func daysLeft(value *int64) string {
+	if value == nil || *value <= 0 {
+		return "-"
+	}
+	remaining := time.Until(time.Unix(*value, 0))
+	if remaining < 0 {
+		return persianDigits("0")
+	}
+	return persianDigits(fmt.Sprintf("%d", int(remaining.Hours()/24)))
 }
 
 // relativeFromServer renders a naive/zoned server timestamp as a coarse relative
@@ -66,21 +125,21 @@ func relativeFromServer(value *string) string {
 	}
 	now := time.Now().UTC()
 	if parsed.After(now) {
-		return "in " + coarseDuration(parsed.Sub(now))
+		return coarseDuration(parsed.Sub(now)) + " دیگر"
 	}
-	return coarseDuration(now.Sub(parsed)) + " ago"
+	return coarseDuration(now.Sub(parsed)) + " پیش"
 }
 
 func coarseDuration(d time.Duration) string {
 	switch {
 	case d >= 24*time.Hour:
-		return fmt.Sprintf("about %d days", int(d.Hours()/24))
+		return persianDigits(fmt.Sprintf("حدود %d روز", int(d.Hours()/24)))
 	case d >= time.Hour:
-		return fmt.Sprintf("about %d hours", int(d.Hours()))
+		return persianDigits(fmt.Sprintf("حدود %d ساعت", int(d.Hours())))
 	case d >= time.Minute:
-		return fmt.Sprintf("about %d minutes", int(d.Minutes()))
+		return persianDigits(fmt.Sprintf("حدود %d دقیقه", int(d.Minutes())))
 	default:
-		return "just now"
+		return "همین الان"
 	}
 }
 
@@ -108,7 +167,11 @@ func statusLine(status string) string {
 	if emoji == "" {
 		emoji = "•"
 	}
-	return fmt.Sprintf("%s <code>%s</code>", emoji, escape(status))
+	name := statusNames[strings.ToLower(strings.TrimSpace(status))]
+	if name == "" {
+		name = status
+	}
+	return fmt.Sprintf("%s <b>%s</b>", emoji, escape(name))
 }
 
 // userDetailText renders the admin-facing user detail message.
@@ -124,24 +187,25 @@ func userDetailText(user UserView) string {
 	lines := []string{
 		"👤 " + statusLine(user.Status),
 		separator(),
-		line("Username", user.Username),
-		line("Data limit", formatOptionalBytes(user.DataLimit)),
-		line("Data used", formatBytes(user.UsedTraffic)),
-		line("Data left", dataLeft),
-		line("Expires", formatExpire(user.Expire)),
-		line("Online", relativeFromServer(user.OnlineAt)),
-		line("Subscription updated", relativeFromServer(user.SubUpdatedAt)),
+		line("نام کاربری", user.Username),
+		line("حجم کل", formatOptionalBytes(user.DataLimit)),
+		line("مصرف شده", formatBytes(user.UsedTraffic)),
+		line("باقی‌مانده", dataLeft),
+		line("انقضا", formatExpire(user.Expire)),
+		line("روزهای باقی‌مانده", daysLeft(user.Expire)),
+		line("آخرین اتصال", relativeFromServer(user.OnlineAt)),
+		line("آخرین آپدیت ساب", relativeFromServer(user.SubUpdatedAt)),
 	}
 	if strings.TrimSpace(user.Note) != "" {
-		lines = append(lines, line("Note", user.Note))
+		lines = append(lines, line("یادداشت", user.Note))
 	}
 	if strings.TrimSpace(user.OwnerAdmin) != "" {
-		lines = append(lines, line("Belongs to", user.OwnerAdmin))
+		lines = append(lines, line("ادمین", user.OwnerAdmin))
 	}
 	if strings.TrimSpace(user.SubscriptionURL) != "" {
-		lines = append(lines, separator(), line("Subscription", user.SubscriptionURL))
+		lines = append(lines, separator(), line("لینک ساب", user.SubscriptionURL))
 		for _, backup := range user.BackupSubscriptionURLs {
-			lines = append(lines, line("Backup", backup))
+			lines = append(lines, line("لینک پشتیبان", backup))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -149,37 +213,28 @@ func userDetailText(user UserView) string {
 
 // userUsageText renders the public /usage response.
 func userUsageText(user UserView) string {
-	daysLeft := "-"
-	if user.Expire != nil && *user.Expire > 0 {
-		remaining := time.Until(time.Unix(*user.Expire, 0))
-		if remaining < 0 {
-			daysLeft = "0"
-		} else {
-			daysLeft = fmt.Sprintf("%d", int(remaining.Hours()/24))
-		}
-	}
 	return strings.Join([]string{
 		"📊 " + statusLine(user.Status),
 		separator(),
-		line("Username", user.Username),
-		line("Data limit", formatOptionalBytes(user.DataLimit)),
-		line("Data used", formatBytes(user.UsedTraffic)),
-		line("Expires", formatExpire(user.Expire)),
-		line("Days left", daysLeft),
+		line("نام کاربری", user.Username),
+		line("حجم کل", formatOptionalBytes(user.DataLimit)),
+		line("مصرف شده", formatBytes(user.UsedTraffic)),
+		line("انقضا", formatExpire(user.Expire)),
+		line("روزهای باقی‌مانده", daysLeft(user.Expire)),
 	}, "\n")
 }
 
 func systemInfoText(info SystemInfo) string {
 	return strings.Join([]string{
-		"🖥 <b>System</b>",
+		"🖥 <b>وضعیت سرور</b>",
 		separator(),
-		line("Version", firstNonEmpty(info.Version, "-")),
-		line("CPU", fmt.Sprintf("%.1f%%", info.CPUPercent)),
-		line("Memory", fmt.Sprintf("%s / %s", formatBytes(info.MemUsed), formatBytes(info.MemTotal))),
+		line("نسخه", firstNonEmpty(info.Version, "-")),
+		line("پردازنده", fmt.Sprintf("%.1f%%", info.CPUPercent)),
+		line("حافظه", fmt.Sprintf("%s / %s", formatBytes(info.MemUsed), formatBytes(info.MemTotal))),
 		separator(),
-		line("Total users", fmt.Sprintf("%d", info.TotalUsers)),
-		line("Active users", fmt.Sprintf("%d", info.ActiveUsers)),
-		line("Online users", fmt.Sprintf("%d", info.OnlineUsers)),
+		line("کل کاربرها", fmt.Sprintf("%d", info.TotalUsers)),
+		line("کاربرهای فعال", fmt.Sprintf("%d", info.ActiveUsers)),
+		line("آنلاین", fmt.Sprintf("%d", info.OnlineUsers)),
 	}, "\n")
 }
 

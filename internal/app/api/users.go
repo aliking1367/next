@@ -644,7 +644,10 @@ func (s *Server) usersListRequest(r *http.Request, principal adminPrincipal) (us
 }
 
 func (s *Server) userAdminContext(principal adminPrincipal, serviceID *int64) userapp.AdminContext {
-	admin := principal.Context.Admin
+	return userAdminContextFor(principal.Context.Admin, serviceID)
+}
+
+func userAdminContextFor(admin adminapp.Admin, serviceID *int64) userapp.AdminContext {
 	result := userapp.AdminContext{
 		Username:       admin.Username,
 		Role:           string(admin.Role),

@@ -43,7 +43,8 @@ type User struct {
 }
 
 type Chat struct {
-	ID int64 `json:"id"`
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
 }
 
 // InlineKeyboard is a Telegram inline_keyboard markup.
@@ -82,13 +83,20 @@ type SettingsSource interface {
 type Actor struct {
 	Username string
 	Admin    any
+	// Reseller marks an admin that reached the bot through the Telegram id
+	// in its own profile. It sees only the users its panel account sees and
+	// gets the create, renew, delete and info actions; everything else stays
+	// with the owner chats in Settings.AdminChatIDs.
+	Reseller bool
 }
 
-// Authorizer resolves the admin actor that authorized bot mutations run as.
-// Access control itself is the allowlist in Settings.AdminChatIDs; this returns
-// the panel admin (typically a full-access admin) used for service calls.
+// Authorizer resolves the admin a bot action runs as. Owner chats are the
+// allowlist in Settings.AdminChatIDs and act as Actor (typically a
+// full-access admin); AdminByTelegramID finds the admin whose profile carries
+// the sender's Telegram id.
 type Authorizer interface {
 	Actor(ctx context.Context) (Actor, bool)
+	AdminByTelegramID(ctx context.Context, telegramID int64) (Actor, bool)
 }
 
 // UserView is the data the bot renders for a user.
@@ -111,10 +119,31 @@ type UserView struct {
 	Links                  []string
 }
 
+// ServiceOption is a service a new user can be put on.
+type ServiceOption struct {
+	ID   int64
+	Name string
+}
+
+// NewUser is what the create flow collects. Zero DataLimitGB or Days means
+// no limit.
+type NewUser struct {
+	Username    string
+	ServiceID   int64
+	DataLimitGB int64
+	Days        int64
+}
+
 // UserService exposes the user operations the bot needs. Implementations must
-// enforce the same permissions/limits as the HTTP API.
+// enforce the same permissions/limits as the HTTP API, and Get must only find
+// users the actor may see.
 type UserService interface {
-	Get(ctx context.Context, username string) (UserView, error)
+	Get(ctx context.Context, actor Actor, username string) (UserView, error)
+	Create(ctx context.Context, actor Actor, user NewUser) error
+	// Renew adds days to the user's time and gigabytes to its data limit;
+	// either may be zero.
+	Renew(ctx context.Context, actor Actor, username string, days int64, gigabytes int64) error
+	Services(ctx context.Context, actor Actor) ([]ServiceOption, error)
 	Delete(ctx context.Context, actor Actor, username string) error
 	Reset(ctx context.Context, actor Actor, username string) error
 	RevokeSubscription(ctx context.Context, actor Actor, username string) error

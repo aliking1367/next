@@ -10,12 +10,12 @@ import (
 
 func (b *Bot) handleBackupCommand(ctx context.Context, settings Settings, chatID int64) {
 	if b.backup == nil {
-		b.reply(ctx, settings, chatID, "Backup is not available.", nil)
+		b.reply(ctx, settings, chatID, "بکاپ در دسترس نیست.", nil)
 		return
 	}
 	status, err := b.backup.Status(ctx)
 	if err != nil {
-		b.reply(ctx, settings, chatID, actionErrorText("read backup status", err), nil)
+		b.reply(ctx, settings, chatID, actionErrorText("خواندن وضعیت بکاپ", err), nil)
 		return
 	}
 	b.reply(ctx, settings, chatID, backupStatusText(status), backupMenuKeyboard())
@@ -26,50 +26,50 @@ func (b *Bot) handleBackupCommand(ctx context.Context, settings Settings, chatID
 // document alone never mutates panel state.
 func (b *Bot) handleBackupDocument(ctx context.Context, settings Settings, chatID int64, doc *Document) {
 	if b.backup == nil {
-		b.reply(ctx, settings, chatID, "Backup is not available.", nil)
+		b.reply(ctx, settings, chatID, "بکاپ در دسترس نیست.", nil)
 		return
 	}
 	if doc.FileSize > 0 && doc.FileSize > maxTelegramDownloadBytes {
 		b.reply(ctx, settings, chatID, fmt.Sprintf(
-			"This file is %s, above Telegram's %d MB bot download limit. Restore it from the panel's Settings → Backup page instead.",
+			"حجم این فایل %s است و از سقف دانلود ربات تلگرام (%d MB) بیشتر است. از صفحه تنظیمات ← بکاپ در پنل بازگردانی‌اش کن.",
 			formatBytes(doc.FileSize), maxTelegramDownloadBytes>>20), nil)
 		return
 	}
 	info, err := b.client.getFile(ctx, settings, doc.FileID)
 	if err != nil {
-		b.reply(ctx, settings, chatID, actionErrorText("fetch the uploaded file", err), nil)
+		b.reply(ctx, settings, chatID, actionErrorText("گرفتن فایل", err), nil)
 		return
 	}
 	content, err := b.client.downloadFile(ctx, settings, info.FilePath)
 	if err != nil {
-		b.reply(ctx, settings, chatID, actionErrorText("download the uploaded file", err), nil)
+		b.reply(ctx, settings, chatID, actionErrorText("دانلود فایل", err), nil)
 		return
 	}
 	path, err := stageRestoreUpload(content, doc.FileName)
 	if err != nil {
-		b.reply(ctx, settings, chatID, actionErrorText("stage the uploaded file", err), nil)
+		b.reply(ctx, settings, chatID, actionErrorText("آماده کردن فایل", err), nil)
 		return
 	}
 	if err := b.state.set(ctx, chatID, stateAwaitRestoreConfirm, path); err != nil {
 		_ = os.Remove(path)
-		b.reply(ctx, settings, chatID, actionErrorText("stage the uploaded file", err), nil)
+		b.reply(ctx, settings, chatID, actionErrorText("آماده کردن فایل", err), nil)
 		return
 	}
 	name := strings.TrimSpace(doc.FileName)
 	if name == "" {
-		name = "backup archive"
+		name = "فایل بکاپ"
 	}
 	b.reply(ctx, settings, chatID, fmt.Sprintf(
-		"⚠️ <b>Restore %s?</b>\n\nThis replaces the panel's ENTIRE database and every user with the contents of this file. "+
-			"A safety copy of the current state is taken automatically first, and it's restored back if the import fails — but a bad file can still wipe recent changes.\n\n"+
-			"Confirm within a few minutes or send /help to cancel.",
+		"⚠️ <b>بازگردانی %s؟</b>\n\nکل دیتابیس پنل و همه کاربرها با محتوای این فایل جایگزین می‌شوند. "+
+			"اول خودکار یک نسخه امن از وضعیت فعلی گرفته می‌شود و اگر بازگردانی خطا بدهد برمی‌گردد، ولی فایل اشتباه می‌تواند تغییرهای اخیر را پاک کند.\n\n"+
+			"تا چند دقیقه تأیید کن، یا برای لغو /cancel را بفرست.",
 		escape(name)), restoreConfirmKeyboard())
 }
 
 func (b *Bot) handleRestoreCallback(ctx context.Context, settings Settings, query *CallbackQuery, chatID, messageID int64, confirmed bool) {
 	conv, ok := b.state.get(ctx, chatID)
 	if !ok || conv.State != stateAwaitRestoreConfirm {
-		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Nothing pending")
+		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "چیزی در انتظار نیست")
 		return
 	}
 	_ = b.state.clear(ctx, chatID)
@@ -77,16 +77,16 @@ func (b *Bot) handleRestoreCallback(ctx context.Context, settings Settings, quer
 	defer os.Remove(path)
 
 	if !confirmed {
-		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Cancelled")
-		_ = b.client.editMessageText(ctx, settings, chatID, messageID, "❌ Restore cancelled. No changes were made.", nil)
+		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "لغو شد")
+		_ = b.client.editMessageText(ctx, settings, chatID, messageID, "❌ بازگردانی لغو شد. هیچ تغییری داده نشد.", nil)
 		return
 	}
-	_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Restoring…")
-	_ = b.client.editMessageText(ctx, settings, chatID, messageID, "⏳ Restoring backup, this can take a moment…", nil)
+	_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "در حال بازگردانی…")
+	_ = b.client.editMessageText(ctx, settings, chatID, messageID, "⏳ در حال بازگردانی بکاپ؛ کمی طول می‌کشد…", nil)
 
 	result, err := b.backup.Restore(ctx, path)
 	if err != nil {
-		_ = b.client.editMessageText(ctx, settings, chatID, messageID, actionErrorText("restore the backup", err), nil)
+		_ = b.client.editMessageText(ctx, settings, chatID, messageID, actionErrorText("بازگردانی بکاپ", err), nil)
 		return
 	}
 	_ = b.client.editMessageText(ctx, settings, chatID, messageID, backupRestoreResultText(result), nil)
@@ -95,32 +95,32 @@ func (b *Bot) handleRestoreCallback(ctx context.Context, settings Settings, quer
 func (b *Bot) handleBackupSetSchedule(ctx context.Context, settings Settings, query *CallbackQuery, chatID, messageID int64, arg string) {
 	value, unit, err := parseSchedulePreset(arg)
 	if err != nil {
-		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Invalid preset")
+		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "گزینه نامعتبر")
 		return
 	}
 	if err := b.backup.SetSchedule(ctx, value, unit); err != nil {
-		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Failed")
-		_ = b.client.editMessageText(ctx, settings, chatID, messageID, actionErrorText("update the backup schedule", err), nil)
+		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "انجام نشد")
+		_ = b.client.editMessageText(ctx, settings, chatID, messageID, actionErrorText("تغییر زمان‌بندی بکاپ", err), nil)
 		return
 	}
-	_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Schedule updated")
+	_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "زمان‌بندی عوض شد")
 	status, err := b.backup.Status(ctx)
 	if err != nil {
-		_ = b.client.editMessageText(ctx, settings, chatID, messageID, fmt.Sprintf("✅ Backup scheduled every %d %s.", value, unit), backupMenuKeyboard())
+		_ = b.client.editMessageText(ctx, settings, chatID, messageID, fmt.Sprintf("✅ بکاپ هر %d %s فرستاده می‌شود.", value, backupUnitName(unit)), backupMenuKeyboard())
 		return
 	}
-	_ = b.client.editMessageText(ctx, settings, chatID, messageID, "✅ Schedule updated.\n\n"+backupStatusText(status), backupMenuKeyboard())
+	_ = b.client.editMessageText(ctx, settings, chatID, messageID, "✅ زمان‌بندی عوض شد.\n\n"+backupStatusText(status), backupMenuKeyboard())
 }
 
 func (b *Bot) handleBackupSendNow(ctx context.Context, settings Settings, query *CallbackQuery, chatID, messageID int64) {
-	_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "Sending…")
+	_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "در حال ارسال…")
 	result, err := b.backup.SendNow(ctx)
 	if err != nil {
-		_ = b.client.editMessageText(ctx, settings, chatID, messageID, actionErrorText("send the backup", err), backupMenuKeyboard())
+		_ = b.client.editMessageText(ctx, settings, chatID, messageID, actionErrorText("ارسال بکاپ", err), backupMenuKeyboard())
 		return
 	}
 	_ = b.client.editMessageText(ctx, settings, chatID, messageID,
-		fmt.Sprintf("✅ Backup sent: <code>%s</code> (%s).", escape(result.Filename), formatBytes(result.Size)), backupMenuKeyboard())
+		fmt.Sprintf("✅ بکاپ فرستاده شد: <code>%s</code> (%s).", escape(result.Filename), formatBytes(result.Size)), backupMenuKeyboard())
 }
 
 func parseSchedulePreset(arg string) (int, string, error) {
@@ -159,44 +159,56 @@ func stageRestoreUpload(content []byte, filename string) (string, error) {
 }
 
 func backupStatusText(status BackupStatus) string {
-	state := "disabled"
+	state := "خاموش"
 	if status.Enabled {
-		state = fmt.Sprintf("every %d %s", status.IntervalValue, status.IntervalUnit)
+		state = fmt.Sprintf("هر %d %s", status.IntervalValue, backupUnitName(status.IntervalUnit))
 	}
 	lines := []string{
-		"📦 <b>Periodic backup</b>",
-		line("Schedule", state),
-		line("Scope", firstNonEmpty(status.Scope, "database")),
-		line("Last sent", formatOptionalTime(status.LastSentAt)),
+		"📦 <b>بکاپ خودکار</b>",
+		line("زمان‌بندی", state),
+		line("محتوا", firstNonEmpty(status.Scope, "database")),
+		line("آخرین ارسال", formatOptionalTime(status.LastSentAt)),
 	}
 	if status.LastError != nil && strings.TrimSpace(*status.LastError) != "" {
-		lines = append(lines, line("Last error", *status.LastError))
+		lines = append(lines, line("آخرین خطا", *status.LastError))
 	}
-	lines = append(lines, "", "Pick a schedule below, or send a backup file here to restore it.")
+	lines = append(lines, "", "یک زمان‌بندی انتخاب کن، یا یک فایل بکاپ همین‌جا بفرست تا بازگردانی شود.")
 	return strings.Join(lines, "\n")
 }
 
 func backupRestoreResultText(result BackupRestoreResult) string {
 	lines := []string{
-		"✅ <b>Restore complete</b>",
-		line("Tables restored", strconv.Itoa(result.TablesRestored)),
-		line("Rows restored", strconv.Itoa(result.RowsRestored)),
+		"✅ <b>بازگردانی انجام شد</b>",
+		line("جدول‌ها", strconv.Itoa(result.TablesRestored)),
+		line("ردیف‌ها", strconv.Itoa(result.RowsRestored)),
 	}
 	if len(result.FilesRestored) > 0 {
-		lines = append(lines, line("Files restored", strconv.Itoa(len(result.FilesRestored))))
+		lines = append(lines, line("فایل‌ها", strconv.Itoa(len(result.FilesRestored))))
 	}
 	for _, warning := range result.Warnings {
 		lines = append(lines, "⚠️ "+escape(warning))
 	}
 	if strings.TrimSpace(result.SafetyBackupPath) != "" {
-		lines = append(lines, "", "A safety copy of the previous state was saved on the server at:", "<code>"+escape(result.SafetyBackupPath)+"</code>")
+		lines = append(lines, "", "نسخه امن وضعیت قبلی روی سرور اینجا ذخیره شد:", "<code>"+escape(result.SafetyBackupPath)+"</code>")
 	}
 	return strings.Join(lines, "\n")
 }
 
 func formatOptionalTime(value *string) string {
 	if value == nil || strings.TrimSpace(*value) == "" {
-		return "never"
+		return "هنوز نه"
 	}
 	return *value
+}
+
+func backupUnitName(unit string) string {
+	switch unit {
+	case "hours":
+		return "ساعت"
+	case "days":
+		return "روز"
+	case "minutes":
+		return "دقیقه"
+	}
+	return unit
 }

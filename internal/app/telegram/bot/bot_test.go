@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,15 +26,21 @@ type fakeUsers struct {
 	deleted  []string
 	resets   []string
 	revokes  []string
+	created  []NewUser
+	renewals []string
+	// getActors records whether each Get came from a reseller actor.
+	getActors []bool
+	services  []ServiceOption
 }
 
 func newFakeUsers() *fakeUsers {
 	return &fakeUsers{users: map[string]UserView{}}
 }
 
-func (f *fakeUsers) Get(_ context.Context, username string) (UserView, error) {
+func (f *fakeUsers) Get(_ context.Context, actor Actor, username string) (UserView, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.getActors = append(f.getActors, actor.Reseller)
 	if f.getErr != nil {
 		return UserView{}, f.getErr
 	}
@@ -88,6 +95,30 @@ func (f *fakeUsers) SetNote(_ context.Context, _ Actor, username string, note st
 	return nil
 }
 
+func (f *fakeUsers) Create(_ context.Context, _ Actor, user NewUser) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created = append(f.created, user)
+	f.users[user.Username] = UserView{Username: user.Username, Status: "active"}
+	return nil
+}
+
+func (f *fakeUsers) Renew(_ context.Context, _ Actor, username string, days int64, gigabytes int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.renewals = append(f.renewals, fmt.Sprintf("%s:%dd:%dg", username, days, gigabytes))
+	return nil
+}
+
+func (f *fakeUsers) Services(context.Context, Actor) ([]ServiceOption, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.services == nil {
+		return []ServiceOption{{ID: 1, Name: "main"}}, nil
+	}
+	return f.services, nil
+}
+
 type fakeSystem struct{}
 
 func (fakeSystem) Info(context.Context) (SystemInfo, error) {
@@ -101,6 +132,16 @@ func (f fakeAuthorizer) Actor(context.Context) (Actor, bool) {
 		return Actor{}, false
 	}
 	return Actor{Username: "admin", Admin: "admin"}, true
+}
+
+// resellerTelegramID is the Telegram id the fake gives to admin "seller".
+const resellerTelegramID = 555
+
+func (f fakeAuthorizer) AdminByTelegramID(_ context.Context, telegramID int64) (Actor, bool) {
+	if telegramID != resellerTelegramID {
+		return Actor{}, false
+	}
+	return Actor{Username: "seller", Admin: "seller"}, true
 }
 
 // --- harness ---------------------------------------------------------------
@@ -287,7 +328,7 @@ func TestUnknownUserReportsNotFound(t *testing.T) {
 	if !ok {
 		t.Fatal("expected sendMessage")
 	}
-	if text, _ := call.body["text"].(string); !strings.Contains(text, "not found") {
+	if text, _ := call.body["text"].(string); !strings.Contains(text, "پیدا نشد") {
 		t.Fatalf("expected not found message, got %q", text)
 	}
 }

@@ -142,7 +142,7 @@ func TestBackupCommandShowsStatusAndMenu(t *testing.T) {
 		t.Fatal("expected sendMessage")
 	}
 	text, _ := call.body["text"].(string)
-	if !strings.Contains(text, "every 24 hours") {
+	if !strings.Contains(text, "هر 24 ساعت") {
 		t.Fatalf("expected schedule in status text, got %q", text)
 	}
 	if _, ok := call.body["reply_markup"]; !ok {
@@ -234,7 +234,7 @@ func TestBackupDocumentStagesRestoreConfirmation(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a confirmation prompt")
 	}
-	if text, _ := call.body["text"].(string); !strings.Contains(text, "Restore") {
+	if text, _ := call.body["text"].(string); !strings.Contains(text, "بازگردانی") {
 		t.Fatalf("expected restore warning text, got %q", text)
 	}
 	if _, ok := call.body["reply_markup"]; !ok {
@@ -300,7 +300,7 @@ func TestRestoreCancelSkipsRestoreAndClearsState(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a cancellation message")
 	}
-	if text, _ := call.body["text"].(string); !strings.Contains(text, "cancelled") {
+	if text, _ := call.body["text"].(string); !strings.Contains(text, "لغو شد") {
 		t.Fatalf("expected cancellation text, got %q", text)
 	}
 }
@@ -344,7 +344,7 @@ func TestBackupCommandRejectedForNonBackupChat(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a rejection message")
 	}
-	if text, _ := call.body["text"].(string); !strings.Contains(text, "restricted to the dedicated backup chat") {
+	if text, _ := call.body["text"].(string); !strings.Contains(text, "چت مخصوص بکاپ") {
 		t.Fatalf("expected a not-authorized-for-backup message, got %q", text)
 	}
 }

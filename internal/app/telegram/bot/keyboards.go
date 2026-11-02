@@ -17,6 +17,19 @@ const (
 	cbLinks      = "links:"
 	cbEditNote   = "edit_note:"
 	cbRefresh    = "refresh:"
+	cbSystem     = "system"
+
+	cbNew          = "new"
+	cbCancel       = "cancel"
+	cbNewRandom    = "nrand"
+	cbNewService   = "nsvc:"
+	cbNewGB        = "ngb:"
+	cbNewDays      = "nday:"
+	cbNewConfirm   = "nok"
+	cbRenew        = "renew:"
+	cbRenewDays    = "rday:"
+	cbRenewGB      = "rgb:"
+	cbRenewConfirm = "rok"
 
 	cbBackupSetSchedule = "backup_set:"
 	cbBackupSendNow     = "backup_send"
@@ -33,11 +46,11 @@ var backupSchedulePresets = []struct {
 	Value int
 	Unit  string
 }{
-	{"Every 6 hours", 6, "hours"},
-	{"Every 12 hours", 12, "hours"},
-	{"Every 24 hours", 24, "hours"},
-	{"Every 3 days", 3, "days"},
-	{"Every 7 days", 7, "days"},
+	{"هر ۶ ساعت", 6, "hours"},
+	{"هر ۱۲ ساعت", 12, "hours"},
+	{"هر ۲۴ ساعت", 24, "hours"},
+	{"هر ۳ روز", 3, "days"},
+	{"هر ۷ روز", 7, "days"},
 }
 
 func backupMenuKeyboard() *InlineKeyboard {
@@ -48,41 +61,81 @@ func backupMenuKeyboard() *InlineKeyboard {
 			CallbackData: fmt.Sprintf("%s%d:%s", cbBackupSetSchedule, preset.Value, preset.Unit),
 		}})
 	}
-	rows = append(rows, []InlineButton{{Text: "📤 Send backup now", CallbackData: cbBackupSendNow}})
+	rows = append(rows, []InlineButton{{Text: "📤 ارسال بکاپ همین حالا", CallbackData: cbBackupSendNow}})
 	return &InlineKeyboard{InlineKeyboard: rows}
 }
 
 func restoreConfirmKeyboard() *InlineKeyboard {
 	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
-		{{Text: "✅ Confirm restore", CallbackData: cbRestoreConfirm}, {Text: "✖️ Cancel", CallbackData: cbRestoreCancel}},
+		{{Text: "✅ بازگردانی کن", CallbackData: cbRestoreConfirm}, {Text: "✖️ لغو", CallbackData: cbRestoreCancel}},
 	}}
 }
 
-func mainMenuKeyboard() *InlineKeyboard {
-	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
-		{{Text: "🖥 System", CallbackData: "system"}},
-	}}
+func mainMenuKeyboard(reseller bool) *InlineKeyboard {
+	rows := [][]InlineButton{{{Text: "➕ ساخت کاربر", CallbackData: cbNew}}}
+	if !reseller {
+		rows = append(rows, []InlineButton{{Text: "🖥 وضعیت سرور", CallbackData: cbSystem}})
+	}
+	return &InlineKeyboard{InlineKeyboard: rows}
 }
 
-// userMenuKeyboard builds the lifecycle keyboard for a user, choosing between
-// activate/suspend depending on the current status.
-func userMenuKeyboard(username string, status string) *InlineKeyboard {
-	toggle := InlineButton{Text: "⛔ Disable", CallbackData: cbSuspend + username}
+// userMenuKeyboard builds the keyboard under a user's detail. An admin using
+// the bot through its own Telegram id gets links, renew, refresh and delete;
+// the owner also gets the status, reset, revoke and note buttons.
+func userMenuKeyboard(username string, status string, reseller bool) *InlineKeyboard {
+	links := InlineButton{Text: "🔗 لینک‌ها", CallbackData: cbLinks + username}
+	renew := InlineButton{Text: "♻️ تمدید", CallbackData: cbRenew + username}
+	refresh := InlineButton{Text: "🔄 بروزرسانی", CallbackData: cbRefresh + username}
+	remove := InlineButton{Text: "🗑 حذف", CallbackData: cbDelete + username}
+	if reseller {
+		return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
+			{links, renew},
+			{refresh, remove},
+		}}
+	}
+	toggle := InlineButton{Text: "⛔ غیرفعال کن", CallbackData: cbSuspend + username}
 	if strings.EqualFold(strings.TrimSpace(status), "disabled") {
-		toggle = InlineButton{Text: "✅ Activate", CallbackData: cbActivate + username}
+		toggle = InlineButton{Text: "✅ فعال کن", CallbackData: cbActivate + username}
 	}
 	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
-		{toggle, {Text: "🔄 Reset usage", CallbackData: cbResetUsage + username}},
-		{{Text: "🚫 Revoke sub", CallbackData: cbRevokeSub + username}, {Text: "🔗 Links", CallbackData: cbLinks + username}},
-		{{Text: "📝 Edit note", CallbackData: cbEditNote + username}, {Text: "♻️ Refresh", CallbackData: cbRefresh + username}},
-		{{Text: "🗑 Delete", CallbackData: cbDelete + username}},
+		{links, renew},
+		{toggle, {Text: "0️⃣ ریست مصرف", CallbackData: cbResetUsage + username}},
+		{{Text: "🚫 لینک ساب جدید", CallbackData: cbRevokeSub + username}, {Text: "📝 یادداشت", CallbackData: cbEditNote + username}},
+		{refresh, remove},
 	}}
 }
 
 func confirmDeleteKeyboard(username string) *InlineKeyboard {
 	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
-		{{Text: "✅ Yes, delete", CallbackData: cbDeleteYes + username}, {Text: "✖️ Cancel", CallbackData: cbRefresh + username}},
+		{{Text: "✅ بله، حذف کن", CallbackData: cbDeleteYes + username}, {Text: "✖️ لغو", CallbackData: cbRefresh + username}},
 	}}
+}
+
+func cancelRow() []InlineButton {
+	return []InlineButton{{Text: "✖️ لغو", CallbackData: cbCancel}}
+}
+
+// amountKeyboard offers preset amounts for a step that also accepts a typed
+// number. zeroLabel names the 0 choice (unlimited, or no change).
+func amountKeyboard(prefix string, presets []int64, unit string, zeroLabel string) *InlineKeyboard {
+	rows := [][]InlineButton{}
+	row := []InlineButton{}
+	for _, value := range presets {
+		row = append(row, InlineButton{Text: fmt.Sprintf("%s %s", persianDigits(fmt.Sprint(value)), unit), CallbackData: fmt.Sprintf("%s%d", prefix, value)})
+		if len(row) == 3 {
+			rows = append(rows, row)
+			row = []InlineButton{}
+		}
+	}
+	if len(row) > 0 {
+		rows = append(rows, row)
+	}
+	rows = append(rows, []InlineButton{{Text: zeroLabel, CallbackData: prefix + "0"}}, cancelRow())
+	return &InlineKeyboard{InlineKeyboard: rows}
+}
+
+func confirmKeyboard(confirm InlineButton) *InlineKeyboard {
+	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{{confirm}, cancelRow()}}
 }
 
 // parseCallback splits "prefix:value" callback data into the prefix (with colon)

@@ -113,6 +113,39 @@ func (b *Bot) handleUpdate(ctx context.Context, settings Settings, update Update
 	}
 }
 
+// caller is who sent an update and what the bot does on its behalf.
+type caller struct {
+	actor Actor
+	// hasActor is false for an owner chat when no full-access admin exists;
+	// such a chat can still read but not change anything.
+	hasActor bool
+}
+
+func (c caller) reseller() bool {
+	return c.actor.Reseller
+}
+
+// resolveCaller decides whether an update may be served. ownerID is the id
+// checked against the owner allowlist (the chat for messages, the sender for
+// button presses, as before). An admin reaches the bot through the Telegram
+// id in its profile, and only in a private chat with the bot, so replies about
+// its users never land in a group.
+func (b *Bot) resolveCaller(ctx context.Context, settings Settings, ownerID, chatID, fromID int64, private bool) (caller, bool) {
+	if authorized(settings, ownerID) {
+		actor, ok := b.authorizer.Actor(ctx)
+		return caller{actor: actor, hasActor: ok}, true
+	}
+	if fromID == 0 || !private || chatID != fromID {
+		return caller{}, false
+	}
+	actor, ok := b.authorizer.AdminByTelegramID(ctx, fromID)
+	if !ok {
+		return caller{}, false
+	}
+	actor.Reseller = true
+	return caller{actor: actor, hasActor: true}, true
+}
+
 // authorized reports whether the given Telegram id is in the admin allowlist.
 func authorized(settings Settings, id int64) bool {
 	for _, allowed := range settings.AdminChatIDs {

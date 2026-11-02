@@ -49,11 +49,11 @@ func TestFormatBytes(t *testing.T) {
 }
 
 func TestFormatOptionalBytes(t *testing.T) {
-	if got := formatOptionalBytes(nil); got != "Unlimited" {
+	if got := formatOptionalBytes(nil); got != "نامحدود" {
 		t.Errorf("nil limit = %q", got)
 	}
 	zero := int64(0)
-	if got := formatOptionalBytes(&zero); got != "Unlimited" {
+	if got := formatOptionalBytes(&zero); got != "نامحدود" {
 		t.Errorf("zero limit = %q", got)
 	}
 	limit := int64(1 << 20)
@@ -73,12 +73,12 @@ func TestAuthorized(t *testing.T) {
 }
 
 func TestUserMenuKeyboardTogglesActivate(t *testing.T) {
-	disabled := userMenuKeyboard("alice", "disabled")
-	if disabled.InlineKeyboard[0][0].CallbackData != cbActivate+"alice" {
-		t.Errorf("disabled user should offer activate, got %q", disabled.InlineKeyboard[0][0].CallbackData)
+	disabled := userMenuKeyboard("alice", "disabled", false)
+	if disabled.InlineKeyboard[1][0].CallbackData != cbActivate+"alice" {
+		t.Errorf("disabled user should offer activate, got %q", disabled.InlineKeyboard[1][0].CallbackData)
 	}
-	active := userMenuKeyboard("alice", "active")
-	if active.InlineKeyboard[0][0].CallbackData != cbSuspend+"alice" {
-		t.Errorf("active user should offer suspend, got %q", active.InlineKeyboard[0][0].CallbackData)
+	active := userMenuKeyboard("alice", "active", false)
+	if active.InlineKeyboard[1][0].CallbackData != cbSuspend+"alice" {
+		t.Errorf("active user should offer suspend, got %q", active.InlineKeyboard[1][0].CallbackData)
 	}
 }
