@@ -19,6 +19,7 @@ func (s *Server) runUserLifecycleWorkers(ctx context.Context) {
 	go s.runUserLifecycleWorker(ctx)
 	go s.runUserUsageResetWorker(ctx)
 	go s.runUserAutodeleteWorker(ctx)
+	go s.runUserStatusReportWorker(ctx)
 }
 
 func (s *Server) runUserLifecycleWorker(ctx context.Context) {

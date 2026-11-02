@@ -268,6 +268,30 @@ const fillRandomValues = (buffer: Uint8Array) => {
 	}
 };
 
+// Shadowsocks 2022 methods take a base64 key of an exact length instead of
+// a free-form password, so the form generates one rather than leaving Save
+// disabled with no hint.
+const shadowsocks2022KeyBytes = (method: string): number | null => {
+	if (!method.startsWith("2022-")) return null;
+	return method === "2022-blake3-aes-128-gcm" ? 16 : 32;
+};
+
+const generateShadowsocksPassword = (method: string): string => {
+	const buffer = new Uint8Array(shadowsocks2022KeyBytes(method) ?? 16);
+	fillRandomValues(buffer);
+	return btoa(String.fromCharCode(...buffer));
+};
+
+const shadowsocksPasswordFits = (method: string, password: string) => {
+	const keyBytes = shadowsocks2022KeyBytes(method);
+	if (keyBytes === null) return true;
+	try {
+		return atob(password.trim()).length === keyBytes;
+	} catch {
+		return false;
+	}
+};
+
 const randomHex = (length: number): string => {
 	const bytes = new Uint8Array(Math.ceil(length / 2));
 	fillRandomValues(bytes);
@@ -1904,13 +1928,43 @@ export const InboundFormModal: FC<Props> = ({
 										)}
 										{currentProtocol === "shadowsocks" && (
 											<Stack spacing={3}>
-												<FormControl>
+												<FormControl
+													isInvalid={
+														!!fieldValidationErrors.shadowsocksPassword
+													}
+												>
 													<FormLabel>{t("password")}</FormLabel>
-													<Input
-														type="text"
-														autoComplete="off"
-														{...register("shadowsocksPassword")}
-													/>
+													<HStack align="stretch" spacing={2}>
+														<Input
+															type="text"
+															dir="ltr"
+															autoComplete="off"
+															{...register("shadowsocksPassword")}
+														/>
+														<Button
+															flexShrink={0}
+															size="sm"
+															alignSelf="center"
+															variant="outline"
+															leftIcon={<SparklesIcon width={16} height={16} />}
+															onClick={() =>
+																form.setValue(
+																	"shadowsocksPassword",
+																	generateShadowsocksPassword(
+																		formValues.shadowsocksMethod || "",
+																	),
+																	{ shouldDirty: true, shouldValidate: true },
+																)
+															}
+														>
+															{t("inbounds.randomPort")}
+														</Button>
+													</HStack>
+													{fieldValidationErrors.shadowsocksPassword && (
+														<Text fontSize="xs" color="red.500" mt={1}>
+															{t("inbounds.shadowsocks.keyHint")}
+														</Text>
+													)}
 												</FormControl>
 												<SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
 													<FormControl>
@@ -1921,16 +1975,25 @@ export const InboundFormModal: FC<Props> = ({
 															value={formValues.shadowsocksMethod || ""}
 															options={shadowsocksMethods}
 															placeholder={t("inbounds.shadowsocks.method")}
-															onChange={(value) =>
-																form.setValue(
-																	"shadowsocksMethod",
-																	String(value),
-																	{
-																		shouldDirty: true,
-																		shouldValidate: true,
-																	},
-																)
-															}
+															onChange={(value) => {
+																const method = String(value);
+																form.setValue("shadowsocksMethod", method, {
+																	shouldDirty: true,
+																	shouldValidate: true,
+																});
+																if (
+																	!shadowsocksPasswordFits(
+																		method,
+																		formValues.shadowsocksPassword || "",
+																	)
+																) {
+																	form.setValue(
+																		"shadowsocksPassword",
+																		generateShadowsocksPassword(method),
+																		{ shouldDirty: true, shouldValidate: true },
+																	);
+																}
+															}}
 														/>
 													</FormControl>
 													<FormControl>

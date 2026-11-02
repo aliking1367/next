@@ -208,6 +208,7 @@ export type AdvancedUserActionType =
 	| "activate_users"
 	| "disable_users"
 	| "change_service"
+	| "change_admin"
 	| "delete_users";
 
 export type AdvancedUserActionPayload = {
@@ -220,6 +221,7 @@ export type AdvancedUserActionPayload = {
 	service_id?: number;
 	service_id_is_null?: boolean;
 	target_service_id?: number | null;
+	target_admin_username?: string;
 	usernames?: string[];
 	last_online_days?: number;
 	status_age_days?: number;

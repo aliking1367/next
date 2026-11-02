@@ -18,6 +18,7 @@ import (
 
 	adminapp "github.com/aliking1367/next/internal/app/admin"
 	telegramapp "github.com/aliking1367/next/internal/app/telegram"
+	userapp "github.com/aliking1367/next/internal/app/user"
 	webhookapp "github.com/aliking1367/next/internal/app/webhook"
 )
 
@@ -514,6 +515,10 @@ func (s *Server) handleUpdateAdmin(w http.ResponseWriter, r *http.Request, usern
 func (s *Server) handleDeleteAdmin(w http.ResponseWriter, r *http.Request, username string) {
 	principal, _ := r.Context().Value(adminContextKey).(adminPrincipal)
 	deletedUsername := username
+	// transfer_users_to keeps the admin's users alive under another admin
+	// instead of deleting them along with the admin.
+	transferTo := strings.TrimSpace(r.URL.Query().Get("transfer_users_to"))
+	movedUsers := 0
 	err := s.withTx(r.Context(), func(tx *sql.Tx) error {
 		target, err := adminByUsernameTx(r.Context(), tx, username)
 		if err != nil {
@@ -522,6 +527,23 @@ func (s *Server) handleDeleteAdmin(w http.ResponseWriter, r *http.Request, usern
 		deletedUsername = target.Username
 		if err := ensureCanManageAdmin(principal.Context.Admin, target); err != nil {
 			return err
+		}
+		var destination *adminapp.Admin
+		if transferTo != "" {
+			found, err := adminByUsernameTx(r.Context(), tx, transferTo)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return statusError{status: http.StatusNotFound, detail: "The admin chosen to receive the users was not found"}
+				}
+				return err
+			}
+			if found.ID == target.ID {
+				return statusError{status: http.StatusBadRequest, detail: "Choose another admin to receive the users"}
+			}
+			if err := ensureCanMoveUsersBetween(principal.Context.Admin, target, found); err != nil {
+				return err
+			}
+			destination = &found
 		}
 		if _, err := tx.ExecContext(r.Context(), `DELETE FROM admin_api_keys WHERE admin_id = ?`, target.ID); err != nil {
 			return err
@@ -543,18 +565,46 @@ func (s *Server) handleDeleteAdmin(w http.ResponseWriter, r *http.Request, usern
 		if err != nil {
 			return err
 		}
-		for _, userID := range userIDs {
-			if err := enqueueNodeOperationTx(r.Context(), tx, "remove_user", nil, &userID, map[string]any{}); err != nil {
+		if destination != nil {
+			restored, err := userapp.TransferUsersToAdminTx(r.Context(), tx, userIDs, *destination, time.Now().UTC())
+			if err != nil {
+				var mutationErr userapp.MutationError
+				if errors.As(err, &mutationErr) {
+					return statusError{status: mutationErr.Status, detail: mutationErr.Detail}
+				}
 				return err
 			}
+			for _, userID := range userIDs {
+				if err := enqueueNodeOperationTx(r.Context(), tx, "update_user", nil, &userID, map[string]any{}); err != nil {
+					return err
+				}
+			}
+			for _, userID := range restored {
+				if err := enqueueNodeOperationTx(r.Context(), tx, "enable_user", nil, &userID, map[string]any{}); err != nil {
+					return err
+				}
+			}
+			movedUsers = len(userIDs)
+		} else {
+			for _, userID := range userIDs {
+				if err := enqueueNodeOperationTx(r.Context(), tx, "remove_user", nil, &userID, map[string]any{}); err != nil {
+					return err
+				}
+			}
 		}
+		// Moved users no longer carry this admin's id, so only the rest are
+		// deleted here.
 		if _, err := tx.ExecContext(r.Context(), `UPDATE users SET status = ?, last_status_change = ? WHERE admin_id = ?`, "deleted", now, target.ID); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(r.Context(), `UPDATE admins SET status = ? WHERE id = ?`, string(adminapp.StatusDeleted), target.ID); err != nil {
 			return err
 		}
-		return s.recordRecentActionEventTx(r.Context(), tx, "admin.delete", "admin", deletedUsername, "Deleted admin")
+		summary := "Deleted admin"
+		if destination != nil {
+			summary = fmt.Sprintf("Deleted admin and moved its users to %s", destination.Username)
+		}
+		return s.recordRecentActionEventTx(r.Context(), tx, "admin.delete", "admin", deletedUsername, summary)
 	})
 	if err != nil {
 		writeStatusError(w, err)
@@ -566,7 +616,7 @@ func (s *Server) handleDeleteAdmin(w http.ResponseWriter, r *http.Request, usern
 	}
 	s.telegramReports.AdminDeleted(r.Context(), deletedReport)
 	s.enqueueWebhook(r.Context(), webhookAdminEvent(webhookapp.ActionAdminDeleted, deletedReport))
-	writeJSON(w, http.StatusOK, map[string]any{"detail": "Admin removed successfully"})
+	writeJSON(w, http.StatusOK, map[string]any{"detail": "Admin removed successfully", "moved_users": movedUsers})
 }
 
 func (s *Server) handleDisableAdmin(w http.ResponseWriter, r *http.Request, username string) {
@@ -974,6 +1024,28 @@ func parseAdminPath(path string) (string, string, bool) {
 		return username, "", true
 	}
 	return username, strings.Join(parts[1:], "/"), true
+}
+
+// ensureCanMoveUsersBetween lets an actor hand users from one admin to
+// another only when it may manage both. Unlike ensureCanManageAdmin, a full
+// access admin may receive users, which is the usual way an owner takes back
+// a reseller's customers.
+func ensureCanMoveUsersBetween(actor adminapp.Admin, source adminapp.Admin, destination adminapp.Admin) error {
+	if !actor.Role.IsGlobal() || !canEditAdmins(actor) {
+		return statusError{status: http.StatusForbidden, detail: "You're not allowed to move users between admins"}
+	}
+	for _, admin := range []adminapp.Admin{source, destination} {
+		if strings.EqualFold(actor.Username, admin.Username) || actor.Role == adminapp.RoleFullAccess {
+			continue
+		}
+		if admin.Role == adminapp.RoleFullAccess {
+			return statusError{status: http.StatusForbidden, detail: "Only a full access admin can move users to or from a full access admin"}
+		}
+		if admin.Role == adminapp.RoleSudo && !actor.Permissions.AdminManagement.CanManageSudo {
+			return statusError{status: http.StatusForbidden, detail: "You're not allowed to move users of a sudo admin"}
+		}
+	}
+	return nil
 }
 
 func canEditAdmins(actor adminapp.Admin) bool {

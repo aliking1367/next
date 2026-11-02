@@ -64,6 +64,7 @@ import {
 	generateSuccessMessage,
 } from "utils/toastHandler";
 import { z } from "zod";
+import { type AdminLogin, AdminLoginShareModal } from "./AdminLoginShareModal";
 import AdminPermissionsEditor from "./AdminPermissionsEditor";
 import AdminPermissionsModal from "./AdminPermissionsModal";
 import {
@@ -463,6 +464,7 @@ export const AdminDialog: FC = () => {
 		}, 900);
 	}, []);
 
+	const [createdLogin, setCreatedLogin] = useState<AdminLogin | null>(null);
 	const handleCloseAdminDialog = useCallback(() => {
 		clearSubmitTimers();
 		setSubmitStatus("idle");
@@ -906,6 +908,12 @@ export const AdminDialog: FC = () => {
 						await fetchAdmins(undefined, { force: true });
 					}
 					generateSuccessMessage(t("admins.createSuccess"), toast);
+					if (payload.password) {
+						setCreatedLogin({
+							username: createdAdmin.username,
+							password: payload.password,
+						});
+					}
 					if (serviceSyncError) {
 						generateErrorMessage(serviceSyncError, toast);
 					}
@@ -1751,6 +1759,10 @@ export const AdminDialog: FC = () => {
 					</XrayModalFooter>
 				</XrayModalContent>
 			</Modal>
+			<AdminLoginShareModal
+				login={createdLogin}
+				onClose={() => setCreatedLogin(null)}
+			/>
 			<AdminPermissionsModal
 				isOpen={permissionsModalOpen}
 				onClose={() => setPermissionsModalOpen(false)}

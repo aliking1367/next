@@ -154,6 +154,25 @@ func (r Repository) bulkUsersActionMutation(ctx context.Context, requester admin
 			return BulkUsersActionResult{}, err
 		}
 		result = BulkUsersActionResult{Detail: detail, Count: count}
+	case AdvancedUserActionChangeAdmin:
+		destination := opts.DestinationAdmin
+		if targetAdmin == nil || destination == nil {
+			return BulkUsersActionResult{}, clientError(400, "Choose the admin whose users move and the admin that receives them.")
+		}
+		if targetAdmin.ID == destination.ID {
+			return BulkUsersActionResult{}, clientError(400, "The users already belong to this admin.")
+		}
+		now := time.Now().UTC()
+		restored, err := TransferUsersToAdminTx(ctx, tx, affectedUserIDs, *destination, now)
+		if err != nil {
+			return BulkUsersActionResult{}, err
+		}
+		for _, userID := range restored {
+			if err := r.enqueueUserOperationForNodesTx(ctx, tx, NodeOperationEnableUser, userID, now); err != nil {
+				return BulkUsersActionResult{}, err
+			}
+		}
+		result = BulkUsersActionResult{Detail: "Users moved to " + destination.Username, Count: int64(len(affectedUserIDs))}
 	case AdvancedUserActionDeleteUsers:
 	default:
 		return BulkUsersActionResult{}, clientError(400, "Unsupported action")
@@ -201,7 +220,7 @@ func (r Repository) bulkAffectedUserIDsTx(ctx context.Context, tx *sql.Tx, targe
 		}
 		filter.where = append(filter.where, "(service_id IS NULL OR service_id != ?)")
 		filter.args = append(filter.args, *payload.TargetServiceID)
-	case AdvancedUserActionDeleteUsers:
+	case AdvancedUserActionDeleteUsers, AdvancedUserActionChangeAdmin:
 		filter.addStatuses("status", payload.Scope)
 	default:
 		return nil, nil

@@ -14,11 +14,15 @@ import {
 	ModalFooter,
 	ModalHeader,
 	ModalOverlay,
+	Radio,
+	RadioGroup,
+	Select,
 	SimpleGrid,
 	Stack,
 	type TableProps,
 	Text,
 	Textarea,
+	VStack,
 	useColorModeValue,
 	useDisclosure,
 	useToast,
@@ -193,6 +197,10 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 	const dialogBorderColor = useColorModeValue("light-border", "gray.700");
 	const inlineMenuBg = useColorModeValue("blackAlpha.50", "whiteAlpha.50");
 	const adminOptions = useAdminsStore((state) => state.adminOptions);
+	const [deleteUsersMode, setDeleteUsersMode] = useState<"transfer" | "delete">(
+		"transfer",
+	);
+	const [deleteTransferTo, setDeleteTransferTo] = useState("");
 	const admins = useAdminsStore((state) => state.admins);
 	const loading = useAdminsStore((state) => state.loading);
 	const total = useAdminsStore((state) => state.total);
@@ -328,10 +336,15 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 		);
 	}, [visibleAdminUsernameSet]);
 
-	const handleDeleteAdmin = async (admin: Admin) => {
+	const handleDeleteAdmin = async (admin: Admin, transferUsersTo?: string) => {
 		try {
-			await deleteAdmin(admin.username);
-			generateSuccessMessage(t("admins.deleteSuccess"), toast);
+			await deleteAdmin(admin.username, transferUsersTo);
+			generateSuccessMessage(
+				transferUsersTo
+					? t("admins.deleteMovedSuccess", { username: transferUsersTo })
+					: t("admins.deleteSuccess"),
+				toast,
+			);
 			fetchAdmins();
 			return true;
 		} catch (error) {
@@ -405,8 +418,23 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 		closeDeleteDialog();
 		setAdminToDelete(null);
 	};
+	// An admin with users is deleted either with them or after handing them
+	// to another admin; moving is the default so a slip does not wipe out a
+	// reseller's customers.
+	const deleteNeedsChoice = Boolean(adminToDelete?.users_count);
+	const transferCandidates = useMemo(
+		() =>
+			(adminOptions.length ? adminOptions : admins).filter(
+				(admin) =>
+					admin.username !== adminToDelete?.username &&
+					admin.status === AdminStatus.Active,
+			),
+		[adminOptions, admins, adminToDelete],
+	);
 	const startDeleteAdmin = (admin: Admin) => {
 		setAdminToDelete(admin);
+		setDeleteUsersMode("transfer");
+		setDeleteTransferTo("");
 		openDeleteDialog();
 		closeContextMenu();
 	};
@@ -416,7 +444,12 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 		}
 		setActionState({ type: "deleteAdmin", username: adminToDelete.username });
 		try {
-			const deleted = await handleDeleteAdmin(adminToDelete);
+			const deleted = await handleDeleteAdmin(
+				adminToDelete,
+				deleteNeedsChoice && deleteUsersMode === "transfer"
+					? deleteTransferTo
+					: undefined,
+			);
 			if (deleted) {
 				closeDeleteDialogAndReset();
 			}
@@ -1171,13 +1204,68 @@ export const AdminsTable: FC<AdminsTableProps> = ({
 				onClose={closeDeleteDialogAndReset}
 				onConfirm={confirmDeleteAdmin}
 				title={t("delete")}
-				description={t("admins.confirmDeleteMessage", {
-					username: adminToDelete?.username ?? "",
-				})}
+				description={
+					<VStack align="stretch" spacing={3}>
+						<Text>
+							{t("admins.confirmDeleteMessage", {
+								username: adminToDelete?.username ?? "",
+							})}
+						</Text>
+						{deleteNeedsChoice && (
+							<>
+								<RadioGroup
+									value={deleteUsersMode}
+									onChange={(value) =>
+										setDeleteUsersMode(value as "transfer" | "delete")
+									}
+								>
+									<Stack spacing={2}>
+										<Radio value="transfer">
+											{t("admins.deleteMoveUsers", {
+												count: adminToDelete?.users_count ?? 0,
+											})}
+										</Radio>
+										<Radio value="delete" colorScheme="red">
+											{t("admins.deleteWithUsers", {
+												count: adminToDelete?.users_count ?? 0,
+											})}
+										</Radio>
+									</Stack>
+								</RadioGroup>
+								{deleteUsersMode === "transfer" && (
+									<>
+										<Select
+											size="sm"
+											placeholder={t("admins.deleteMoveTarget")}
+											value={deleteTransferTo}
+											onChange={(event) =>
+												setDeleteTransferTo(event.target.value)
+											}
+										>
+											{transferCandidates.map((admin) => (
+												<option key={admin.username} value={admin.username}>
+													{admin.username}
+												</option>
+											))}
+										</Select>
+										<Text fontSize="xs" color="gray.500">
+											{t("admins.deleteMoveHint")}
+										</Text>
+									</>
+								)}
+							</>
+						)}
+					</VStack>
+				}
 				confirmLabel={t("delete")}
 				colorScheme="red"
 				isLoading={actionState?.type === "deleteAdmin"}
-				isConfirmDisabled={!adminToDelete}
+				isConfirmDisabled={
+					!adminToDelete ||
+					(deleteNeedsChoice &&
+						deleteUsersMode === "transfer" &&
+						!deleteTransferTo)
+				}
 			/>
 
 			<ConfirmDialog

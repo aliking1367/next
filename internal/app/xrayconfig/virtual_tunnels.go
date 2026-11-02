@@ -81,6 +81,28 @@ func normalizeVirtualTunnelInbound(inbound map[string]any) map[string]any {
 }
 
 func normalizeVirtualTunnelSettings(protocol string, settings map[string]any) map[string]any {
+	return unescapePEMFields(normalizeVirtualTunnelSettingsFor(protocol, settings))
+}
+
+// pemSettingKeys are the settings that hold PEM text for the tunnel daemons.
+var pemSettingKeys = []string{"ca", "ca_certificate", "server_certificate", "server_key", "dh", "tls_crypt", "tls_auth"}
+
+// unescapePEMFields turns a PEM pasted as one line with literal "\n" back
+// into real lines. ocserv and openvpn refuse a one-line PEM, and the inbound
+// keeps working only until the next apply, so the damage shows up late.
+func unescapePEMFields(settings map[string]any) map[string]any {
+	for _, key := range pemSettingKeys {
+		value, ok := settings[key].(string)
+		if !ok || !strings.Contains(value, "-----BEGIN") || !strings.Contains(value, `\n`) {
+			continue
+		}
+		value = strings.ReplaceAll(value, `\r\n`, "\n")
+		settings[key] = strings.TrimSpace(strings.ReplaceAll(value, `\n`, "\n"))
+	}
+	return settings
+}
+
+func normalizeVirtualTunnelSettingsFor(protocol string, settings map[string]any) map[string]any {
 	switch protocol {
 	case WGProtocol:
 		return normalizeWGSettings(settings)

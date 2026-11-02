@@ -46,7 +46,7 @@ type AdminsStore = {
 	onFilterChange: (filters: Partial<AdminFilters>) => void;
 	createAdmin: (payload: AdminCreatePayload) => Promise<Admin>;
 	updateAdmin: (username: string, payload: AdminUpdatePayload) => Promise<void>;
-	deleteAdmin: (username: string) => Promise<void>;
+	deleteAdmin: (username: string, transferUsersTo?: string) => Promise<void>;
 	resetUsage: (username: string) => Promise<void>;
 	resetDeletedUsersUsage: (
 		username: string,
@@ -399,8 +399,11 @@ export const useAdminsStore = create<AdminsStore>((set, get) => ({
 		await get().fetchAdmins(undefined, { force: true });
 		await get().fetchAdminOptions(undefined, { force: true });
 	},
-	async deleteAdmin(username) {
-		await fetch(`/admin/${encodeURIComponent(username)}`, {
+	async deleteAdmin(username, transferUsersTo) {
+		const query = transferUsersTo
+			? `?transfer_users_to=${encodeURIComponent(transferUsersTo)}`
+			: "";
+		await fetch(`/admin/${encodeURIComponent(username)}${query}`, {
 			method: "DELETE",
 		});
 		await get().fetchAdmins(undefined, { force: true });

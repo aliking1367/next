@@ -112,6 +112,7 @@ func ValidateBulkUsersAction(payload *BulkUsersActionRequest) error {
 		AdvancedUserActionDisableUsers:    {},
 		AdvancedUserActionChangeService:   {},
 		AdvancedUserActionDeleteUsers:     {},
+		AdvancedUserActionChangeAdmin:     {},
 	}
 	if _, ok := allowedActions[payload.Action]; !ok {
 		return ValidationError{Detail: "unsupported bulk action"}
@@ -172,6 +173,9 @@ func ValidateBulkUsersAction(payload *BulkUsersActionRequest) error {
 		if *payload.TargetServiceID <= 0 {
 			return ValidationError{Detail: "target_service_id must be a positive integer when provided for change_service"}
 		}
+	}
+	if payload.Action == AdvancedUserActionChangeAdmin && (payload.TargetAdminUsername == nil || strings.TrimSpace(*payload.TargetAdminUsername) == "") {
+		return ValidationError{Detail: "target_admin_username is required for change_admin"}
 	}
 	if payload.ServiceIDIsNull != nil && *payload.ServiceIDIsNull && payload.ServiceID != nil {
 		return ValidationError{Detail: "service_id and service_id_is_null cannot both be set"}

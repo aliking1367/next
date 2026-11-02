@@ -508,10 +508,30 @@ func (s *Server) handleBulkUsersAction(w http.ResponseWriter, r *http.Request, s
 		writeUserMutationError(w, err)
 		return
 	}
+	var destinationAdmin *adminapp.Admin
+	if payload.Action == userapp.AdvancedUserActionChangeAdmin && payload.TargetAdminUsername != nil {
+		destination, found, err := s.adminRepo.AdminByUsername(r.Context(), *payload.TargetAdminUsername)
+		if err != nil {
+			writeUserMutationError(w, err)
+			return
+		}
+		if !found {
+			writeError(w, http.StatusNotFound, "Admin not found")
+			return
+		}
+		if targetAdmin != nil {
+			if err := ensureCanMoveUsersBetween(principal.Context.Admin, *targetAdmin, destination); err != nil {
+				writeStatusError(w, err)
+				return
+			}
+		}
+		destinationAdmin = &destination
+	}
 	// TODO: emit bulk users action report through the Go Telegram notifier.
 	result, err := s.userService.BulkUsersAction(r.Context(), principal.Context.Admin, payload, userapp.BulkUsersActionOptions{
-		TargetAdmin:    targetAdmin,
-		ServiceRouteID: serviceRouteID,
+		TargetAdmin:      targetAdmin,
+		ServiceRouteID:   serviceRouteID,
+		DestinationAdmin: destinationAdmin,
 	})
 	if err != nil {
 		writeUserMutationError(w, err)

@@ -50,6 +50,7 @@ const (
 	AdvancedUserActionDisableUsers    AdvancedUserAction = "disable_users"
 	AdvancedUserActionChangeService   AdvancedUserAction = "change_service"
 	AdvancedUserActionDeleteUsers     AdvancedUserAction = "delete_users"
+	AdvancedUserActionChangeAdmin     AdvancedUserAction = "change_admin"
 )
 
 type ProxyPayload map[string]map[string]any
@@ -117,20 +118,21 @@ type UserModify struct {
 }
 
 type BulkUsersActionRequest struct {
-	Action            AdvancedUserAction `json:"action"`
-	Days              *int64             `json:"days,omitempty"`
-	Gigabytes         *float64           `json:"gigabytes,omitempty"`
-	Statuses          []UserStatus       `json:"statuses,omitempty"`
-	Scope             []UserStatus       `json:"scope,omitempty"`
-	AdminUsername     *string            `json:"admin_username,omitempty"`
-	ServiceID         *int64             `json:"service_id,omitempty"`
-	TargetServiceID   *int64             `json:"target_service_id,omitempty"`
-	ServiceIDIsNull   *bool              `json:"service_id_is_null,omitempty"`
-	Usernames         []string           `json:"usernames,omitempty"`
-	LastOnlineDays    *int64             `json:"last_online_days,omitempty"`
-	StatusAgeDays     *int64             `json:"status_age_days,omitempty"`
-	CreatedBeforeDays *int64             `json:"created_before_days,omitempty"`
-	DryRun            bool               `json:"dry_run,omitempty"`
+	Action              AdvancedUserAction `json:"action"`
+	Days                *int64             `json:"days,omitempty"`
+	Gigabytes           *float64           `json:"gigabytes,omitempty"`
+	Statuses            []UserStatus       `json:"statuses,omitempty"`
+	Scope               []UserStatus       `json:"scope,omitempty"`
+	AdminUsername       *string            `json:"admin_username,omitempty"`
+	ServiceID           *int64             `json:"service_id,omitempty"`
+	TargetServiceID     *int64             `json:"target_service_id,omitempty"`
+	TargetAdminUsername *string            `json:"target_admin_username,omitempty"`
+	ServiceIDIsNull     *bool              `json:"service_id_is_null,omitempty"`
+	Usernames           []string           `json:"usernames,omitempty"`
+	LastOnlineDays      *int64             `json:"last_online_days,omitempty"`
+	StatusAgeDays       *int64             `json:"status_age_days,omitempty"`
+	CreatedBeforeDays   *int64             `json:"created_before_days,omitempty"`
+	DryRun              bool               `json:"dry_run,omitempty"`
 }
 
 type BulkUsersActionResult struct {
@@ -142,6 +144,8 @@ type BulkUsersActionResult struct {
 type BulkUsersActionOptions struct {
 	TargetAdmin    *adminapp.Admin
 	ServiceRouteID *int64
+	// DestinationAdmin receives the users of a change_admin action.
+	DestinationAdmin *adminapp.Admin
 }
 
 type InboundInfo struct {

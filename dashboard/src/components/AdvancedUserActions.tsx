@@ -29,7 +29,7 @@ import { useServicesStore } from "contexts/ServicesContext";
 import useGetUser from "hooks/useGetUser";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AdminRole, AdminTrafficLimitMode } from "types/Admin";
+import { AdminRole, AdminStatus, AdminTrafficLimitMode } from "types/Admin";
 import type {
 	AdvancedUserActionPayload,
 	AdvancedUserActionScopeStatus,
@@ -113,6 +113,8 @@ const AdvancedUserActions = ({
 	const [statusAgeDays, setStatusAgeDays] = useState("");
 	const [createdBeforeDays, setCreatedBeforeDays] = useState("");
 	const [isChangingService, setIsChangingService] = useState(false);
+	const [targetAdminValue, setTargetAdminValue] = useState("");
+	const [isChangingAdmin, setIsChangingAdmin] = useState(false);
 	const adminList = useAdminsStore((store) => store.adminOptions);
 	const adminOptionsLoading = useAdminsStore(
 		(store) => store.adminOptionsLoading,
@@ -426,6 +428,46 @@ const AdvancedUserActions = ({
 		}
 	};
 
+	// Moves the matched users to another admin. It needs one source admin, so
+	// "all users" is not offered as a source.
+	const sourceAdminUsername =
+		ownerSelection === "all_users" ? null : resolveTargetAdminUsername();
+	const handleChangeAdmin = async () => {
+		if (!sourceAdminUsername) {
+			showToast(t("filters.advancedActions.adminChange.needSource"), "warning");
+			return;
+		}
+		if (!targetAdminValue || targetAdminValue === sourceAdminUsername) {
+			showToast(t("filters.advancedActions.adminChange.needTarget"), "warning");
+			return;
+		}
+		const targeting = buildTargetingPayload();
+		if (!targeting) return;
+		setIsChangingAdmin(true);
+		try {
+			const payload: AdvancedUserActionPayload = {
+				action: "change_admin",
+				admin_username: sourceAdminUsername,
+				...buildServiceScopePayload(),
+				target_admin_username: targetAdminValue,
+				...(targeting.status_age_days ? { scope: selectedScopeStatuses } : {}),
+				...targeting,
+			};
+			const result = await performBulkUserAction(payload);
+			showToast(
+				t("filters.advancedActions.success.changeAdmin", {
+					count: result.count ?? 0,
+					username: targetAdminValue,
+				}),
+				"success",
+			);
+		} catch (error) {
+			handleError(resolveErrorMessage(error));
+		} finally {
+			setIsChangingAdmin(false);
+		}
+	};
+
 	const toggleStatus = (status: AdvancedUserActionStatus) => {
 		setSelectedStatuses((prev) =>
 			prev.includes(status)
@@ -561,6 +603,47 @@ const AdvancedUserActions = ({
 							</Stack>
 						</Box>
 					)}
+
+					<Box borderWidth="1px" borderRadius="md" px={4} py={4}>
+						<Stack spacing={3}>
+							<Text fontWeight="semibold">
+								{t("filters.advancedActions.adminChange.title")}
+							</Text>
+							<Text fontSize="sm" color="gray.500">
+								{t("filters.advancedActions.adminChange.helper")}
+							</Text>
+							<Select
+								placeholder={t(
+									"filters.advancedActions.adminChange.placeholder",
+								)}
+								value={targetAdminValue}
+								onChange={(event) => setTargetAdminValue(event.target.value)}
+								size="sm"
+							>
+								{adminList
+									.filter(
+										(admin) =>
+											admin.username !== sourceAdminUsername &&
+											admin.status === AdminStatus.Active,
+									)
+									.map((admin) => (
+										<option key={admin.username} value={admin.username}>
+											{admin.username}
+										</option>
+									))}
+							</Select>
+							<Button
+								colorScheme="primary"
+								size="sm"
+								alignSelf="flex-start"
+								isLoading={isChangingAdmin}
+								isDisabled={!sourceAdminUsername || !targetAdminValue}
+								onClick={handleChangeAdmin}
+							>
+								{t("filters.advancedActions.adminChange.button")}
+							</Button>
+						</Stack>
+					</Box>
 				</>
 			)}
 
