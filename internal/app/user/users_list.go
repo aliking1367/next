@@ -532,6 +532,12 @@ func addAdvancedUsersFilters(filter *usersFilter, filters []string) {
 	if _, ok := normalized["finished"]; ok {
 		filter.add("u.status IN (?, ?)", "limited", "expired")
 	}
+	if _, ok := normalized["expiring"]; ok {
+		// Active users about to run out: within three days, or under a tenth
+		// of their traffic left. The bot lists them so they can be renewed in
+		// time.
+		filter.add("u.status = ? AND ((u.expire IS NOT NULL AND u.expire > 0 AND u.expire <= ?) OR (u.data_limit IS NOT NULL AND u.data_limit > 0 AND (u.data_limit - u.used_traffic) * 10 < u.data_limit))", "active", now.Add(72*time.Hour).Unix())
+	}
 	if _, ok := normalized["limit"]; ok {
 		filter.add("u.data_limit IS NOT NULL")
 		filter.add("u.data_limit > 0")

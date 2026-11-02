@@ -166,6 +166,14 @@ func backupAuthorized(settings Settings, id int64) bool {
 	return settings.BackupChatID != nil && *settings.BackupChatID == id
 }
 
+// replyWithPad sends a message that also sets the button pad under the
+// chat's typing box.
+func (b *Bot) replyWithPad(ctx context.Context, settings Settings, chatID int64, text string, pad *ReplyKeyboard) {
+	if err := b.client.sendMessageWithMarkup(ctx, settings, chatID, text, pad); err != nil {
+		b.logf("telegram bot: sendMessage: %v", err)
+	}
+}
+
 func (b *Bot) reply(ctx context.Context, settings Settings, chatID int64, text string, keyboard *InlineKeyboard) {
 	if err := b.client.sendMessage(ctx, settings, chatID, text, keyboard); err != nil {
 		b.logf("telegram bot: sendMessage: %v", err)

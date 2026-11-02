@@ -52,6 +52,18 @@ type InlineKeyboard struct {
 	InlineKeyboard [][]InlineButton `json:"inline_keyboard"`
 }
 
+// ReplyKeyboard is the button pad Telegram shows in place of the typing
+// keyboard. Pressing a button sends its text as a message.
+type ReplyKeyboard struct {
+	Keyboard       [][]ReplyButton `json:"keyboard"`
+	ResizeKeyboard bool            `json:"resize_keyboard"`
+	IsPersistent   bool            `json:"is_persistent"`
+}
+
+type ReplyButton struct {
+	Text string `json:"text"`
+}
+
 type InlineButton struct {
 	Text         string `json:"text"`
 	CallbackData string `json:"callback_data,omitempty"`
@@ -134,6 +146,22 @@ type NewUser struct {
 	Days        int64
 }
 
+// User list kinds the bot offers.
+const (
+	ListAll      = "a"
+	ListExpiring = "e"
+	ListFinished = "f"
+	ListSearch   = "s"
+)
+
+// UserListQuery picks one page of a user list.
+type UserListQuery struct {
+	Kind   string
+	Search string
+	Offset int64
+	Limit  int64
+}
+
 // UserService exposes the user operations the bot needs. Implementations must
 // enforce the same permissions/limits as the HTTP API, and Get must only find
 // users the actor may see.
@@ -144,6 +172,9 @@ type UserService interface {
 	// either may be zero.
 	Renew(ctx context.Context, actor Actor, username string, days int64, gigabytes int64) error
 	Services(ctx context.Context, actor Actor) ([]ServiceOption, error)
+	// List returns one page of the users the actor may see and the total
+	// that match.
+	List(ctx context.Context, actor Actor, query UserListQuery) ([]UserView, int64, error)
 	Delete(ctx context.Context, actor Actor, username string) error
 	Reset(ctx context.Context, actor Actor, username string) error
 	RevokeSubscription(ctx context.Context, actor Actor, username string) error

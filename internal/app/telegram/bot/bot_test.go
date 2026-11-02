@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -108,6 +109,25 @@ func (f *fakeUsers) Renew(_ context.Context, _ Actor, username string, days int6
 	defer f.mu.Unlock()
 	f.renewals = append(f.renewals, fmt.Sprintf("%s:%dd:%dg", username, days, gigabytes))
 	return nil
+}
+
+func (f *fakeUsers) List(_ context.Context, _ Actor, query UserListQuery) ([]UserView, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	names := make([]string, 0, len(f.users))
+	for name := range f.users {
+		if query.Kind == ListSearch && !strings.Contains(name, query.Search) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	total := int64(len(names))
+	views := []UserView{}
+	for i := query.Offset; i < total && i < query.Offset+query.Limit; i++ {
+		views = append(views, f.users[names[i]])
+	}
+	return views, total, nil
 }
 
 func (f *fakeUsers) Services(context.Context, Actor) ([]ServiceOption, error) {

@@ -178,3 +178,72 @@ func testBotMigratedServer(t *testing.T) (*Server, *sql.DB) {
 	}
 	return server, db
 }
+
+func TestBotListsAreScopedAndFiltered(t *testing.T) {
+	server, db := testBotMigratedServer(t)
+	ctx := context.Background()
+	seller, _, _ := server.adminRepo.AdminByUsername(ctx, "seller")
+	owner, _, _ := server.adminRepo.AdminByUsername(ctx, "owner")
+	users := botUserService{server: server}
+	sellerActor := telegrambot.Actor{Username: "seller", Admin: seller, Reseller: true}
+	ownerActor := telegrambot.Actor{Username: "owner", Admin: owner}
+
+	for _, item := range []struct {
+		actor telegrambot.Actor
+		name  string
+		days  int64
+	}{
+		{sellerActor, "s_soon", 2},
+		{sellerActor, "s_later", 40},
+		{sellerActor, "s_done", 40},
+		{ownerActor, "o_soon", 1},
+	} {
+		if err := users.Create(ctx, item.actor, telegrambot.NewUser{Username: item.name, ServiceID: 1, DataLimitGB: 10, Days: item.days}); err != nil {
+			t.Fatalf("create %s: %v", item.name, err)
+		}
+	}
+	if _, err := db.Exec(`UPDATE users SET status = 'limited', used_traffic = data_limit WHERE username = 's_done'`); err != nil {
+		t.Fatal(err)
+	}
+
+	names := func(actor telegrambot.Actor, query telegrambot.UserListQuery) []string {
+		query.Limit = 10
+		views, total, err := users.List(ctx, actor, query)
+		if err != nil {
+			t.Fatalf("list %+v: %v", query, err)
+		}
+		out := []string{}
+		for _, view := range views {
+			out = append(out, view.Username)
+		}
+		if int64(len(out)) != total {
+			t.Fatalf("list %+v total=%d rows=%v", query, total, out)
+		}
+		return out
+	}
+	has := func(list []string, name string) bool {
+		for _, item := range list {
+			if item == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	all := names(sellerActor, telegrambot.UserListQuery{Kind: telegrambot.ListAll})
+	if len(all) != 3 || has(all, "o_soon") {
+		t.Fatalf("seller all = %v", all)
+	}
+	if got := names(sellerActor, telegrambot.UserListQuery{Kind: telegrambot.ListExpiring}); len(got) != 1 || got[0] != "s_soon" {
+		t.Fatalf("seller expiring = %v", got)
+	}
+	if got := names(sellerActor, telegrambot.UserListQuery{Kind: telegrambot.ListFinished}); len(got) != 1 || got[0] != "s_done" {
+		t.Fatalf("seller finished = %v", got)
+	}
+	if got := names(sellerActor, telegrambot.UserListQuery{Kind: telegrambot.ListSearch, Search: "soon"}); len(got) != 1 || got[0] != "s_soon" {
+		t.Fatalf("seller search = %v", got)
+	}
+	if got := names(ownerActor, telegrambot.UserListQuery{Kind: telegrambot.ListExpiring}); !has(got, "o_soon") || !has(got, "s_soon") {
+		t.Fatalf("owner expiring = %v", got)
+	}
+}

@@ -64,14 +64,23 @@ func (c client) getUpdates(ctx context.Context, settings Settings, offset int64,
 }
 
 func (c client) sendMessage(ctx context.Context, settings Settings, chatID int64, text string, keyboard *InlineKeyboard) error {
+	if keyboard == nil {
+		return c.sendMessageWithMarkup(ctx, settings, chatID, text, nil)
+	}
+	return c.sendMessageWithMarkup(ctx, settings, chatID, text, keyboard)
+}
+
+// sendMessageWithMarkup sends with any reply_markup, such as a ReplyKeyboard.
+// A nil markup sends none.
+func (c client) sendMessageWithMarkup(ctx context.Context, settings Settings, chatID int64, text string, markup any) error {
 	payload := map[string]any{
 		"chat_id":                  chatID,
 		"text":                     text,
 		"parse_mode":               "HTML",
 		"disable_web_page_preview": true,
 	}
-	if keyboard != nil {
-		payload["reply_markup"] = keyboard
+	if markup != nil {
+		payload["reply_markup"] = markup
 	}
 	return c.fireAndForget(ctx, settings, "sendMessage", payload)
 }

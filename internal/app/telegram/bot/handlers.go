@@ -62,20 +62,22 @@ func (b *Bot) handleMessage(ctx context.Context, settings Settings, msg *Message
 	command, arg := splitCommand(text)
 
 	if !strings.HasPrefix(text, "/") {
+		if b.handlePadButton(ctx, settings, who, chatID, text) {
+			return
+		}
 		// Multi-step flows take priority over a plain username lookup.
 		if conv, ok := b.state.get(ctx, chatID); ok {
 			b.handleConversation(ctx, settings, who, chatID, conv, text)
 			return
 		}
-		if text != "" {
-			b.handleUserCommand(ctx, settings, who, chatID, text)
-		}
+		b.lookupUser(ctx, settings, who, chatID, text)
 		return
 	}
 
 	switch command {
 	case "/start", "/help":
-		b.reply(ctx, settings, chatID, helpText(who), mainMenuKeyboard(who.reseller()))
+		_ = b.state.clear(ctx, chatID)
+		b.sendStart(ctx, settings, who, chatID)
 	case "/cancel":
 		_ = b.state.clear(ctx, chatID)
 		b.reply(ctx, settings, chatID, "لغو شد.", mainMenuKeyboard(who.reseller()))
@@ -158,6 +160,9 @@ func (b *Bot) handleConversation(ctx context.Context, settings Settings, who cal
 			return
 		}
 		b.sendRefreshedUser(ctx, settings, who, chatID, 0, username, "یادداشت ثبت شد")
+	case stateSearch:
+		_ = b.state.clear(ctx, chatID)
+		b.lookupUser(ctx, settings, who, chatID, text)
 	case stateNewUsername, stateNewService, stateNewGB, stateNewDays, stateNewConfirm, stateRenewDays, stateRenewGB, stateRenewConfirm:
 		b.handleFlowText(ctx, settings, who, chatID, conv, text)
 	default:
@@ -178,6 +183,7 @@ var ownerOnlyCallbacks = map[string]bool{
 	cbRestoreConfirm:    true,
 	cbRestoreCancel:     true,
 	cbSystem:            true,
+	cbBackupMenu:        true,
 }
 
 func (b *Bot) handleCallback(ctx context.Context, settings Settings, query *CallbackQuery) {
@@ -216,6 +222,9 @@ func (b *Bot) handleCallback(ctx context.Context, settings Settings, query *Call
 		}
 	}
 
+	if b.handleMenuCallback(ctx, settings, who, query, chatID, messageID, prefix, value) {
+		return
+	}
 	if b.handleFlowCallback(ctx, settings, who, query, chatID, prefix, value) {
 		return
 	}

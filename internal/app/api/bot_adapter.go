@@ -166,6 +166,50 @@ func backupSubscriptionURLs(detail userapp.UserDetail) []string {
 	return backups
 }
 
+// List returns one page of the users the actor may see: everyone for an
+// owner chat, its own users for an admin.
+func (b botUserService) List(ctx context.Context, actor telegrambot.Actor, query telegrambot.UserListQuery) ([]telegrambot.UserView, int64, error) {
+	adminCtx := userapp.AdminContext{
+		Username:       "telegram-bot",
+		Role:           string(adminapp.RoleFullAccess),
+		CanViewTraffic: true,
+		CanSortTraffic: true,
+	}
+	if actor.Reseller {
+		admin, err := b.actorAdmin(actor)
+		if err != nil {
+			return nil, 0, err
+		}
+		adminCtx = userAdminContextFor(admin, nil)
+	}
+	offset, limit := query.Offset, query.Limit
+	req := userapp.UsersListRequest{Offset: &offset, Limit: &limit, Admin: adminCtx}
+	switch query.Kind {
+	case telegrambot.ListExpiring:
+		req.AdvancedFilters = []string{"expiring"}
+		req.Sort = []userapp.SortOption{{Field: "expire", Direction: "asc"}}
+	case telegrambot.ListFinished:
+		req.AdvancedFilters = []string{"finished"}
+	case telegrambot.ListSearch:
+		req.Search = query.Search
+	}
+	result, err := b.server.userService.UsersList(ctx, req)
+	if err != nil {
+		return nil, 0, botMutationError(err)
+	}
+	views := make([]telegrambot.UserView, 0, len(result.Users))
+	for _, user := range result.Users {
+		views = append(views, telegrambot.UserView{
+			Username:    user.Username,
+			Status:      user.Status,
+			UsedTraffic: user.UsedTraffic,
+			DataLimit:   user.DataLimit,
+			Expire:      user.Expire,
+		})
+	}
+	return views, result.Total, nil
+}
+
 // Services lists the services the actor may put a new user on.
 func (b botUserService) Services(ctx context.Context, actor telegrambot.Actor) ([]telegrambot.ServiceOption, error) {
 	admin, err := b.actorAdmin(actor)

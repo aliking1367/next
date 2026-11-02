@@ -71,14 +71,6 @@ func restoreConfirmKeyboard() *InlineKeyboard {
 	}}
 }
 
-func mainMenuKeyboard(reseller bool) *InlineKeyboard {
-	rows := [][]InlineButton{{{Text: "➕ ساخت کاربر", CallbackData: cbNew}}}
-	if !reseller {
-		rows = append(rows, []InlineButton{{Text: "🖥 وضعیت سرور", CallbackData: cbSystem}})
-	}
-	return &InlineKeyboard{InlineKeyboard: rows}
-}
-
 // userMenuKeyboard builds the keyboard under a user's detail. An admin using
 // the bot through its own Telegram id gets links, renew, refresh and delete;
 // the owner also gets the status, reset, revoke and note buttons.
