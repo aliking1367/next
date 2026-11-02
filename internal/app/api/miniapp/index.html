@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>پنل Next</title>
+<script src="https://telegram.org/js/telegram-web-app.js?64"></script>
+<style>
+@font-face {
+  font-family: "Arad Script";
+  src: url("/statics/fonts/Arad-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+}
+@font-face {
+  font-family: "Arad Script";
+  src: url("/statics/fonts/Arad-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+}
+:root {
+  /* iOS grouped-list palette, overridden by the Telegram theme when present. */
+  --bg: var(--tg-theme-secondary-bg-color, #f2f2f7);
+  --cell: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
+  --text: var(--tg-theme-text-color, #000000);
+  --hint: var(--tg-theme-hint-color, #8e8e93);
+  --header: var(--tg-theme-section-header-text-color, #6d6d72);
+  --sep: var(--tg-theme-section-separator-color, rgba(60, 60, 67, 0.22));
+  --accent: var(--tg-theme-button-color, #007aff);
+  --accent-text: var(--tg-theme-button-text-color, #ffffff);
+  --link: var(--tg-theme-link-color, #007aff);
+  --danger: var(--tg-theme-destructive-text-color, #ff3b30);
+  --fill: rgba(118, 118, 128, 0.12);
+  --green: #34c759;
+  --orange: #ff9500;
+  --red: #ff3b30;
+  --blue: #0a84ff;
+  --gray: #8e8e93;
+  --radius: 12px;
+  --safe-top: var(--tg-content-safe-area-inset-top, 0px);
+  --safe-bottom: var(--tg-safe-area-inset-bottom, 0px);
+  color-scheme: light dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: "Arad Script", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  padding-top: var(--safe-top);
+  padding-bottom: calc(var(--safe-bottom) + 24px);
+  overscroll-behavior-y: none;
+}
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.view { display: none; padding: 0 16px; animation: push 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+.view.active { display: block; }
+@keyframes push { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+.large-title { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; margin: 14px 4px 2px; }
+.subtitle { color: var(--hint); font-size: 14px; margin: 0 4px 14px; }
+.section-title { color: var(--header); font-size: 13px; text-transform: uppercase; margin: 22px 16px 7px; }
+.section-foot { color: var(--hint); font-size: 13px; margin: 7px 16px 0; }
+.group { background: var(--cell); border-radius: var(--radius); overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 9px 16px;
+  position: relative; width: 100%; text-align: start; background: var(--cell);
+}
+.row + .row::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 16px; height: 0.5px; background: var(--sep);
+}
+.row.with-icon + .row.with-icon::before { right: 60px; }
+button.row:active, .tile:active, .chip:active { filter: brightness(0.93); }
+.row .label { flex: 1; min-width: 0; }
+.row .value { color: var(--hint); white-space: nowrap; }
+.row .chev { color: var(--gray); opacity: 0.55; font-size: 20px; line-height: 1; }
+.row.action { color: var(--link); justify-content: center; font-weight: 500; }
+.row.danger { color: var(--danger); justify-content: center; font-weight: 500; }
+.icon {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  color: #fff; font-size: 16px; flex: none;
+}
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  color: #fff; font-weight: 700; font-size: 17px; text-transform: uppercase;
+}
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { color: var(--hint); font-size: 13px; margin-top: 1px; }
+.pill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile {
+  background: var(--cell); border-radius: var(--radius); padding: 12px; text-align: start;
+  display: flex; flex-direction: column; gap: 8px; min-height: 92px;
+}
+.tile .num { font-size: 26px; font-weight: 700; }
+.tile .cap { font-size: 13px; color: var(--hint); }
+.tile .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 14px; }
+.search {
+  display: flex; align-items: center; gap: 6px; background: var(--fill); border-radius: 10px;
+  padding: 0 10px; height: 38px; margin-top: 16px;
+}
+.search input { flex: 1; border: 0; outline: 0; background: none; height: 100%; font-size: 16px; }
+.search input::placeholder { color: var(--hint); }
+.segmented {
+  display: grid; grid-template-columns: repeat(3, 1fr); background: var(--fill); border-radius: 9px;
+  padding: 2px; margin-top: 12px; gap: 2px;
+}
+.segmented button { height: 30px; border-radius: 7px; font-size: 13px; font-weight: 500; }
+.segmented button.on { background: var(--cell); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); font-weight: 600; }
+.hero { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 0 6px; }
+.hero .avatar { width: 76px; height: 76px; font-size: 32px; }
+.hero .title { font-size: 24px; font-weight: 700; }
+.ring-wrap { display: flex; align-items: center; gap: 16px; padding: 16px; }
+.ring-text .big { font-size: 22px; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+.chip {
+  padding: 8px 14px; border-radius: 999px; background: var(--fill); font-size: 15px; font-weight: 500;
+}
+.chip.on { background: var(--accent); color: var(--accent-text); }
+.field { display: flex; align-items: center; gap: 10px; padding: 0 16px; min-height: 48px; }
+.field input { flex: 1; border: 0; outline: 0; background: none; height: 46px; font-size: 16px; }
+.field .unit { color: var(--hint); }
+.mini-btn { color: var(--link); font-weight: 600; padding: 6px 4px; }
+.link-box { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--hint); word-break: break-all; padding: 12px 16px 4px; }
+.btn-row { display: flex; gap: 10px; padding: 8px 16px 14px; }
+.btn {
+  flex: 1; height: 42px; border-radius: 10px; font-weight: 600; background: var(--fill); color: var(--link);
+}
+.btn.primary { background: var(--accent); color: var(--accent-text); }
+.empty { text-align: center; color: var(--hint); padding: 32px 16px; }
+.center-msg { min-height: 70vh; display: grid; place-items: center; text-align: center; color: var(--hint); padding: 24px; }
+.spinner {
+  width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--fill); border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite; margin: 18px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.25s;
+}
+.sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-radius: 14px 14px 0 0;
+  padding: 8px 16px calc(var(--safe-bottom) + 20px); transform: translateY(105%);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1); max-height: 88vh; overflow: auto;
+}
+.sheet.open { transform: none; }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--gray); opacity: 0.4; margin: 0 auto 6px; }
+.sheet h3 { margin: 6px 4px 0; font-size: 20px; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--safe-bottom) + 24px); transform: translate(-50%, 20px);
+  background: rgba(30, 30, 30, 0.92); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px;
+  opacity: 0; transition: all 0.25s; pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<main id="app"><div class="center-msg"><div class="spinner"></div></div></main>
+<div class="sheet-backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+const tg = window.Telegram && window.Telegram.WebApp;
+const app = document.getElementById("app");
+const GB = 1024 ** 3;
+const STATUS = {
+  active: { name: "فعال", color: "var(--green)" },
+  limited: { name: "حجمش تمام شده", color: "var(--orange)" },
+  expired: { name: "زمانش تمام شده", color: "var(--red)" },
+  disabled: { name: "غیرفعال", color: "var(--gray)" },
+  on_hold: { name: "منتظر اولین اتصال", color: "var(--blue)" },
+};
+const state = { me: null, kind: "a", search: "", users: [], total: 0, stack: [], services: null };
+let mainHandler = null;
+
+// --- small helpers -----------------------------------------------------------
+function h(tag, props, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(props || {})) {
+    if (value == null || value === false) continue;
+    if (key === "class") el.className = value;
+    else if (key === "style") el.style.cssText = value;
+    else if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
+    else el.setAttribute(key, value === true ? "" : value);
+  }
+  for (const child of children.flat()) {
+    if (child == null || child === false) continue;
+    el.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return el;
+}
+const fa = (n) => Number(n).toLocaleString("fa-IR");
+const gb = (bytes) => (bytes / GB).toLocaleString("fa-IR", { maximumFractionDigits: 1 });
+function bytes(value) {
+  if (!value || value <= 0) return "۰";
+  if (value >= GB) return gb(value) + " گیگ";
+  return (value / 1024 ** 2).toLocaleString("fa-IR", { maximumFractionDigits: 0 }) + " مگ";
+}
+function daysLeft(expire) {
+  if (!expire) return null;
+  // Rounded up, so a user made for 30 days shows 30, not 29.
+  return Math.max(0, Math.ceil((expire * 1000 - Date.now()) / 86400000));
+}
+function jalali(expire) {
+  if (!expire) return "بدون انقضا";
+  try {
+    return new Intl.DateTimeFormat("fa-IR-u-ca-persian", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Tehran" }).format(new Date(expire * 1000));
+  } catch (_) {
+    return new Date(expire * 1000).toLocaleDateString("fa-IR");
+  }
+}
+function ago(value) {
+  if (!value) return "هنوز نه";
+  const time = Date.parse(value.includes("T") || value.endsWith("Z") ? value : value.replace(" ", "T") + "Z");
+  if (Number.isNaN(time)) return "-";
+  const minutes = Math.round((Date.now() - time) / 60000);
+  if (minutes < 1) return "همین الان";
+  if (minutes < 60) return fa(minutes) + " دقیقه پیش";
+  if (minutes < 1440) return fa(Math.floor(minutes / 60)) + " ساعت پیش";
+  return fa(Math.floor(minutes / 1440)) + " روز پیش";
+}
+function haptic(kind) {
+  try {
+    if (kind === "select") tg.HapticFeedback.selectionChanged();
+    else if (kind === "success" || kind === "error" || kind === "warning") tg.HapticFeedback.notificationOccurred(kind);
+    else tg.HapticFeedback.impactOccurred(kind || "light");
+  } catch (_) {}
+}
+let toastTimer = null;
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+function alertBox(text) {
+  if (tg && tg.showAlert) tg.showAlert(text);
+  else alert(text);
+}
+function confirmBox(text) {
+  return new Promise((resolve) => {
+    if (tg && tg.showConfirm) tg.showConfirm(text, (ok) => resolve(Boolean(ok)));
+    else resolve(confirm(text));
+  });
+}
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (_) {
+    const area = h("textarea", { style: "position:fixed;opacity:0" }, text);
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  haptic("success");
+  toast("کپی شد");
+}
+function share(text) {
+  const url = "https://t.me/share/url?url=" + encodeURIComponent(text);
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, "_blank");
+}
+
+// --- API ---------------------------------------------------------------------
+async function api(action, body) {
+  const response = await fetch("/api/miniapp/" + action, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "" },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 401) throw new Error("نشست تمام شده؛ مینی‌اپ را ببند و دوباره باز کن.");
+  if (response.status === 403) throw new Error(data.detail === "only the panel owner can do this" ? "این کار فقط برای مدیر اصلی پنل است." : "این حساب تلگرام به پنل دسترسی ندارد.");
+  if (!response.ok) throw new Error(data.detail || "خطا " + response.status);
+  return data;
+}
+
+// --- Telegram chrome -----------------------------------------------------------
+function setMain(text, color, handler) {
+  if (!tg) return;
+  if (mainHandler) tg.MainButton.offClick(mainHandler);
+  mainHandler = null;
+  if (!text) {
+    tg.MainButton.hide();
+    return;
+  }
+  mainHandler = handler;
+  tg.MainButton.setParams({ text, color: color || tg.themeParams.button_color || "#007aff", text_color: "#ffffff", is_visible: true, is_active: true });
+  tg.MainButton.onClick(mainHandler);
+}
+function mainBusy(on) {
+  if (!tg) return;
+  if (on) tg.MainButton.showProgress(false);
+  else tg.MainButton.hideProgress();
+}
+function updateBack() {
+  if (!tg) return;
+  if (state.stack.length > 0 || sheetOpen) tg.BackButton.show();
+  else tg.BackButton.hide();
+}
+function goBack() {
+  if (sheetOpen) {
+    closeSheet();
+    return;
+  }
+  state.stack.pop();
+  const previous = state.stack.length ? state.stack[state.stack.length - 1] : null;
+  if (previous) previous();
+  else renderHome();
+  updateBack();
+}
+function push(render) {
+  state.stack.push(render);
+  render();
+  updateBack();
+  window.scrollTo(0, 0);
+}
+
+// --- bottom sheet ----------------------------------------------------------------
+let sheetOpen = false;
+function openSheet(content, mainText, mainColor, handler) {
+  const sheet = document.getElementById("sheet");
+  sheet.replaceChildren(h("div", { class: "grabber" }), content);
+  sheet.classList.add("open");
+  document.getElementById("backdrop").classList.add("open");
+  sheetOpen = true;
+  setMain(mainText, mainColor, handler);
+  updateBack();
+}
+function closeSheet() {
+  document.getElementById("sheet").classList.remove("open");
+  document.getElementById("backdrop").classList.remove("open");
+  sheetOpen = false;
+  restoreMain();
+  updateBack();
+}
+document.getElementById("backdrop").addEventListener("click", closeSheet);
+let restoreMain = () => setMain(null);
+
+// --- views -------------------------------------------------------------------
+function statusOf(user) {
+  return STATUS[user.status] || { name: user.status, color: "var(--gray)" };
+}
+function avatar(user, big) {
+  return h("div", { class: "avatar", style: "background:" + statusOf(user).color + (big ? ";width:76px;height:76px;font-size:32px" : "") }, (user.username || "?").slice(0, 1));
+}
+function pill(user) {
+  const status = statusOf(user);
+  return h("span", { class: "pill", style: "color:" + status.color + ";background:color-mix(in srgb, " + status.color + " 16%, transparent)" }, status.name);
+}
+function userSummary(user) {
+  const days = daysLeft(user.expire);
+  const left = user.data_limit > 0 ? Math.max(0, user.data_limit - user.used_traffic) : null;
+  return [days == null ? "♾ روز" : fa(days) + " روز", left == null ? "♾ حجم" : bytes(left)].join(" · ");
+}
+
+function renderHome() {
+  state.stack = [];
+  const me = state.me;
+  const tiles = h("div", { class: "tiles" },
+    tile("👥", "var(--blue)", me.counts.all, "همه", "a"),
+    tile("⏳", "var(--orange)", me.counts.expiring, "نزدیک انقضا", "e"),
+    tile("🔴", "var(--red)", me.counts.finished, "تمام‌شده", "f"),
+  );
+  const searchInput = h("input", { type: "search", placeholder: "جستجوی نام کاربری", value: state.search, enterkeyhint: "search" });
+  let timer = null;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      state.search = searchInput.value.trim();
+      loadUsers(true);
+    }, 300);
+  });
+  const segmented = h("div", { class: "segmented" },
+    segment("a", "همه"), segment("e", "نزدیک انقضا"), segment("f", "تمام‌شده"),
+  );
+  app.replaceChildren(h("section", { class: "view active" },
+    h("div", { class: "large-title" }, "پنل Next"),
+    h("div", { class: "subtitle" }, me.owner ? "مدیر اصلی · " + me.username : "ادمین · " + me.username),
+    tiles,
+    h("div", { class: "search" }, h("span", { style: "color:var(--hint)" }, "🔍"), searchInput),
+    segmented,
+    h("div", { class: "section-title", id: "list-title" }, ""),
+    h("div", { class: "group", id: "user-list" }, h("div", { class: "spinner" })),
+    h("div", { id: "list-foot" }),
+  ));
+  setMain("➕ ساخت کاربر جدید", "#34c759", () => push(renderCreate));
+  restoreMain = () => setMain("➕ ساخت کاربر جدید", "#34c759", () => push(renderCreate));
+  updateBack();
+  loadUsers(true);
+}
+function tile(emoji, color, count, caption, kind) {
+  return h("button", { class: "tile", onclick: () => { haptic("select"); state.kind = kind; state.search = ""; renderHome(); } },
+    h("div", { class: "dot", style: "background:" + color }, emoji),
+    h("div", {}, h("div", { class: "num" }, fa(count)), h("div", { class: "cap" }, caption)),
+  );
+}
+function segment(kind, label) {
+  return h("button", { class: state.kind === kind ? "on" : "", onclick: () => { haptic("select"); state.kind = kind; renderHome(); } }, label);
+}
+async function loadUsers(reset) {
+  const list = document.getElementById("user-list");
+  const foot = document.getElementById("list-foot");
+  if (!list) return;
+  if (reset) {
+    state.users = [];
+    list.replaceChildren(h("div", { class: "spinner" }));
+  }
+  try {
+    const data = await api("users", { kind: state.kind, search: state.search, offset: state.users.length });
+    state.users = state.users.concat(data.users || []);
+    state.total = data.total || 0;
+  } catch (error) {
+    list.replaceChildren(h("div", { class: "empty" }, error.message));
+    return;
+  }
+  const title = state.search ? "نتیجه جستجو" : { a: "کاربرها", e: "نزدیک به انقضا", f: "تمام‌شده‌ها" }[state.kind];
+  document.getElementById("list-title").textContent = title + " · " + fa(state.total);
+  if (!state.users.length) {
+    list.replaceChildren(h("div", { class: "empty" }, "کاربری پیدا نشد."));
+    foot.replaceChildren();
+    return;
+  }
+  list.replaceChildren(...state.users.map((user) =>
+    h("button", { class: "row with-icon", onclick: () => { haptic(); push(() => renderUser(user.username)); } },
+      avatar(user),
+      h("div", { class: "label" }, h("div", { class: "name ltr", style: "text-align:right" }, user.username), h("div", { class: "meta" }, userSummary(user))),
+      pill(user),
+      h("span", { class: "chev" }, "‹"),
+    )));
+  foot.replaceChildren();
+  if (state.users.length < state.total) {
+    foot.append(h("div", { class: "group", style: "margin-top:12px" },
+      h("button", { class: "row action", onclick: () => loadUsers(false) }, "نمایش بیشتر")));
+  }
+}
+
+async function renderUser(username) {
+  setMain(null);
+  restoreMain = () => setMain(null);
+  app.replaceChildren(h("section", { class: "view active" }, h("div", { class: "spinner", style: "margin-top:40px" })));
+  let user;
+  try {
+    user = await api("user", { username });
+    // Without a subscription domain set, the panel hands out links relative
+    // to itself; give the admin something they can send.
+    const absolute = (link) => (link && link.startsWith("/") ? location.origin + link : link);
+    user.subscription_url = absolute(user.subscription_url);
+    user.backup_urls = (user.backup_urls || []).map(absolute);
+  } catch (error) {
+    app.replaceChildren(h("section", { class: "view active" }, h("div", { class: "empty" }, error.message)));
+    return;
+  }
+  const limit = user.data_limit > 0 ? user.data_limit : 0;
+  const used = user.used_traffic || 0;
+  const ratio = limit ? Math.min(1, used / limit) : 0;
+  const days = daysLeft(user.expire);
+  const status = statusOf(user);
+  const ring = usageRing(ratio, limit ? status.color : "var(--blue)");
+  const rows = [
+    infoRow("حجم کل", limit ? bytes(limit) : "نامحدود"),
+    infoRow("مصرف شده", bytes(used)),
+    infoRow("باقی‌مانده", limit ? bytes(Math.max(0, limit - used)) : "نامحدود"),
+    infoRow("انقضا", jalali(user.expire)),
+    infoRow("روزهای باقی‌مانده", days == null ? "♾" : fa(days)),
+    infoRow("آخرین اتصال", ago(user.online_at)),
+    infoRow("آخرین آپدیت ساب", ago(user.sub_updated_at)),
+  ];
+  if (user.owner) rows.push(infoRow("ادمین", user.owner));
+  if (user.note) rows.push(infoRow("یادداشت", user.note));
+
+  const content = h("section", { class: "view active" },
+    h("div", { class: "hero" }, avatar(user, true), h("div", { class: "title ltr" }, user.username), pill(user)),
+    h("div", { class: "group" }, h("div", { class: "ring-wrap" }, ring,
+      h("div", { class: "ring-text" },
+        h("div", { class: "big" }, limit ? fa(Math.round(ratio * 100)) + "٪" : "♾"),
+        h("div", { class: "meta" }, limit ? bytes(used) + " از " + bytes(limit) : bytes(used) + " مصرف"),
+        h("div", { class: "meta" }, days == null ? "بدون انقضا" : fa(days) + " روز مانده"),
+      ))),
+    h("div", { class: "section-title" }, "اطلاعات"),
+    h("div", { class: "group" }, rows),
+  );
+  if (user.subscription_url) {
+    content.append(
+      h("div", { class: "section-title" }, "لینک ساب"),
+      h("div", { class: "group" },
+        h("div", { class: "link-box ltr" }, user.subscription_url),
+        h("div", { class: "btn-row" },
+          h("button", { class: "btn primary", onclick: () => copy(user.subscription_url) }, "کپی لینک"),
+          h("button", { class: "btn", onclick: () => share(user.subscription_url) }, "ارسال در تلگرام"),
+        ),
+      ),
+    );
+    if (user.backup_urls && user.backup_urls.length) {
+      const all = [user.subscription_url].concat(user.backup_urls).join("\n");
+      content.append(h("div", { class: "group", style: "margin-top:10px" },
+        h("button", { class: "row action", onclick: () => copy(all) }, "کپی همه لینک‌ها (+" + fa(user.backup_urls.length) + " پشتیبان)")));
+    }
+  }
+  const actions = [h("button", { class: "row action", onclick: () => openRenew(user) }, "♻️ تمدید")];
+  if (state.me.owner) {
+    actions.push(user.status === "disabled"
+      ? h("button", { class: "row action", onclick: () => mutate("status", { username: user.username, status: "active" }, "فعال شد") }, "✅ فعال کن")
+      : h("button", { class: "row action", style: "color:var(--orange)", onclick: () => mutate("status", { username: user.username, status: "disabled" }, "غیرفعال شد") }, "⛔ غیرفعال کن"));
+    actions.push(h("button", { class: "row action", onclick: async () => {
+      if (await confirmBox("مصرف " + user.username + " صفر شود؟")) mutate("reset", { username: user.username }, "مصرف صفر شد");
+    } }, "0️⃣ ریست مصرف"));
+  }
+  content.append(h("div", { class: "section-title" }, "کارها"), h("div", { class: "group" }, actions));
+  if (state.me.can_delete) {
+    content.append(h("div", { class: "group", style: "margin-top:22px" },
+      h("button", { class: "row danger", onclick: () => removeUser(user) }, "حذف کاربر")));
+  }
+  app.replaceChildren(content);
+}
+function infoRow(label, value) {
+  return h("div", { class: "row" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value));
+}
+function usageRing(ratio, color) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", "76");
+  svg.setAttribute("height", "76");
+  svg.setAttribute("viewBox", "0 0 76 76");
+  const circumference = 2 * Math.PI * 32;
+  for (const [stroke, dash] of [["var(--fill)", circumference], [color, circumference * ratio]]) {
+    const circle = document.createElementNS(ns, "circle");
+    circle.setAttribute("cx", "38");
+    circle.setAttribute("cy", "38");
+    circle.setAttribute("r", "32");
+    circle.setAttribute("fill", "none");
+    circle.setAttribute("stroke-width", "9");
+    circle.setAttribute("stroke-linecap", "round");
+    circle.setAttribute("transform", "rotate(-90 38 38)");
+    circle.style.stroke = stroke;
+    circle.setAttribute("stroke-dasharray", dash + " " + circumference);
+    svg.append(circle);
+  }
+  return svg;
+}
+async function mutate(action, body, done) {
+  try {
+    await api(action, body);
+    haptic("success");
+    toast(done);
+    renderUser(body.username);
+  } catch (error) {
+    haptic("error");
+    alertBox(error.message);
+  }
+}
+async function removeUser(user) {
+  if (!(await confirmBox("کاربر " + user.username + " حذف شود؟ این کار برگشت ندارد."))) return;
+  try {
+    await api("delete", { username: user.username });
+    haptic("success");
+    toast("حذف شد");
+    await refreshMe();
+    goBack();
+  } catch (error) {
+    haptic("error");
+    alertBox(error.message);
+  }
+}
+
+// --- amount pickers -------------------------------------------------------------
+function picker(title, presets, unit, zeroLabel, initial, foot) {
+  const pick = { value: initial };
+  const chips = h("div", { class: "chips" });
+  const input = h("input", { type: "number", inputmode: "numeric", min: "0", placeholder: "عدد دلخواه", class: "ltr", style: "text-align:right" });
+  const draw = () => {
+    chips.replaceChildren(...presets.map((value) =>
+      h("button", { class: "chip" + (pick.value === value ? " on" : ""), onclick: () => { haptic("select"); pick.value = value; input.value = ""; draw(); } },
+        value === 0 ? zeroLabel : fa(value) + " " + unit)));
+  };
+  input.addEventListener("input", () => {
+    const value = parseInt(input.value, 10);
+    pick.value = Number.isFinite(value) && value >= 0 ? value : initial;
+    draw();
+  });
+  draw();
+  pick.el = [
+    h("div", { class: "section-title" }, title),
+    h("div", { class: "group" }, chips, h("div", { class: "row field" }, input, h("span", { class: "unit" }, unit))),
+    foot ? h("div", { class: "section-foot" }, foot) : null,
+  ].filter(Boolean);
+  return pick;
+}
+
+async function renderCreate() {
+  const content = h("section", { class: "view active" }, h("div", { class: "large-title" }, "کاربر جدید"));
+  const username = h("input", { placeholder: "نام کاربری (انگلیسی)", autocapitalize: "off", autocomplete: "off", spellcheck: "false", class: "ltr", style: "text-align:right" });
+  const randomName = () => {
+    const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const bytesArr = crypto.getRandomValues(new Uint8Array(7));
+    username.value = "u" + Array.from(bytesArr, (b) => alphabet[b % alphabet.length]).join("");
+    haptic("select");
+  };
+  content.append(
+    h("div", { class: "section-title" }, "نام کاربری"),
+    h("div", { class: "group" }, h("div", { class: "row field" }, username, h("button", { class: "mini-btn", onclick: randomName }, "🎲 تصادفی"))),
+    h("div", { class: "section-foot" }, "۳ تا ۳۲ حرف: حروف انگلیسی، عدد و _"),
+  );
+  const serviceBox = h("div", {}, h("div", { class: "spinner" }));
+  content.append(serviceBox);
+  const traffic = picker("حجم", [10, 20, 30, 50, 100, 0], "گیگ", "♾ نامحدود", 30);
+  const period = picker("مدت", [30, 60, 90, 180, 0], "روز", "♾ بدون انقضا", 30);
+  content.append(...traffic.el, ...period.el);
+  app.replaceChildren(content);
+
+  const chosen = { service: null };
+  try {
+    if (!state.services) state.services = (await api("services")).services || [];
+  } catch (error) {
+    serviceBox.replaceChildren(h("div", { class: "empty" }, error.message));
+    return;
+  }
+  const services = state.services;
+  if (!services.length) {
+    serviceBox.replaceChildren(h("div", { class: "empty" }, "هیچ سرویسی برای ساخت کاربر نداری."));
+  } else if (services.length === 1) {
+    chosen.service = services[0].id;
+    serviceBox.replaceChildren();
+  } else {
+    chosen.service = services[0].id;
+    const group = h("div", { class: "group" });
+    const draw = () => group.replaceChildren(...services.map((service) =>
+      h("button", { class: "row", onclick: () => { haptic("select"); chosen.service = service.id; draw(); } },
+        h("span", { class: "label" }, service.name),
+        chosen.service === service.id ? h("span", { style: "color:var(--accent);font-weight:700" }, "✓") : null)));
+    draw();
+    serviceBox.replaceChildren(h("div", { class: "section-title" }, "سرویس"), group);
+  }
+
+  const submit = async () => {
+    const name = username.value.trim();
+    if (!/^[A-Za-z0-9_]{3,32}$/.test(name)) {
+      haptic("error");
+      alertBox("نام کاربری باید ۳ تا ۳۲ حرف و فقط حروف انگلیسی، عدد و _ باشد.");
+      return;
+    }
+    if (!chosen.service) {
+      alertBox("سرویسی انتخاب نشده.");
+      return;
+    }
+    mainBusy(true);
+    try {
+      await api("create", { username: name, service_id: chosen.service, gb: traffic.value, days: period.value });
+      haptic("success");
+      toast("کاربر ساخته شد");
+      await refreshMe();
+      state.stack = [];
+      push(() => renderUser(name));
+    } catch (error) {
+      haptic("error");
+      alertBox(error.message);
+    } finally {
+      mainBusy(false);
+    }
+  };
+  setMain("ساخت کاربر", "#34c759", submit);
+  restoreMain = () => setMain("ساخت کاربر", "#34c759", submit);
+}
+
+function openRenew(user) {
+  const days = picker("روز اضافه", [30, 60, 90, 0], "روز", "بدون تغییر", 30, "به تاریخ انقضای فعلی اضافه می‌شود؛ اگر تمام شده بود، از امروز.");
+  const traffic = picker("حجم اضافه", [10, 20, 50, 100, 0], "گیگ", "بدون تغییر", 0, "به حجم باقی‌مانده اضافه می‌شود.");
+  const content = h("div", {}, h("h3", {}, "تمدید ", h("span", { class: "ltr" }, user.username)), ...days.el, ...traffic.el);
+  const submit = async () => {
+    if (!days.value && !traffic.value) {
+      alertBox("روز یا حجمی برای اضافه کردن انتخاب کن.");
+      return;
+    }
+    mainBusy(true);
+    try {
+      await api("renew", { username: user.username, days: days.value, gb: traffic.value });
+      haptic("success");
+      toast("تمدید شد");
+      closeSheet();
+      await refreshMe();
+      renderUser(user.username);
+    } catch (error) {
+      haptic("error");
+      alertBox(error.message);
+    } finally {
+      mainBusy(false);
+    }
+  };
+  openSheet(content, "تمدید", null, submit);
+}
+
+async function refreshMe() {
+  try {
+    state.me = await api("me");
+  } catch (_) {}
+}
+
+// --- start -------------------------------------------------------------------
+async function start() {
+  if (!tg || !tg.initData) {
+    app.replaceChildren(h("div", { class: "center-msg" }, h("div", {}, h("div", { style: "font-size:44px" }, "📱"), "این صفحه را از داخل ربات تلگرام پنل باز کن.")));
+    return;
+  }
+  tg.ready();
+  tg.expand();
+  try { tg.setHeaderColor("secondary_bg_color"); tg.setBackgroundColor("secondary_bg_color"); } catch (_) {}
+  try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (_) {}
+  tg.BackButton.onClick(goBack);
+  try {
+    state.me = await api("me");
+  } catch (error) {
+    app.replaceChildren(h("div", { class: "center-msg" }, h("div", {}, h("div", { style: "font-size:44px" }, "🔒"), error.message)));
+    return;
+  }
+  renderHome();
+}
+start();
+</script>
+</body>
+</html>

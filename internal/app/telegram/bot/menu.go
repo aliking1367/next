@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -41,8 +42,8 @@ func usersPadLabel(reseller bool) string {
 func mainPad(reseller bool) *ReplyKeyboard {
 	return &ReplyKeyboard{
 		Keyboard: [][]ReplyButton{
-			{{Text: padCreate}, {Text: padSearch}},
-			{{Text: usersPadLabel(reseller)}, {Text: padMenu}},
+			{{Text: padCreate, Style: styleSuccess}, {Text: padSearch, Style: stylePrimary}},
+			{{Text: usersPadLabel(reseller), Style: stylePrimary}, {Text: padMenu}},
 		},
 		ResizeKeyboard: true,
 		IsPersistent:   true,
@@ -52,8 +53,8 @@ func mainPad(reseller bool) *ReplyKeyboard {
 // mainMenuKeyboard is the glass menu under the main menu message.
 func mainMenuKeyboard(reseller bool) *InlineKeyboard {
 	rows := [][]InlineButton{
-		{{Text: padCreate, CallbackData: cbNew}, {Text: padSearch, CallbackData: cbSearch}},
-		{{Text: usersPadLabel(reseller), CallbackData: cbList + ListAll + ":0"}, {Text: "⏳ نزدیک به انقضا", CallbackData: cbList + ListExpiring + ":0"}},
+		{{Text: padCreate, CallbackData: cbNew, Style: styleSuccess}, {Text: padSearch, CallbackData: cbSearch, Style: stylePrimary}},
+		{{Text: usersPadLabel(reseller), CallbackData: cbList + ListAll + ":0", Style: stylePrimary}, {Text: "⏳ نزدیک به انقضا", CallbackData: cbList + ListExpiring + ":0"}},
 	}
 	if reseller {
 		rows = append(rows, []InlineButton{{Text: "🔴 تمام‌شده‌ها", CallbackData: cbList + ListFinished + ":0"}})
@@ -73,9 +74,30 @@ func menuText(who caller) string {
 	return "🏠 <b>منوی اصلی</b>"
 }
 
+// miniAppLabel names the Mini App on its buttons.
+const miniAppLabel = "📱 پنل مدیریت"
+
+// withMiniApp puts an "open the Mini App" button on top of a menu when the
+// Mini App has an address. Telegram refuses a whole message that carries
+// such a button in a group, so it only goes to private chats, whose ids are
+// positive.
+func withMiniApp(settings Settings, chatID int64, keyboard *InlineKeyboard) *InlineKeyboard {
+	if strings.TrimSpace(settings.MiniAppURL) == "" || chatID <= 0 {
+		return keyboard
+	}
+	rows := append([][]InlineButton{{{Text: miniAppLabel, WebApp: &WebAppInfo{URL: settings.MiniAppURL}, Style: styleSuccess}}}, keyboard.InlineKeyboard...)
+	return &InlineKeyboard{InlineKeyboard: rows}
+}
+
 func (b *Bot) sendStart(ctx context.Context, settings Settings, who caller, chatID int64) {
 	b.replyWithPad(ctx, settings, chatID, helpText(who), mainPad(who.reseller()))
-	b.reply(ctx, settings, chatID, menuText(who), mainMenuKeyboard(who.reseller()))
+	b.reply(ctx, settings, chatID, menuText(who), withMiniApp(settings, chatID, mainMenuKeyboard(who.reseller())))
+	if strings.TrimSpace(settings.MiniAppURL) != "" && chatID > 0 {
+		// The chat's menu button opens the Mini App too, one tap from anywhere.
+		if err := b.client.setChatMenuButton(ctx, settings, chatID, "پنل", settings.MiniAppURL); err != nil {
+			b.logf("telegram bot: setChatMenuButton: %v", err)
+		}
+	}
 }
 
 // handlePadButton runs a press on the button pad and reports whether the
@@ -93,7 +115,7 @@ func (b *Bot) handlePadButton(ctx context.Context, settings Settings, who caller
 		b.sendUserList(ctx, settings, who, chatID, 0, UserListQuery{Kind: ListAll})
 	case padMenu:
 		_ = b.state.clear(ctx, chatID)
-		b.reply(ctx, settings, chatID, menuText(who), mainMenuKeyboard(who.reseller()))
+		b.reply(ctx, settings, chatID, menuText(who), withMiniApp(settings, chatID, mainMenuKeyboard(who.reseller())))
 	default:
 		return false
 	}
@@ -235,7 +257,7 @@ func userButtonText(user UserView) string {
 	}
 	parts := []string{emoji + " " + user.Username}
 	if user.Expire != nil && *user.Expire > 0 {
-		days := int64(time.Until(time.Unix(*user.Expire, 0)).Hours() / 24)
+		days := int64(math.Ceil(time.Until(time.Unix(*user.Expire, 0)).Hours() / 24))
 		if days < 0 {
 			days = 0
 		}
@@ -263,7 +285,7 @@ func (b *Bot) handleMenuCallback(ctx context.Context, settings Settings, who cal
 	case cbMenu:
 		_ = b.state.clear(ctx, chatID)
 		answer("")
-		_ = b.client.editMessageText(ctx, settings, chatID, messageID, menuText(who), mainMenuKeyboard(who.reseller()))
+		_ = b.client.editMessageText(ctx, settings, chatID, messageID, menuText(who), withMiniApp(settings, chatID, mainMenuKeyboard(who.reseller())))
 	case cbSearch:
 		answer("")
 		b.startSearch(ctx, settings, chatID)

@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	adminapp "github.com/aliking1367/next/internal/app/admin"
 	dashboardapp "github.com/aliking1367/next/internal/app/dashboard"
+	"github.com/aliking1367/next/internal/app/logging"
 	telegramapp "github.com/aliking1367/next/internal/app/telegram"
 	telegrambot "github.com/aliking1367/next/internal/app/telegram/bot"
 	userapp "github.com/aliking1367/next/internal/app/user"
@@ -40,7 +42,25 @@ func (b botSettingsSource) BotSettings(ctx context.Context) (telegrambot.Setting
 		ProxyURL:     proxy,
 		AdminChatIDs: settings.AdminChatIDs,
 		BackupChatID: settings.BackupChatID,
+		MiniAppURL:   miniAppAddress(settings.MiniAppURL),
 	}, nil
+}
+
+// miniAppAddress turns the saved Mini App address into the page Telegram
+// opens: a bare panel address gets the /miniapp path.
+func miniAppAddress(value *string) string {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return ""
+	}
+	address := strings.TrimSpace(*value)
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return ""
+	}
+	if parsed.Path == "" || parsed.Path == "/" {
+		parsed.Path = "/miniapp"
+	}
+	return parsed.String()
 }
 
 // botAuthorizer resolves the active full-access admin bot mutations run as.
@@ -431,16 +451,32 @@ func (b botSystemService) Info(ctx context.Context) (telegrambot.SystemInfo, err
 }
 
 // runTelegramBot starts the long-polling Telegram admin bot. It idles until
-// Telegram is enabled in the dashboard.
+// Telegram is enabled in the dashboard. Should the bot itself fail, it is
+// logged and started again after a pause; the rest of the panel and the
+// users' connections never depend on it.
 func (s *Server) runTelegramBot(ctx context.Context) {
-	b := telegrambot.New(telegrambot.Options{
-		APIBase:    s.cfg.TelegramAPIBase,
-		Settings:   botSettingsSource{server: s},
-		Authorizer: botAuthorizer{server: s},
-		Users:      botUserService{server: s},
-		System:     botSystemService{server: s},
-		Backup:     botBackupService{server: s},
-		DB:         s.db,
-	})
-	b.Run(ctx)
+	for ctx.Err() == nil {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					logging.Warnf(logging.ComponentTelegram, "telegram bot stopped, restarting in 30s: %v", recovered)
+				}
+			}()
+			b := telegrambot.New(telegrambot.Options{
+				APIBase:    s.cfg.TelegramAPIBase,
+				Settings:   botSettingsSource{server: s},
+				Authorizer: botAuthorizer{server: s},
+				Users:      botUserService{server: s},
+				System:     botSystemService{server: s},
+				Backup:     botBackupService{server: s},
+				DB:         s.db,
+			})
+			b.Run(ctx)
+		}()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+		}
+	}
 }

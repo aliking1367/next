@@ -61,13 +61,29 @@ type ReplyKeyboard struct {
 }
 
 type ReplyButton struct {
-	Text string `json:"text"`
+	Text  string `json:"text"`
+	Style string `json:"style,omitempty"`
 }
 
+// Button colors Telegram offers (Bot API 9.4+). Older apps show the default
+// look instead.
+const (
+	stylePrimary = "primary" // blue
+	styleSuccess = "success" // green
+	styleDanger  = "danger"  // red
+)
+
 type InlineButton struct {
-	Text         string `json:"text"`
-	CallbackData string `json:"callback_data,omitempty"`
-	URL          string `json:"url,omitempty"`
+	Text         string      `json:"text"`
+	CallbackData string      `json:"callback_data,omitempty"`
+	URL          string      `json:"url,omitempty"`
+	WebApp       *WebAppInfo `json:"web_app,omitempty"`
+	Style        string      `json:"style,omitempty"`
+}
+
+// WebAppInfo opens a Mini App; Telegram only accepts an HTTPS address.
+type WebAppInfo struct {
+	URL string `json:"url"`
 }
 
 // Settings is the snapshot the bot needs each poll cycle.
@@ -82,6 +98,9 @@ type Settings struct {
 	// available to the wider AdminChatIDs allowlist used for routine
 	// user-management commands.
 	BackupChatID *int64
+	// MiniAppURL is the HTTPS address of the panel's Mini App; empty hides
+	// the Mini App buttons.
+	MiniAppURL string
 }
 
 // SettingsSource provides the current Telegram settings.
@@ -133,8 +152,8 @@ type UserView struct {
 
 // ServiceOption is a service a new user can be put on.
 type ServiceOption struct {
-	ID   int64
-	Name string
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // NewUser is what the create flow collects. Zero DataLimitGB or Days means

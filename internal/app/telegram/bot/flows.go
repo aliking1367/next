@@ -83,7 +83,7 @@ func (b *Bot) startCreate(ctx context.Context, settings Settings, who caller, ch
 	b.saveDraft(ctx, chatID, stateNewUsername, flowDraft{})
 	b.reply(ctx, settings, chatID,
 		"➕ <b>ساخت کاربر جدید</b>\n\nنام کاربری را بفرست (۳ تا ۳۲ حرف انگلیسی، عدد یا _)، یا «🎲 تصادفی» را بزن.",
-		&InlineKeyboard{InlineKeyboard: [][]InlineButton{{{Text: "🎲 تصادفی", CallbackData: cbNewRandom}}, cancelRow()}})
+		&InlineKeyboard{InlineKeyboard: [][]InlineButton{{{Text: "🎲 تصادفی", CallbackData: cbNewRandom, Style: stylePrimary}}, cancelRow()}})
 }
 
 func (b *Bot) createUsernameChosen(ctx context.Context, settings Settings, who caller, chatID int64, username string) {
@@ -138,7 +138,7 @@ func (b *Bot) askCreateConfirm(ctx context.Context, settings Settings, chatID in
 		line("حجم", gigabytesLabel(draft.GB, "نامحدود")),
 		line("مدت", daysLabel(draft.Days, "بدون انقضا")),
 	}, "\n")
-	b.reply(ctx, settings, chatID, text, confirmKeyboard(InlineButton{Text: "✅ بساز", CallbackData: cbNewConfirm}))
+	b.reply(ctx, settings, chatID, text, confirmKeyboard(InlineButton{Text: "✅ بساز", CallbackData: cbNewConfirm, Style: styleSuccess}))
 }
 
 func (b *Bot) createConfirmed(ctx context.Context, settings Settings, who caller, query *CallbackQuery, chatID int64) {
@@ -202,7 +202,7 @@ func (b *Bot) askRenewConfirm(ctx context.Context, settings Settings, chatID int
 		line("روز اضافه", daysLabel(draft.Days, "بدون تغییر")),
 		line("حجم اضافه", gigabytesLabel(draft.GB, "بدون تغییر")),
 	}, "\n")
-	b.reply(ctx, settings, chatID, text, confirmKeyboard(InlineButton{Text: "✅ تمدید کن", CallbackData: cbRenewConfirm}))
+	b.reply(ctx, settings, chatID, text, confirmKeyboard(InlineButton{Text: "✅ تمدید کن", CallbackData: cbRenewConfirm, Style: styleSuccess}))
 }
 
 func (b *Bot) renewConfirmed(ctx context.Context, settings Settings, who caller, query *CallbackQuery, chatID int64) {

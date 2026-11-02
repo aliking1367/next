@@ -159,6 +159,18 @@ func (c client) downloadFile(ctx context.Context, settings Settings, filePath st
 	return content, nil
 }
 
+// setChatMenuButton puts a Mini App button beside the chat's typing box.
+func (c client) setChatMenuButton(ctx context.Context, settings Settings, chatID int64, text string, url string) error {
+	return c.fireAndForget(ctx, settings, "setChatMenuButton", map[string]any{
+		"chat_id": chatID,
+		"menu_button": map[string]any{
+			"type":    "web_app",
+			"text":    text,
+			"web_app": WebAppInfo{URL: url},
+		},
+	})
+}
+
 func (c client) answerCallbackQuery(ctx context.Context, settings Settings, callbackID string, text string) error {
 	payload := map[string]any{"callback_query_id": callbackID}
 	if strings.TrimSpace(text) != "" {

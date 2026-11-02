@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"html"
+	"math"
 	"strings"
 	"time"
 )
@@ -110,7 +111,8 @@ func daysLeft(value *int64) string {
 	if remaining < 0 {
 		return persianDigits("0")
 	}
-	return persianDigits(fmt.Sprintf("%d", int(remaining.Hours()/24)))
+	// Rounded up, so a user made for 30 days shows 30, not 29.
+	return persianDigits(fmt.Sprintf("%d", int(math.Ceil(remaining.Hours()/24))))
 }
 
 // relativeFromServer renders a naive/zoned server timestamp as a coarse relative

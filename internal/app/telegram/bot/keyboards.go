@@ -61,13 +61,13 @@ func backupMenuKeyboard() *InlineKeyboard {
 			CallbackData: fmt.Sprintf("%s%d:%s", cbBackupSetSchedule, preset.Value, preset.Unit),
 		}})
 	}
-	rows = append(rows, []InlineButton{{Text: "📤 ارسال بکاپ همین حالا", CallbackData: cbBackupSendNow}})
+	rows = append(rows, []InlineButton{{Text: "📤 ارسال بکاپ همین حالا", CallbackData: cbBackupSendNow, Style: stylePrimary}})
 	return &InlineKeyboard{InlineKeyboard: rows}
 }
 
 func restoreConfirmKeyboard() *InlineKeyboard {
 	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
-		{{Text: "✅ بازگردانی کن", CallbackData: cbRestoreConfirm}, {Text: "✖️ لغو", CallbackData: cbRestoreCancel}},
+		{{Text: "✅ بازگردانی کن", CallbackData: cbRestoreConfirm, Style: styleDanger}, {Text: "✖️ لغو", CallbackData: cbRestoreCancel}},
 	}}
 }
 
@@ -76,18 +76,18 @@ func restoreConfirmKeyboard() *InlineKeyboard {
 // the owner also gets the status, reset, revoke and note buttons.
 func userMenuKeyboard(username string, status string, reseller bool) *InlineKeyboard {
 	links := InlineButton{Text: "🔗 لینک‌ها", CallbackData: cbLinks + username}
-	renew := InlineButton{Text: "♻️ تمدید", CallbackData: cbRenew + username}
+	renew := InlineButton{Text: "♻️ تمدید", CallbackData: cbRenew + username, Style: stylePrimary}
 	refresh := InlineButton{Text: "🔄 بروزرسانی", CallbackData: cbRefresh + username}
-	remove := InlineButton{Text: "🗑 حذف", CallbackData: cbDelete + username}
+	remove := InlineButton{Text: "🗑 حذف", CallbackData: cbDelete + username, Style: styleDanger}
 	if reseller {
 		return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
 			{links, renew},
 			{refresh, remove},
 		}}
 	}
-	toggle := InlineButton{Text: "⛔ غیرفعال کن", CallbackData: cbSuspend + username}
+	toggle := InlineButton{Text: "⛔ غیرفعال کن", CallbackData: cbSuspend + username, Style: styleDanger}
 	if strings.EqualFold(strings.TrimSpace(status), "disabled") {
-		toggle = InlineButton{Text: "✅ فعال کن", CallbackData: cbActivate + username}
+		toggle = InlineButton{Text: "✅ فعال کن", CallbackData: cbActivate + username, Style: styleSuccess}
 	}
 	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
 		{links, renew},
@@ -99,7 +99,7 @@ func userMenuKeyboard(username string, status string, reseller bool) *InlineKeyb
 
 func confirmDeleteKeyboard(username string) *InlineKeyboard {
 	return &InlineKeyboard{InlineKeyboard: [][]InlineButton{
-		{{Text: "✅ بله، حذف کن", CallbackData: cbDeleteYes + username}, {Text: "✖️ لغو", CallbackData: cbRefresh + username}},
+		{{Text: "✅ بله، حذف کن", CallbackData: cbDeleteYes + username, Style: styleDanger}, {Text: "✖️ لغو", CallbackData: cbRefresh + username}},
 	}}
 }
 

@@ -105,6 +105,14 @@ func (b *Bot) sleep(ctx context.Context, d time.Duration) (cancelled bool) {
 }
 
 func (b *Bot) handleUpdate(ctx context.Context, settings Settings, update Update) {
+	// The bot shares the panel's process. A bug in one update is logged and
+	// that update dropped; the panel, its subscriptions and the users'
+	// connections carry on.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			b.logf("telegram bot: update %d failed: %v", update.UpdateID, recovered)
+		}
+	}()
 	switch {
 	case update.Message != nil:
 		b.handleMessage(ctx, settings, update.Message)

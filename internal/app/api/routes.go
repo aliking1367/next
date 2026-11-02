@@ -75,11 +75,13 @@ func (s *Server) Handler() http.Handler {
 	r.HandleFunc("/hosts/*", s.requireAdmin(s.handleHostStatusPath))
 	r.HandleFunc("/hosts", s.requireAdmin(s.handleHostsRoot))
 	r.HandleFunc("/sub/*", s.handleSubscriptionPath)
+	r.HandleFunc("/miniapp", s.handleMiniAppPage)
 	// The node server calls these itself, with a single-use token as its only
 	// credential, so they cannot sit behind admin authentication.
 	r.HandleFunc(nodeInstallScriptLegacyPath, s.handleNodeInstallScript)
 
 	r.Route("/api", func(r chi.Router) {
+		r.HandleFunc("/miniapp/*", s.handleMiniAppAPI)
 		s.registerAdminRoutes(r)
 		s.registerMyAccountRoutes(r)
 		s.registerCoreRoutes(r)

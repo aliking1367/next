@@ -29,6 +29,13 @@ func (s *Server) runUserStatusReportWorker(ctx context.Context) {
 	if s.db == nil {
 		return
 	}
+	// Reports are a side line: a failure here stops the reports, never the
+	// panel.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logging.Warnf(logging.ComponentUser, "status report worker stopped: %v", recovered)
+		}
+	}()
 	since := time.Now().UTC()
 	seen := map[string]time.Time{}
 	ticker := time.NewTicker(userStatusReportInterval)

@@ -134,7 +134,7 @@ func TestBotResellerCreatesRenewsAndOnlySeesItsOwnUsers(t *testing.T) {
 // (standard, on service 1) exist.
 func testBotMigratedServer(t *testing.T) (*Server, *sql.DB) {
 	t.Helper()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "bot.db"))
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "bot.db")+"?_pragma=busy_timeout(30000)")
 	if err != nil {
 		t.Fatal(err)
 	}

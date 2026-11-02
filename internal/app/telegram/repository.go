@@ -112,6 +112,12 @@ func (r Repository) UpdateSettings(ctx context.Context, raw map[string]json.RawM
 				return Settings{}, err
 			}
 			add(key, nullableString(proxyURL))
+		case "mini_app_url":
+			miniAppURL := rawTrimmedStringPtr(value)
+			if err := validateMiniAppURL(miniAppURL); err != nil {
+				return Settings{}, err
+			}
+			add(key, nullableString(miniAppURL))
 		case "admin_chat_ids":
 			ids, err := rawInt64List(value)
 			if err != nil {
@@ -364,6 +370,11 @@ LIMIT 1`
 		LastError:           stringPtrFromNull(lastError),
 		LastErrorAt:         stringPtrFromNull(lastErrorAt),
 	}
+	// Read on its own so a database from before the column still loads.
+	var miniAppURL sql.NullString
+	if err := r.db.QueryRowContext(ctx, `SELECT mini_app_url FROM telegram_settings ORDER BY id DESC LIMIT 1`).Scan(&miniAppURL); err == nil {
+		settings.MiniAppURL = stringPtrFromNull(miniAppURL)
+	}
 	return settings, nil
 }
 
@@ -424,6 +435,19 @@ func normalizeToggles(source map[string]bool) map[string]bool {
 		result[key] = value
 	}
 	return result
+}
+
+// validateMiniAppURL accepts an empty value or an absolute HTTPS address,
+// which is all Telegram opens a Mini App from.
+func validateMiniAppURL(value *string) error {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return nil
+	}
+	parsed, err := url.Parse(strings.TrimSpace(*value))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return fmt.Errorf("mini_app_url must be an https:// address")
+	}
+	return nil
 }
 
 func validateProxyURL(value *string) error {

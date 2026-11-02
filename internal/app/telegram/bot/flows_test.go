@@ -206,3 +206,22 @@ func TestFormatExpireIsSolarHijri(t *testing.T) {
 		t.Fatalf("formatExpire = %q", got)
 	}
 }
+
+// panicUsers fails the way an unexpected bug would.
+type panicUsers struct{ *fakeUsers }
+
+func (panicUsers) Get(context.Context, Actor, string) (UserView, error) {
+	panic("unexpected failure")
+}
+
+func TestAFailingUpdateDoesNotStopTheBot(t *testing.T) {
+	users := newFakeUsers()
+	b, calls, settings := newTestBot(t, panicUsers{users})
+	// Must not panic out of handleUpdate.
+	b.handleUpdate(context.Background(), settings, Update{UpdateID: 1, Message: &Message{From: &User{ID: 100}, Chat: Chat{ID: 100}, Text: "/user alice"}})
+	// The next update is served as usual.
+	b.handleUpdate(context.Background(), settings, Update{UpdateID: 2, Message: &Message{From: &User{ID: 100}, Chat: Chat{ID: 100}, Text: "/help"}})
+	if _, ok := lastCall(*calls, "sendMessage"); !ok {
+		t.Fatal("the bot should keep answering after a failed update")
+	}
+}
