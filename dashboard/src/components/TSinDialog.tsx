@@ -71,6 +71,14 @@ type TSinView = {
 	account_error?: string;
 };
 
+type TSinDatacenterRank = {
+	dc: string;
+	ok: boolean;
+	latency_ms: number;
+	countries?: number;
+	error?: string;
+};
+
 type TSinApplyResponse = {
 	needs_node_script?: boolean;
 	service_name: string;
@@ -122,7 +130,50 @@ export const TSinDialog: FC<{
 	const [selected, setSelected] = useState<string[]>([]);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
+	const [ranking, setRanking] = useState(false);
+	const [ranked, setRanked] = useState<TSinDatacenterRank[] | null>(null);
 	const script = useClipboard(view?.node_script ?? "");
+
+	// Asks every datacenter at once with the typed token, or the saved one,
+	// and selects the fastest that accepts it.
+	// Countries served from a node use the tunnel the node script made on that
+	// node's datacenter. Applying another datacenter here would point their
+	// configs at ports that tunnel does not have, so it is never switched for
+	// them silently.
+	const nodeTunnel = Boolean(view?.applied) && target.startsWith("node:");
+	const dcChangedOnNode = nodeTunnel && dc !== view?.dc;
+
+	const findBestDatacenter = async () => {
+		setRanking(true);
+		try {
+			const data = await fetch<{
+				datacenters: TSinDatacenterRank[];
+				best: string;
+			}>("/core/tsin/datacenters", {
+				method: "POST",
+				body: token.trim() ? { token: token.trim() } : {},
+			});
+			setRanked(data.datacenters);
+			if (data.best && nodeTunnel) {
+				// Shown, not chosen: see nodeTunnel.
+			} else if (data.best) {
+				setDc(data.best);
+			} else {
+				toast({
+					status: "warning",
+					title: tt(
+						"tsin.noDatacenter",
+						"No datacenter accepts this token right now.",
+					),
+				});
+			}
+		} catch (error) {
+			const detail = (error as { data?: { detail?: string } })?.data?.detail;
+			toast({ status: "error", title: detail || String(error) });
+		} finally {
+			setRanking(false);
+		}
+	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the dialog loads once each time it opens, not whenever the toast or translator changes identity
 	const load = useCallback(async () => {
@@ -422,13 +473,71 @@ export const TSinDialog: FC<{
 
 					<FormControl>
 						<FormLabel>{tt("tsin.dc", "Datacenter")}</FormLabel>
-						<Select value={dc} onChange={(event) => setDc(event.target.value)}>
-							{(view?.datacenters ?? ["dc1"]).map((item) => (
-								<option key={item} value={item}>
-									{item}
-								</option>
-							))}
-						</Select>
+						<HStack spacing={2}>
+							<Select
+								value={dc}
+								onChange={(event) => setDc(event.target.value)}
+							>
+								{(view?.datacenters ?? ["dc1"]).map((item) => (
+									<option key={item} value={item}>
+										{item}
+									</option>
+								))}
+							</Select>
+							<Button
+								size="sm"
+								variant="outline"
+								flexShrink={0}
+								isLoading={ranking}
+								onClick={findBestDatacenter}
+							>
+								{tt("tsin.findBest", "Find the best")}
+							</Button>
+						</HStack>
+						{ranked && (
+							<Stack spacing={1} mt={2}>
+								{ranked.map((item) => (
+									<HStack key={item.dc} justify="space-between" fontSize="sm">
+										<Text
+											dir="ltr"
+											fontWeight={item.dc === dc ? "bold" : "normal"}
+										>
+											{item.dc}
+										</Text>
+										{item.ok ? (
+											<Badge colorScheme="green">
+												{item.latency_ms} ms ·{" "}
+												{tt("tsin.countriesCount", "{{count}} countries", {
+													count: item.countries ?? 0,
+												})}
+											</Badge>
+										) : (
+											<Badge colorScheme="red" title={item.error}>
+												{tt("tsin.dcUnavailable", "not available")}
+											</Badge>
+										)}
+									</HStack>
+								))}
+							</Stack>
+						)}
+						{dcChangedOnNode && (
+							<Alert status="warning" borderRadius="6px" fontSize="sm" mt={2}>
+								<AlertIcon />
+								<AlertDescription>
+									{tt(
+										"tsin.dcChangeOnNode",
+										"The node's tunnel is registered on {{current}}. After applying {{next}}, run the new node script on that node right away, or every country stops working until you do.",
+										{ current: view?.dc ?? "", next: dc },
+									)}
+								</AlertDescription>
+							</Alert>
+						)}
+						<FormHelperText>
+							{tt(
+								"tsin.dcHelp",
+								"Find the best asks every datacenter at once and picks the fastest one that accepts the token. On this panel's own machine a watch also checks the tunnel every minute and repairs it, moving to another datacenter only if it serves the same countries on the same ports.",
+							)}
+						</FormHelperText>
 					</FormControl>
 
 					{view?.account_error && (

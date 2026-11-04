@@ -916,6 +916,8 @@
 	"settings.telegram.events.loginHint": "当管理员尝试登录时发送通知。",
 	"settings.telegram.events.nodeErrors": "节点错误日志",
 	"settings.telegram.events.nodeErrorsHint": "当系统记录节点错误时发送通知。",
+	"settings.telegram.events.tsinTunnel": "T.Sin 隧道",
+	"settings.telegram.events.tsinTunnelHint": "当 T.Sin 隧道断开、恢复或切换到其他数据中心时通知。",
 	"settings.save": "Save Settings",
 	"settings.savedSuccess": "Telegram settings updated.",
 	"settings.tabs.comingSoon": "Coming Soon",

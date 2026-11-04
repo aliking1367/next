@@ -1880,6 +1880,8 @@
 	"settings.telegram.events.nodeDeletedHint": "با حذف نود اعلان ارسال شود.",
 	"settings.telegram.events.nodeErrors": "گزارش خطای نود",
 	"settings.telegram.events.nodeErrorsHint": "با گزارش خطای سیستم برای نود اعلان ارسال شود.",
+	"settings.telegram.events.tsinTunnel": "تونل T.Sin",
+	"settings.telegram.events.tsinTunnelHint": "وقتی تونل T.Sin قطع شود، دوباره وصل شود یا به دیتاسنتر دیگری برود اعلان ارسال شود.",
 	"settings.telegram.events.nodeStatusConnected": "اتصال نود",
 	"settings.telegram.events.nodeStatusConnectedHint": "با آنلاین شدن نود اعلان ارسال شود.",
 	"settings.telegram.events.nodeStatusConnecting": "در حال اتصال نود",

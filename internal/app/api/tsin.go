@@ -322,6 +322,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		needRegister := settings.RegisteredDC != settings.DC || settings.RegisteredTokenSum != sum || !tunnel.ConfigExists()
 		conf := ""
 		if needRegister {
+			if tsin.ValidDC(settings.RegisteredDC) && settings.RegisteredDC != settings.DC && settings.RegisteredTokenSum == sum {
+				// Leaving a datacenter: drop the session there first, or the
+				// new one may answer that the token is in use elsewhere, as
+				// T.Sin's own client does when switching.
+				_ = client.Disconnect(ctx, settings.RegisteredDC, settings.Token)
+			}
 			registration, err := client.Register(ctx, settings.DC, settings.Token)
 			if err != nil {
 				writeError(w, tsinProviderStatus, err.Error())
@@ -544,4 +550,54 @@ func findOrCreateTSinServiceTx(ctx context.Context, tx *sql.Tx) (int64, error) {
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// handleCoreTSinDatacenters asks every T.Sin datacenter about the token at
+// once and returns them fastest first, the ones that accept it on top. The
+// dialog uses it to pick the best datacenter, as T.Sin's own client does.
+func (s *Server) handleCoreTSinDatacenters(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var request struct {
+		Token *string `json:"token"`
+	}
+	if err := decodeOptionalJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	token := ""
+	if request.Token != nil && strings.TrimSpace(*request.Token) != "" {
+		token = strings.TrimSpace(*request.Token)
+	} else {
+		settings, err := s.loadTSinSettings(ctx)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		token = settings.Token
+	}
+	if !tsin.ValidToken(token) {
+		writeError(w, http.StatusUnprocessableEntity, "enter the T.Sin token first")
+		return
+	}
+	ranked := tsin.NewClient().RankDatacenters(ctx, token)
+	rows := make([]map[string]any, 0, len(ranked))
+	best := ""
+	for _, result := range ranked {
+		row := map[string]any{"dc": result.DC, "ok": result.OK, "latency_ms": result.LatencyMS}
+		if result.OK {
+			row["countries"] = len(result.Status.Proxies)
+			if best == "" {
+				best = result.DC
+			}
+		} else {
+			row["error"] = result.Error
+		}
+		rows = append(rows, row)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"datacenters": rows, "best": best})
 }

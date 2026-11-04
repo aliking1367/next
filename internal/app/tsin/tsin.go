@@ -146,7 +146,9 @@ type Status struct {
 	ActiveConnections int     `json:"active_connections"`
 	ExpiryDate        string  `json:"expiry_date"`
 	Active            bool    `json:"active"`
-	Proxies           []Proxy `json:"proxies"`
+	// ActiveKnown is whether T.Sin said at all; it does not on every answer.
+	ActiveKnown bool    `json:"-"`
+	Proxies     []Proxy `json:"proxies"`
 }
 
 func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
@@ -159,7 +161,7 @@ func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
 		DataLimitGB       float64         `json:"data_limit_gb"`
 		ActiveConnections float64         `json:"active_connections"`
 		ExpiryDate        string          `json:"expiry_date"`
-		IsActive          float64         `json:"is_active"`
+		IsActive          *float64        `json:"is_active"`
 		ActiveProxies     map[string]rawP `json:"active_proxies"`
 	}
 	if err := c.get(ctx, dc, "/status", token, &raw); err != nil {
@@ -174,7 +176,8 @@ func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
 		DataLimitGB:       raw.DataLimitGB,
 		ActiveConnections: int(raw.ActiveConnections),
 		ExpiryDate:        raw.ExpiryDate,
-		Active:            raw.IsActive != 0,
+		Active:            raw.IsActive != nil && *raw.IsActive != 0,
+		ActiveKnown:       raw.IsActive != nil,
 	}
 	for key, proxy := range raw.ActiveProxies {
 		port, err := strconv.Atoi(key)
@@ -187,6 +190,120 @@ func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
 	}
 	sort.Slice(status.Proxies, func(i, j int) bool { return status.Proxies[i].Country < status.Proxies[j].Country })
 	return status, nil
+}
+
+// Disconnect tells a datacenter to drop this token's session, so another
+// datacenter accepts it. Failures are returned but are usually ignored: the
+// datacenter being left is often the one that stopped answering.
+func (c Client) Disconnect(ctx context.Context, dc, token string) error {
+	var raw map[string]any
+	return c.get(ctx, dc, "/disconnect", token, &raw)
+}
+
+// DatacenterResult is how one datacenter answered for a token.
+type DatacenterResult struct {
+	DC        string `json:"dc"`
+	OK        bool   `json:"ok"`
+	LatencyMS int64  `json:"latency_ms"`
+	Error     string `json:"error,omitempty"`
+	Status    Status `json:"-"`
+}
+
+// RankDatacenters asks every datacenter for this token's status at once and
+// orders them: the ones that accept the token first, fastest answer first.
+// The time of the status call stands in for a ping, so a datacenter that is
+// up but refuses the token never wins.
+func (c Client) RankDatacenters(ctx context.Context, token string) []DatacenterResult {
+	dcs := Datacenters()
+	results := make([]DatacenterResult, len(dcs))
+	done := make(chan struct{}, len(dcs))
+	for i, dc := range dcs {
+		go func(i int, dc string) {
+			defer func() { done <- struct{}{} }()
+			callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			started := time.Now()
+			status, err := c.Status(callCtx, dc, token)
+			result := DatacenterResult{DC: dc, LatencyMS: time.Since(started).Milliseconds()}
+			if err != nil {
+				result.Error = err.Error()
+			} else {
+				result.OK = true
+				result.Status = status
+			}
+			results[i] = result
+		}(i, dc)
+	}
+	for range dcs {
+		<-done
+	}
+	sort.SliceStable(results, func(i, j int) bool {
+		if results[i].OK != results[j].OK {
+			return results[i].OK
+		}
+		return results[i].LatencyMS < results[j].LatencyMS
+	})
+	return results
+}
+
+// tehran is where T.Sin's dates are meant when they carry no zone; Iran has
+// kept +03:30 all year since 2022.
+var tehran = time.FixedZone("Asia/Tehran", 3*3600+30*60)
+
+// Expiry reads the account's expiry date, as T.Sin's own client does: ISO
+// 8601, in Tehran time unless it says otherwise. ok is false when the account
+// has no expiry or the date cannot be read.
+func (s Status) Expiry() (time.Time, bool) {
+	raw := strings.TrimSpace(s.ExpiryDate)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if parsed, err := time.Parse(layout, raw); err == nil {
+			return parsed, true
+		}
+	}
+	for _, layout := range []string{"2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999", "2006-01-02"} {
+		if parsed, err := time.ParseInLocation(layout, raw, tehran); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// Missing lists the chosen countries this account no longer offers.
+func (s Status) Missing(names []string) []string {
+	_, missing := s.Resolve(names)
+	return missing
+}
+
+// PortsOf maps each chosen country to its proxy port on this account.
+func (s Status) PortsOf(names []string) map[string]int {
+	proxies, _ := s.Resolve(names)
+	ports := map[string]int{}
+	for _, proxy := range proxies {
+		ports[strings.ToLower(proxy.Country)] = proxy.Port
+	}
+	return ports
+}
+
+// SamePorts reports whether this account serves every country in want on the
+// same port. Configs already point at those ports, so only such a datacenter
+// can take over without them breaking.
+func (s Status) SamePorts(want map[string]int) bool {
+	if len(want) == 0 {
+		return false
+	}
+	have := map[string]int{}
+	for _, proxy := range s.Proxies {
+		have[strings.ToLower(proxy.Country)] = proxy.Port
+	}
+	for country, port := range want {
+		if have[country] != port {
+			return false
+		}
+	}
+	return true
 }
 
 type rawP struct {
@@ -353,6 +470,14 @@ func (t Tunnel) Up(ctx context.Context, conf string) error {
 	return nil
 }
 
+// Restart restarts the interface with the profile already on disk.
+func (t Tunnel) Restart(ctx context.Context) error {
+	if out, err := t.Run(ctx, "systemctl", "restart", "wg-quick@"+Interface); err != nil {
+		return fmt.Errorf("could not restart the %s tunnel: %s", Interface, tail(out, err))
+	}
+	return nil
+}
+
 // Down removes the interface and its profile.
 func (t Tunnel) Down(ctx context.Context) error {
 	_, _ = t.Run(ctx, "systemctl", "disable", "--now", "wg-quick@"+Interface)
@@ -409,7 +534,9 @@ func tail(out []byte, err error) string {
 	return text
 }
 
-// NodeScript is what an admin runs on a node to bring the tunnel up there.
+// NodeScript is what an admin runs on a node to bring the tunnel up there and
+// keep it up: it also installs a watch that restarts or re-registers a tunnel
+// that has gone down, the way T.Sin's own client does.
 //
 // The panel cannot run commands on a node, and the tunnel has to exist on the
 // machine whose Xray uses it. The script asks for the token itself, so the
@@ -430,7 +557,9 @@ func NodeScript(dc string) string {
 }
 
 const nodeScriptTemplate = `#!/bin/bash
-# Brings up the T.Sin tunnel (interface tsin0) on this server. Run as root.
+# Brings up the T.Sin tunnel (interface tsin0) on this server and keeps it up.
+# Run as root. To stop it for good later:
+#   systemctl disable --now next-tsin-watch.timer wg-quick@tsin0
 set -euo pipefail
 DC=@DC@
 read -rs -p "T.Sin token: " TOKEN </dev/tty; echo
@@ -438,19 +567,38 @@ if [[ ! "$TOKEN" =~ ^[A-Za-z0-9._~-]{6,200}$ ]]; then echo "That does not look l
 if ! command -v wg-quick >/dev/null || ! command -v python3 >/dev/null; then
   apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools python3 >/dev/null
 fi
+umask 077
+mkdir -p /etc/wireguard /usr/local/lib/next-tsin
+# The token stays on this server, readable by root only, so the watch below
+# can register again by itself, as T.Sin's own client does.
+printf '%s' "$TOKEN" > /etc/wireguard/tsin0.token
+printf '%s' "$DC" > /etc/wireguard/tsin0.dc
+unset TOKEN
+
+cat > /usr/local/lib/next-tsin/register.sh <<'REGISTER_END'
+#!/bin/bash
+# Registers this server with T.Sin and writes the tsin0 tunnel from the answer.
+# With --fresh an existing profile is replaced whatever it served; without it
+# a profile for a different proxy address is refused, because the configs on
+# this server point at the old one.
+set -euo pipefail
+FRESH="${1:-}"
+TOKEN=$(cat /etc/wireguard/tsin0.token)
+DC=$(cat /etc/wireguard/tsin0.dc)
+if [[ ! "$DC" =~ ^dc[1-5]$ ]]; then echo "unknown T.Sin datacenter $DC"; exit 1; fi
 REG=$(mktemp); trap 'shred -u "$REG" 2>/dev/null || rm -f "$REG"' EXIT
 CODE=$(curl -sS -m 25 -o "$REG" -w '%{http_code}' "http://$DC.sin-kabir.ir:8080/register?token=$TOKEN" || echo 000)
+unset TOKEN
 if [ "$CODE" != "200" ]; then
   echo "T.Sin refused the registration (HTTP $CODE):"; head -c 300 "$REG" 2>/dev/null; echo
   echo "If it says the token is in use on another server: stop the tunnel there, call /disconnect, wait a few minutes and run this again."
   exit 1
 fi
-unset TOKEN
-REG="$REG" python3 - <<'PY'
-import os, json, base64, ipaddress, sys
+REG="$REG" FRESH="$FRESH" python3 - <<'PY'
+import os, re, json, base64, ipaddress, sys
 d = json.load(open(os.environ["REG"]))
 if d.get("status") != "success":
-    sys.exit("T.Sin refused the registration: " + str(d.get("message", d.get("status"))))
+    sys.exit("T.Sin refused the registration: " + str(d.get("error") or d.get("message") or d.get("status")))
 f, sec = {}, ""
 for line in d["wg_conf"].splitlines():
     line = line.strip()
@@ -473,9 +621,13 @@ ep = ipaddress.ip_address(host)
 assert ep.version == 4 and 0 < int(port) < 65536, "unexpected endpoint"
 al = ipaddress.ip_network(f["peer.allowedips"], strict=True)
 assert al.version == 4 and al.prefixlen == 32 and al.network_address.is_private, "profile would route more than the proxy address"
+path = "/etc/wireguard/tsin0.conf"
+if os.environ.get("FRESH") != "--fresh" and os.path.exists(path):
+    m = re.search(r"(?im)^\s*AllowedIPs\s*=\s*(\S+)", open(path).read())
+    if m and m.group(1) != str(al):
+        sys.exit("the new profile serves %s but the configs use %s; keeping the old one" % (al, m.group(1)))
 os.umask(0o077)
-os.makedirs("/etc/wireguard", exist_ok=True)
-open("/etc/wireguard/tsin0.conf", "w").write(
+open(path, "w").write(
     "[Interface]\nPrivateKey = %s\nAddress = %s/32\n\n[Peer]\nPublicKey = %s\nEndpoint = %s:%s\nAllowedIPs = %s\nPersistentKeepalive = 25\n"
     % (priv, addr.ip, pub, ep, port, al))
 print("profile written")
@@ -483,10 +635,74 @@ PY
 wg-quick down tsin0 2>/dev/null || true
 systemctl enable wg-quick@tsin0 >/dev/null 2>&1 || true
 systemctl restart wg-quick@tsin0
-for i in 1 2 3 4 5 6 7 8 9 10; do
+for i in $(seq 1 20); do
   HS=$(wg show tsin0 latest-handshakes | awk '{print $2}')
   if [ -n "$HS" ] && [ "$HS" != "0" ]; then echo "Tunnel is up (handshake completed)"; exit 0; fi
   sleep 1
 done
 echo "No handshake yet: check that outbound UDP to the provider is not blocked on this server"; exit 1
+REGISTER_END
+
+cat > /usr/local/sbin/next-tsin-watch <<'WATCH_END'
+#!/bin/bash
+# Checks the T.Sin tunnel once; next-tsin-watch.timer runs it every minute.
+# A tunnel down for two checks in a row is restarted, then registered again,
+# and that is retried every five minutes while it stays down. A working
+# tunnel is never touched.
+STATE=/run/next-tsin-watch.failures
+age() {
+  local hs
+  hs=$(wg show tsin0 latest-handshakes 2>/dev/null | awk '{print $2}')
+  if [ -n "$hs" ] && [ "$hs" != "0" ]; then echo $(( $(date +%s) - hs )); else echo 999999; fi
+}
+[ -f /etc/wireguard/tsin0.conf ] && [ -f /etc/wireguard/tsin0.token ] || exit 0
+FAILS=$(cat "$STATE" 2>/dev/null || echo 0)
+[[ "$FAILS" =~ ^[0-9]+$ ]] || FAILS=0
+if [ "$(age)" -lt 180 ]; then
+  if [ "$FAILS" -ge 2 ]; then logger -t next-tsin-watch "tunnel is up again"; fi
+  echo 0 > "$STATE"; exit 0
+fi
+FAILS=$(( FAILS + 1 ))
+echo "$FAILS" > "$STATE"
+if [ "$FAILS" -lt 2 ] || [ $(( (FAILS - 2) % 5 )) -ne 0 ]; then exit 0; fi
+logger -t next-tsin-watch "tunnel down for $FAILS checks; restarting it"
+systemctl restart wg-quick@tsin0 || true
+sleep 20
+if [ "$(age)" -lt 180 ]; then logger -t next-tsin-watch "fixed by restarting"; echo 0 > "$STATE"; exit 0; fi
+logger -t next-tsin-watch "still down; registering again"
+OUT=$(/usr/local/lib/next-tsin/register.sh 2>&1) && RC=0 || RC=$?
+logger -t next-tsin-watch "$OUT"
+if [ "$RC" -eq 0 ]; then echo 0 > "$STATE"; fi
+exit 0
+WATCH_END
+
+cat > /etc/systemd/system/next-tsin-watch.service <<'UNIT_END'
+[Unit]
+Description=Check the T.Sin tunnel (tsin0) and repair it when it is down
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/next-tsin-watch
+UNIT_END
+
+cat > /etc/systemd/system/next-tsin-watch.timer <<'UNIT_END'
+[Unit]
+Description=Check the T.Sin tunnel every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
+UNIT_END
+
+chmod 700 /usr/local/lib/next-tsin/register.sh /usr/local/sbin/next-tsin-watch
+chmod 644 /etc/systemd/system/next-tsin-watch.service /etc/systemd/system/next-tsin-watch.timer
+/usr/local/lib/next-tsin/register.sh --fresh
+systemctl daemon-reload
+systemctl enable --now next-tsin-watch.timer >/dev/null
+echo "Watch installed: the tunnel is checked every minute and repaired when it is down (journalctl -t next-tsin-watch)"
 `

@@ -950,6 +950,21 @@ detect_public_ip() {
     return 1
 }
 
+# ensure_wireguard_tools installs what the T.Sin countries need, so turning
+# them on later in the panel is only a matter of entering the token. It never
+# stops an install: without it the panel installs the package itself when the
+# countries are first applied.
+ensure_wireguard_tools() {
+    detect_os
+    if command -v wg-quick >/dev/null 2>&1; then
+        return 0
+    fi
+    if [[ "$OS" == "Ubuntu"* ]] || [[ "$OS" == "Debian"* ]]; then
+        install_package wireguard-tools >/dev/null 2>&1 || colorized_echo yellow "wireguard-tools was not installed; the panel will install it when T.Sin is first used"
+    fi
+    return 0
+}
+
 install_ssl_dependencies() {
     detect_os
     local packages=("curl" "socat" "certbot" "openssl")
@@ -4385,6 +4400,7 @@ install_command() {
         if check_version_exists "$next_version"; then
             if [ "$install_mode" = "binary" ]; then
                 install_binary_next "$next_version" "$database_type"
+                ensure_wireguard_tools
                 prompt_dashboard_bind_settings
                 prompt_initial_admin
                 if [ "$install_phpmyadmin" = "true" ]; then

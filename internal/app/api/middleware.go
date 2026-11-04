@@ -176,6 +176,7 @@ var configPathPrefixes = []string{
 var supportPaths = map[string]bool{
 	"/api/core/restart":                  true,
 	"/api/core/verify-protocols":         true,
+	"/api/core/tsin/datacenters":         true,
 	"/api/panel/xray/testOutbound":       true,
 	"/api/panel/xray/testOutbounds":      true,
 	"/api/panel/xray/routeTest":          true,

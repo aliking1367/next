@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 var testKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
@@ -165,5 +166,73 @@ func TestRefusalReasonIsReadFromTheErrorKey(t *testing.T) {
 	_, err = client.Register(context.Background(), "dc1", "secret-token")
 	if err == nil || !strings.Contains(err.Error(), "in use on another online server") {
 		t.Fatalf("the provider's reason was lost on register: %v", err)
+	}
+}
+
+func TestRankDatacentersPutsWorkingFastOnesFirst(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dc := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")[0]
+		switch dc {
+		case "dc1":
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"down"}`))
+		case "dc2":
+			time.Sleep(300 * time.Millisecond)
+			_, _ = w.Write([]byte(`{"status":"success","active_proxies":{"5001":{"country":"Germany"}}}`))
+		case "dc4":
+			_, _ = w.Write([]byte(`{"status":"success","active_proxies":{"5001":{"country":"Germany"},"5002":{"country":"France dc"}}}`))
+		default:
+			_, _ = w.Write([]byte(`{"error":"Invalid token"}`))
+		}
+	}))
+	defer server.Close()
+	client := Client{HTTP: server.Client(), BaseURL: func(dc string) string { return server.URL + "/" + dc }}
+
+	ranked := client.RankDatacenters(context.Background(), "token-123456")
+	if len(ranked) != 5 || ranked[0].DC != "dc4" || ranked[1].DC != "dc2" || !ranked[0].OK || !ranked[1].OK {
+		t.Fatalf("ranked = %+v", ranked)
+	}
+	for _, result := range ranked[2:] {
+		if result.OK || result.Error == "" {
+			t.Fatalf("%s should be refused with a reason: %+v", result.DC, result)
+		}
+	}
+	want := ranked[1].Status.PortsOf([]string{"Germany"})
+	if !ranked[0].Status.SamePorts(want) {
+		t.Fatal("dc4 serves Germany on the same port")
+	}
+	if ranked[0].Status.SamePorts(map[string]int{"germany": 9999}) || ranked[0].Status.SamePorts(nil) {
+		t.Fatal("other ports, or nothing to compare, must not count as the same")
+	}
+}
+
+func TestNodeScriptInstallsTheWatch(t *testing.T) {
+	script := NodeScript("dc2")
+	for _, want := range []string{
+		"printf '%s' \"$TOKEN\" > /etc/wireguard/tsin0.token",
+		"umask 077",
+		"/usr/local/lib/next-tsin/register.sh --fresh",
+		"systemctl enable --now next-tsin-watch.timer",
+		"OnUnitActiveSec=1min",
+		"keeping the old one",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("node script lacks %q", want)
+		}
+	}
+}
+
+func TestStatusExpiryReadsTehranTime(t *testing.T) {
+	naive := Status{ExpiryDate: "2026-12-01T10:00:00"}
+	when, ok := naive.Expiry()
+	if !ok || !when.Equal(time.Date(2026, 12, 1, 6, 30, 0, 0, time.UTC)) {
+		t.Fatalf("naive expiry = %v %v", when, ok)
+	}
+	zoned := Status{ExpiryDate: "2026-12-01T10:00:00Z"}
+	if when, ok := zoned.Expiry(); !ok || !when.Equal(time.Date(2026, 12, 1, 10, 0, 0, 0, time.UTC)) {
+		t.Fatalf("zoned expiry = %v %v", when, ok)
+	}
+	if _, ok := (Status{}).Expiry(); ok {
+		t.Fatal("no expiry must not parse")
 	}
 }

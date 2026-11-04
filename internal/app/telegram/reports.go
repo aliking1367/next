@@ -148,6 +148,16 @@ func (r Reporter) AdminUsageReset(ctx context.Context, report AdminReport) {
 	r.sendHTML(ctx, "admin.usage_reset", adminReportText("♻️ <b>#AdminUsageReset</b>", report, nil))
 }
 
+// TSinTunnel reports what the T.Sin tunnel watchdog saw or did: the tunnel
+// going down, coming back, or moving to another datacenter.
+func (r Reporter) TSinTunnel(ctx context.Context, title string, lines ...string) {
+	parts := []string{"🛰 <b>#TSin</b> " + EscapeHTML(title)}
+	for _, item := range lines {
+		parts = append(parts, EscapeHTML(item))
+	}
+	r.sendHTML(ctx, "errors.tsin", strings.Join(parts, "\n"))
+}
+
 func (r Reporter) AdminLimitReached(ctx context.Context, report AdminLimitReport) {
 	event := "admin.limit.data"
 	title := "📉 <b>#AdminDataLimit</b>"

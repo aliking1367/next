@@ -911,6 +911,8 @@
 	"settings.telegram.events.loginHint": "Отправлять уведомление при попытках входа администратора.",
 	"settings.telegram.events.nodeErrors": "Журнал ошибок узла",
 	"settings.telegram.events.nodeErrorsHint": "Отправлять уведомление при ошибках узла, зафиксированных системой.",
+	"settings.telegram.events.tsinTunnel": "Туннель T.Sin",
+	"settings.telegram.events.tsinTunnelHint": "Уведомлять, когда туннель T.Sin падает, восстанавливается или переходит в другой датацентр.",
 	"settings.save": "Save Settings",
 	"settings.savedSuccess": "Telegram settings updated.",
 	"settings.tabs.comingSoon": "Coming Soon",

@@ -1890,6 +1890,8 @@
 	"settings.telegram.events.nodeDeletedHint": "Notify when a node is deleted.",
 	"settings.telegram.events.nodeErrors": "Node error logs",
 	"settings.telegram.events.nodeErrorsHint": "Notify about node errors reported by the system.",
+	"settings.telegram.events.tsinTunnel": "T.Sin tunnel",
+	"settings.telegram.events.tsinTunnelHint": "Notify when the T.Sin tunnel goes down, comes back or moves to another datacenter.",
 	"settings.telegram.events.nodeStatusConnected": "Node connected",
 	"settings.telegram.events.nodeStatusConnectedHint": "Notify when a node connects.",
 	"settings.telegram.events.nodeStatusConnecting": "Node connecting",

@@ -495,6 +495,14 @@ const EVENT_TOGGLE_GROUPS: EventToggleGroup[] = [
 				hintKey: "settings.telegram.events.nodeErrorsHint",
 				defaultHint: "Notify about node errors reported by the system.",
 			},
+			{
+				key: "errors.tsin",
+				labelKey: "settings.telegram.events.tsinTunnel",
+				defaultLabel: "T.Sin tunnel",
+				hintKey: "settings.telegram.events.tsinTunnelHint",
+				defaultHint:
+					"Notify when the T.Sin tunnel goes down, comes back or moves to another datacenter.",
+			},
 		],
 	},
 ];

@@ -50,6 +50,7 @@ var defaultEventToggles = map[string]bool{
 	"node.status.limited":       true,
 	"login":                     true,
 	"errors.node":               true,
+	"errors.tsin":               true,
 }
 
 type Repository struct {
