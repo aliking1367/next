@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-c9c6dc6",
-  "updated_at": "2026-11-04T10:55:57Z",
+  "latest": "dev-e70f4cc",
+  "updated_at": "2026-11-04T11:46:04Z",
   "builds": [
+    {
+      "tag": "dev-e70f4cc",
+      "sha": "e70f4cc2ae19bda1d2e072e7b6aaa21eaadafb1a",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "41822992929",
+      "run_number": "170",
+      "created_at": "2026-11-04T11:46:04Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-e70f4cc.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-e70f4cc.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-e70f4cc.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-e70f4cc.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-c9c6dc6",
       "sha": "c9c6dc630517b4ff92ca0aa333d71a28793665ca",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-51bf2d8.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-51bf2d8.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-ea995b0",
-      "sha": "ea995b008c8daa353ca8c6b8581afa797b0a9d1c",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36444309676",
-      "run_number": "62",
-      "created_at": "2026-09-28T15:36:54Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-ea995b0.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-ea995b0.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-ea995b0.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ea995b0.zip"
         }
       }
     }
