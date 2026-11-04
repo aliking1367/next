@@ -53,6 +53,7 @@
   - [Why using Next?](#why-using-next)
     - [Features](#features)
 - [Installation guide](#installation-guide)
+- [T.Sin exit countries (Persian guide)](docs/tsin-fa.md)
 - [Configuration](#configuration)
 - [Donation](#donation)
 - [License](#license)
@@ -85,6 +86,7 @@ Next is user-friendly, feature-rich and reliable. It lets you create different p
 - Integrated **Command Line Interface (CLI)**
 - **Multi-language**
 - **Multi-admin** support (WIP)
+- **T.Sin exit countries**: choose the best datacenter, a tunnel watchdog, account warnings, and every country on one domain and port 443 — see the [T.Sin guide (Persian)](docs/tsin-fa.md)
 
 # Installation guide
 
