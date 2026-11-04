@@ -222,8 +222,14 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 	} else {
 		view["tunnel"] = map[string]any{"up": false}
 	}
+	if tsin.ValidDC(settings.RegisteredDC) {
+		view["registered_dc"] = settings.RegisteredDC
+	}
 	if strings.TrimSpace(settings.Token) != "" {
+		started := time.Now()
 		status, err := tsin.NewClient().Status(ctx, settings.DC, settings.Token)
+		// The time of the status call is what the datacenter ranking shows too.
+		view["latency_ms"] = time.Since(started).Milliseconds()
 		if err != nil {
 			view["account_error"] = err.Error()
 		} else {

@@ -60,6 +60,7 @@ import { SearchInput } from "components/common/SearchInput";
 import { Input } from "components/Input";
 import { AppDialog } from "components/dialogs/AppDialog";
 import { TSinDialog } from "components/TSinDialog";
+import { TSinStatusCard, tsinStatusQueryKey } from "components/TSinStatusCard";
 import { ConfirmDialog } from "components/dialogs/ConfirmDialog";
 import {
 	DataTable,
@@ -87,6 +88,7 @@ import { useServicesStore } from "contexts/ServicesContext";
 import { motion } from "framer-motion";
 import useGetUser from "hooks/useGetUser";
 import { type FC, useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { fetch } from "service/http";
@@ -930,6 +932,7 @@ const ServicesPage: FC = () => {
 	const cdnHostsDisclosure = useDisclosure();
 	const cdnAutomationDisclosure = useDisclosure();
 	const tsinDisclosure = useDisclosure();
+	const queryClient = useQueryClient();
 	const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
 	const [cdnDomain, setCdnDomain] = useState("");
 	const [wireGuardTunnel, setWireGuardTunnel] = useState(false);
@@ -2176,6 +2179,11 @@ const ServicesPage: FC = () => {
 			<ResourceListCard
 				title={t("services.listHeader")}
 				summaryItems={serviceSummaryItems}
+				center={
+					isSudoOrAbove ? (
+						<TSinStatusCard onOpen={tsinDisclosure.onOpen} />
+					) : undefined
+				}
 				actions={
 					<HStack spacing={2} w={{ base: "full", xl: "auto" }}>
 						{isSudoOrAbove && (
@@ -2842,7 +2850,13 @@ const ServicesPage: FC = () => {
 			<TSinDialog
 				isOpen={tsinDisclosure.isOpen}
 				onClose={tsinDisclosure.onClose}
-				onChanged={() => void Promise.all([fetchServices(), fetchHosts()])}
+				onChanged={() =>
+					void Promise.all([
+						fetchServices(),
+						fetchHosts(),
+						queryClient.invalidateQueries([tsinStatusQueryKey]),
+					])
+				}
 			/>
 
 			<AppDialog

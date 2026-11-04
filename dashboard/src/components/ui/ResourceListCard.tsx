@@ -23,6 +23,8 @@ type ResourceListCardProps = Omit<StackProps, "title"> & {
 	title: ReactNode;
 	summaryItems?: ResourceSummaryItem[];
 	actions?: ReactNode;
+	// center sits between the title and the actions on wide screens.
+	center?: ReactNode;
 	footerActions?: ReactNode;
 	children?: ReactNode;
 };
@@ -31,6 +33,7 @@ export const ResourceListCard: FC<ResourceListCardProps> = ({
 	title,
 	summaryItems = [],
 	actions,
+	center,
 	footerActions,
 	children,
 	...props
@@ -112,6 +115,16 @@ export const ResourceListCard: FC<ResourceListCardProps> = ({
 						</HStack>
 					)}
 				</VStack>
+				{center && (
+					<Box
+						flex="1"
+						minW={0}
+						display="flex"
+						justifyContent={{ base: "stretch", xl: "center" }}
+					>
+						{center}
+					</Box>
+				)}
 				{actions && <Box>{actions}</Box>}
 			</Stack>
 
