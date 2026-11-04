@@ -236,3 +236,18 @@ func TestStatusExpiryReadsTehranTime(t *testing.T) {
 		t.Fatal("no expiry must not parse")
 	}
 }
+
+// Running the script again on a node whose tunnel works must not register
+// again: T.Sin refuses that as "in use on another server".
+func TestNodeScriptKeepsAWorkingTunnel(t *testing.T) {
+	script := NodeScript("dc1")
+	for _, want := range []string{
+		"keeping it as it is and only adding the watch",
+		"PREV_DC=$(cat /etc/wireguard/tsin0.dc",
+		"/disconnect?token=$PREV_TOKEN",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("node script lacks %q", want)
+		}
+	}
+}

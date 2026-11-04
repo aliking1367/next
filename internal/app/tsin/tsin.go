@@ -569,11 +569,17 @@ if ! command -v wg-quick >/dev/null || ! command -v python3 >/dev/null; then
 fi
 umask 077
 mkdir -p /etc/wireguard /usr/local/lib/next-tsin
+# What the tunnel on this server was made with, if anything. A tunnel from
+# before this script kept no record; it is taken to match.
+PREV_DC=$(cat /etc/wireguard/tsin0.dc 2>/dev/null || true)
+PREV_TOKEN=$(cat /etc/wireguard/tsin0.token 2>/dev/null || true)
 # The token stays on this server, readable by root only, so the watch below
 # can register again by itself, as T.Sin's own client does.
 printf '%s' "$TOKEN" > /etc/wireguard/tsin0.token
 printf '%s' "$DC" > /etc/wireguard/tsin0.dc
-unset TOKEN
+SAME=1
+if [ -n "$PREV_DC" ] && [ "$PREV_DC" != "$DC" ]; then SAME=0; fi
+if [ -n "$PREV_TOKEN" ] && [ "$PREV_TOKEN" != "$TOKEN" ]; then SAME=0; fi
 
 cat > /usr/local/lib/next-tsin/register.sh <<'REGISTER_END'
 #!/bin/bash
@@ -701,7 +707,21 @@ UNIT_END
 
 chmod 700 /usr/local/lib/next-tsin/register.sh /usr/local/sbin/next-tsin-watch
 chmod 644 /etc/systemd/system/next-tsin-watch.service /etc/systemd/system/next-tsin-watch.timer
-/usr/local/lib/next-tsin/register.sh --fresh
+# A working tunnel for the same datacenter and token is kept as it is: T.Sin
+# refuses a second registration while that session is online ("in use on
+# another server"), and keeping it means no drop at all for the users.
+HS=$(wg show tsin0 latest-handshakes 2>/dev/null | awk '{print $2}' | head -n1)
+if [ "$SAME" = 1 ] && [ -f /etc/wireguard/tsin0.conf ] && [ -n "$HS" ] && [ "$HS" != "0" ] && [ $(( $(date +%s) - HS )) -lt 180 ]; then
+  echo "The tunnel is already up; keeping it as it is and only adding the watch"
+else
+  if [ "$SAME" = 0 ] && [ -n "$PREV_DC" ] && [ -n "$PREV_TOKEN" ]; then
+    # Leaving the old datacenter or token: end that session first so the
+    # new registration is not refused as in use.
+    curl -sS -m 15 -o /dev/null "http://$PREV_DC.sin-kabir.ir:8080/disconnect?token=$PREV_TOKEN" || true
+  fi
+  /usr/local/lib/next-tsin/register.sh --fresh
+fi
+unset TOKEN PREV_TOKEN
 systemctl daemon-reload
 systemctl enable --now next-tsin-watch.timer >/dev/null
 echo "Watch installed: the tunnel is checked every minute and repaired when it is down (journalctl -t next-tsin-watch)"
