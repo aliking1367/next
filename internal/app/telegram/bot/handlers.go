@@ -163,7 +163,7 @@ func (b *Bot) handleConversation(ctx context.Context, settings Settings, who cal
 	case stateSearch:
 		_ = b.state.clear(ctx, chatID)
 		b.lookupUser(ctx, settings, who, chatID, text)
-	case stateNewUsername, stateNewService, stateNewGB, stateNewDays, stateNewConfirm, stateRenewDays, stateRenewGB, stateRenewConfirm:
+	case stateNewUsername, stateNewService, stateNewGB, stateNewReset, stateNewDays, stateNewConfirm, stateRenewDays, stateRenewGB, stateRenewConfirm:
 		b.handleFlowText(ctx, settings, who, chatID, conv, text)
 	default:
 		_ = b.state.clear(ctx, chatID)

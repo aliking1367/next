@@ -17,6 +17,7 @@ const (
 	stateNewService    = "new_service"
 	stateNewGB         = "new_gb"
 	stateNewDays       = "new_days"
+	stateNewReset      = "new_reset"
 	stateNewConfirm    = "new_confirm"
 	stateRenewDays     = "renew_days"
 	stateRenewGB       = "renew_gb"
@@ -43,6 +44,38 @@ type flowDraft struct {
 	ServiceID int64  `json:"s,omitempty"`
 	GB        int64  `json:"g,omitempty"`
 	Days      int64  `json:"d,omitempty"`
+	Reset     string `json:"r,omitempty"`
+}
+
+// resetChoices are the traffic reset periods a new user can get, in the
+// order they are offered.
+var resetChoices = []struct {
+	Value string
+	Label string
+}{
+	{"no_reset", "بدون ریست"},
+	{"day", "روزانه"},
+	{"week", "هفتگی"},
+	{"month", "ماهانه"},
+	{"year", "سالانه"},
+}
+
+func resetLabel(value string) string {
+	for _, choice := range resetChoices {
+		if choice.Value == value {
+			return choice.Label
+		}
+	}
+	return "بدون ریست"
+}
+
+func validReset(value string) bool {
+	for _, choice := range resetChoices {
+		if choice.Value == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *Bot) loadDraft(ctx context.Context, chatID int64, states ...string) (flowDraft, string, bool) {
@@ -123,6 +156,22 @@ func (b *Bot) askCreateGB(ctx context.Context, settings Settings, chatID int64, 
 		amountKeyboard(cbNewGB, gbPresets, "گیگ", "♾ نامحدود"))
 }
 
+// askCreateReset offers the traffic reset period. It comes only for a user
+// with a traffic limit, and only to an account allowed to set one.
+func (b *Bot) askCreateReset(ctx context.Context, settings Settings, chatID int64, draft flowDraft) {
+	b.saveDraft(ctx, chatID, stateNewReset, draft)
+	rows := [][]InlineButton{{}, {}}
+	for i, choice := range resetChoices {
+		button := InlineButton{Text: choice.Label, CallbackData: cbNewReset + choice.Value}
+		if choice.Value == "no_reset" {
+			button.Style = stylePrimary
+		}
+		rows[i/3] = append(rows[i/3], button)
+	}
+	rows = append(rows, cancelRow())
+	b.reply(ctx, settings, chatID, "حجم کاربر هر چند وقت یک بار ریست (صفر) شود؟", &InlineKeyboard{InlineKeyboard: rows})
+}
+
 func (b *Bot) askCreateDays(ctx context.Context, settings Settings, chatID int64, draft flowDraft) {
 	b.saveDraft(ctx, chatID, stateNewDays, draft)
 	b.reply(ctx, settings, chatID, "مدت کاربر چند روز باشد؟ انتخاب کن یا عددش را بفرست:",
@@ -136,6 +185,7 @@ func (b *Bot) askCreateConfirm(ctx context.Context, settings Settings, chatID in
 		separator(),
 		line("نام کاربری", draft.Username),
 		line("حجم", gigabytesLabel(draft.GB, "نامحدود")),
+		line("ریست حجم", resetLabel(draft.Reset)),
 		line("مدت", daysLabel(draft.Days, "بدون انقضا")),
 	}, "\n")
 	b.reply(ctx, settings, chatID, text, confirmKeyboard(InlineButton{Text: "✅ بساز", CallbackData: cbNewConfirm, Style: styleSuccess}))
@@ -149,10 +199,11 @@ func (b *Bot) createConfirmed(ctx context.Context, settings Settings, who caller
 	}
 	_ = b.state.clear(ctx, chatID)
 	err := b.users.Create(ctx, who.actor, NewUser{
-		Username:    draft.Username,
-		ServiceID:   draft.ServiceID,
-		DataLimitGB: draft.GB,
-		Days:        draft.Days,
+		Username:      draft.Username,
+		ServiceID:     draft.ServiceID,
+		DataLimitGB:   draft.GB,
+		Days:          draft.Days,
+		ResetStrategy: draft.Reset,
 	})
 	if err != nil {
 		_ = b.client.answerCallbackQuery(ctx, settings, query.ID, "انجام نشد")
@@ -235,7 +286,7 @@ func (b *Bot) handleFlowText(ctx context.Context, settings Settings, who caller,
 		b.createUsernameChosen(ctx, settings, who, chatID, text)
 		return
 	}
-	if conv.State == stateNewService || conv.State == stateNewConfirm || conv.State == stateRenewConfirm {
+	if conv.State == stateNewService || conv.State == stateNewReset || conv.State == stateNewConfirm || conv.State == stateRenewConfirm {
 		b.reply(ctx, settings, chatID, "یکی از دکمه‌های بالا را بزن، یا /cancel را بفرست.", nil)
 		return
 	}
@@ -248,13 +299,17 @@ func (b *Bot) handleFlowText(ctx context.Context, settings Settings, who caller,
 		b.reply(ctx, settings, chatID, fmt.Sprintf("یک عدد بین ۰ و %s بفرست، یا یکی از دکمه‌ها را بزن.", persianDigits(strconv.FormatInt(limit, 10))), &InlineKeyboard{InlineKeyboard: [][]InlineButton{cancelRow()}})
 		return
 	}
-	b.flowAmountChosen(ctx, settings, chatID, conv.State, draft, value)
+	b.flowAmountChosen(ctx, settings, who, chatID, conv.State, draft, value)
 }
 
-func (b *Bot) flowAmountChosen(ctx context.Context, settings Settings, chatID int64, state string, draft flowDraft, value int64) {
+func (b *Bot) flowAmountChosen(ctx context.Context, settings Settings, who caller, chatID int64, state string, draft flowDraft, value int64) {
 	switch state {
 	case stateNewGB:
 		draft.GB = value
+		if value > 0 && who.actor.CanPeriodicReset {
+			b.askCreateReset(ctx, settings, chatID, draft)
+			return
+		}
 		b.askCreateDays(ctx, settings, chatID, draft)
 	case stateNewDays:
 		draft.Days = value
@@ -311,7 +366,16 @@ func (b *Bot) handleFlowCallback(ctx context.Context, settings Settings, who cal
 			return true
 		}
 		answer("")
-		b.flowAmountChosen(ctx, settings, chatID, state, draft, amount)
+		b.flowAmountChosen(ctx, settings, who, chatID, state, draft, amount)
+	case cbNewReset:
+		draft, _, ok := b.loadDraft(ctx, chatID, stateNewReset)
+		if !ok || !validReset(value) {
+			answer(staleStepText)
+			return true
+		}
+		answer("")
+		draft.Reset = value
+		b.askCreateDays(ctx, settings, chatID, draft)
 	case cbNewConfirm:
 		b.createConfirmed(ctx, settings, who, query, chatID)
 	case cbRenew:

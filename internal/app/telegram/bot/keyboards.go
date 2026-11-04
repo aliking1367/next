@@ -25,6 +25,7 @@ const (
 	cbNewService   = "nsvc:"
 	cbNewGB        = "ngb:"
 	cbNewDays      = "nday:"
+	cbNewReset     = "nrst:"
 	cbNewConfirm   = "nok"
 	cbRenew        = "renew:"
 	cbRenewDays    = "rday:"

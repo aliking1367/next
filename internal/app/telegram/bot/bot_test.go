@@ -145,13 +145,16 @@ func (fakeSystem) Info(context.Context) (SystemInfo, error) {
 	return SystemInfo{Version: "1.0.0", CPUPercent: 5, MemUsed: 1 << 30, MemTotal: 4 << 30, TotalUsers: 10, ActiveUsers: 7, OnlineUsers: 3}, nil
 }
 
-type fakeAuthorizer struct{ ok bool }
+type fakeAuthorizer struct {
+	ok       bool
+	canReset bool
+}
 
 func (f fakeAuthorizer) Actor(context.Context) (Actor, bool) {
 	if !f.ok {
 		return Actor{}, false
 	}
-	return Actor{Username: "admin", Admin: "admin"}, true
+	return Actor{Username: "admin", Admin: "admin", CanPeriodicReset: f.canReset}, true
 }
 
 // resellerTelegramID is the Telegram id the fake gives to admin "seller".

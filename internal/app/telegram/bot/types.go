@@ -119,6 +119,9 @@ type Actor struct {
 	// gets the create, renew, delete and info actions; everything else stays
 	// with the owner chats in Settings.AdminChatIDs.
 	Reseller bool
+	// CanPeriodicReset is whether the account may give a user a daily,
+	// weekly, monthly or yearly traffic reset; the step is offered only then.
+	CanPeriodicReset bool
 }
 
 // Authorizer resolves the admin a bot action runs as. Owner chats are the
@@ -141,6 +144,7 @@ type UserView struct {
 	SubUpdatedAt    *string
 	Note            string
 	OwnerAdmin      string
+	ResetStrategy   string
 	SubscriptionURL string
 	// BackupSubscriptionURLs are the same subscription on the panel's backup
 	// domains. They are listed beside the main link so an admin hands a user
@@ -163,6 +167,8 @@ type NewUser struct {
 	ServiceID   int64
 	DataLimitGB int64
 	Days        int64
+	// ResetStrategy is no_reset, day, week, month or year; empty is no_reset.
+	ResetStrategy string
 }
 
 // User list kinds the bot offers.

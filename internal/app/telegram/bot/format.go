@@ -193,11 +193,16 @@ func userDetailText(user UserView) string {
 		line("حجم کل", formatOptionalBytes(user.DataLimit)),
 		line("مصرف شده", formatBytes(user.UsedTraffic)),
 		line("باقی‌مانده", dataLeft),
+	}
+	if reset := strings.TrimSpace(user.ResetStrategy); reset != "" && reset != "no_reset" {
+		lines = append(lines, line("ریست حجم", resetLabel(reset)))
+	}
+	lines = append(lines,
 		line("انقضا", formatExpire(user.Expire)),
 		line("روزهای باقی‌مانده", daysLeft(user.Expire)),
 		line("آخرین اتصال", relativeFromServer(user.OnlineAt)),
 		line("آخرین آپدیت ساب", relativeFromServer(user.SubUpdatedAt)),
-	}
+	)
 	if strings.TrimSpace(user.Note) != "" {
 		lines = append(lines, line("یادداشت", user.Note))
 	}

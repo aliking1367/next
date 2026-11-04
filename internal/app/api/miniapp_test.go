@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	adminapp "github.com/aliking1367/next/internal/app/admin"
 	telegramapp "github.com/aliking1367/next/internal/app/telegram"
 )
 
@@ -171,5 +172,61 @@ func TestMiniAppAddress(t *testing.T) {
 		if got := miniAppAddress(&value); got != want {
 			t.Errorf("miniAppAddress(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestMiniAppCreateWithAResetPeriod(t *testing.T) {
+	server, db := testBotMigratedServer(t)
+	server.telegramRepo = telegramapp.NewRepository(db, "sqlite")
+	if _, err := server.telegramRepo.Settings(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE telegram_settings SET api_token = '` + miniAppTestToken + `', use_telegram = 1, admin_chat_ids = '[1001]'`,
+		`UPDATE admins SET telegram_id = 2002 WHERE username = 'seller'`,
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := server.Handler()
+	call := func(telegramID int64, action string, body string) (int, map[string]any) {
+		req := httptest.NewRequest(http.MethodPost, "/api/miniapp/"+action, strings.NewReader(body))
+		req.Header.Set(miniAppInitDataHeader, signInitData(t, miniAppTestToken, telegramID, time.Now(), nil))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		var out map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
+	if _, me := call(1001, "me", `{}`); me["can_reset"] != true {
+		t.Fatalf("owner can_reset = %v", me["can_reset"])
+	}
+	if _, me := call(2002, "me", `{}`); me["can_reset"] != true {
+		t.Fatalf("a standard admin may set a reset period by default, can_reset = %v", me["can_reset"])
+	}
+	// Take the permission away from the seller.
+	perms := adminapp.RoleDefaultPermissions(adminapp.RoleStandard)
+	perms.Users.PeriodicUsageReset = false
+	raw, _ := json.Marshal(perms)
+	if _, err := db.Exec(`UPDATE admins SET permissions = ? WHERE username = 'seller'`, string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if _, me := call(2002, "me", `{}`); me["can_reset"] != false {
+		t.Fatalf("seller without the permission can_reset = %v", me["can_reset"])
+	}
+	code, out := call(1001, "create", `{"username":"monthly","service_id":1,"gb":50,"days":30,"reset_strategy":"month"}`)
+	if code != http.StatusOK || out["reset_strategy"] != "month" {
+		t.Fatalf("owner create = %d %v", code, out)
+	}
+	if code, _ := call(1001, "create", `{"username":"bad_period","service_id":1,"gb":50,"reset_strategy":"hourly"}`); code != http.StatusBadRequest {
+		t.Fatalf("unknown period = %d", code)
+	}
+	if code, _ := call(2002, "create", `{"username":"seller_monthly","service_id":1,"gb":50,"reset_strategy":"month"}`); code == http.StatusOK {
+		t.Fatal("an admin without the periodic reset permission must not set one")
+	}
+	var stored string
+	if err := db.QueryRow(`SELECT COALESCE(data_limit_reset_strategy, '') FROM users WHERE username = 'monthly'`).Scan(&stored); err != nil || stored != "month" {
+		t.Fatalf("stored = %q %v", stored, err)
 	}
 }

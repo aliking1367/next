@@ -472,6 +472,8 @@ async function renderUser(username) {
     infoRow("آخرین اتصال", ago(user.online_at)),
     infoRow("آخرین آپدیت ساب", ago(user.sub_updated_at)),
   ];
+  const resetNames = { day: "روزانه", week: "هفتگی", month: "ماهانه", year: "سالانه" };
+  if (resetNames[user.reset_strategy]) rows.splice(3, 0, infoRow("ریست حجم", resetNames[user.reset_strategy]));
   if (user.owner) rows.push(infoRow("ادمین", user.owner));
   if (user.note) rows.push(infoRow("یادداشت", user.note));
 
@@ -611,7 +613,23 @@ async function renderCreate() {
   content.append(serviceBox);
   const traffic = picker("حجم", [10, 20, 30, 50, 100, 0], "گیگ", "♾ نامحدود", 30);
   const period = picker("مدت", [30, 60, 90, 180, 0], "روز", "♾ بدون انقضا", 30);
-  content.append(...traffic.el, ...period.el);
+  content.append(...traffic.el);
+  // The traffic reset period, for accounts allowed to set one. It only
+  // applies to a user with a traffic limit.
+  const reset = { value: "no_reset" };
+  if (state.me.can_reset) {
+    const choices = [["no_reset", "بدون ریست"], ["day", "روزانه"], ["week", "هفتگی"], ["month", "ماهانه"], ["year", "سالانه"]];
+    const chips = h("div", { class: "chips" });
+    const draw = () => chips.replaceChildren(...choices.map(([value, label]) =>
+      h("button", { class: "chip" + (reset.value === value ? " on" : ""), onclick: () => { haptic("select"); reset.value = value; draw(); } }, label)));
+    draw();
+    content.append(
+      h("div", { class: "section-title" }, "ریست حجم"),
+      h("div", { class: "group" }, chips),
+      h("div", { class: "section-foot" }, "حجم کاربر در هر دوره صفر می‌شود. برای حجم نامحدود کاری نمی‌کند."),
+    );
+  }
+  content.append(...period.el);
   app.replaceChildren(content);
 
   const chosen = { service: null };
@@ -651,7 +669,7 @@ async function renderCreate() {
     }
     mainBusy(true);
     try {
-      await api("create", { username: name, service_id: chosen.service, gb: traffic.value, days: period.value });
+      await api("create", { username: name, service_id: chosen.service, gb: traffic.value, days: period.value, reset_strategy: traffic.value > 0 ? reset.value : "no_reset" });
       haptic("success");
       toast("کاربر ساخته شد");
       await refreshMe();

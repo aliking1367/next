@@ -73,7 +73,7 @@ func (b botAuthorizer) Actor(ctx context.Context) (telegrambot.Actor, bool) {
 	if err != nil || !ok {
 		return telegrambot.Actor{}, false
 	}
-	return telegrambot.Actor{Username: admin.Username, Admin: admin}, true
+	return telegrambot.Actor{Username: admin.Username, Admin: admin, CanPeriodicReset: true}, true
 }
 
 // AdminByTelegramID finds the active admin whose profile carries this
@@ -103,7 +103,8 @@ func (b botAuthorizer) AdminByTelegramID(ctx context.Context, telegramID int64) 
 	if err != nil || !ok || admin.Status != adminapp.StatusActive {
 		return telegrambot.Actor{}, false
 	}
-	return telegrambot.Actor{Username: admin.Username, Admin: admin}, true
+	canReset := admin.Role == adminapp.RoleFullAccess || admin.Permissions.Users.PeriodicUsageReset
+	return telegrambot.Actor{Username: admin.Username, Admin: admin, CanPeriodicReset: canReset}, true
 }
 
 // botUserService adapts the user service to the bot's UserService, enforcing the
@@ -127,6 +128,7 @@ func (b botUserService) Get(ctx context.Context, actor telegrambot.Actor, userna
 		Expire:          detail.Expire,
 		OnlineAt:        detail.OnlineAt,
 		SubUpdatedAt:    detail.SubUpdatedAt,
+		ResetStrategy:   detail.DataLimitResetStrategy,
 		SubscriptionURL: detail.SubscriptionURL,
 		Links:           detail.Links,
 	}
@@ -220,11 +222,12 @@ func (b botUserService) List(ctx context.Context, actor telegrambot.Actor, query
 	views := make([]telegrambot.UserView, 0, len(result.Users))
 	for _, user := range result.Users {
 		views = append(views, telegrambot.UserView{
-			Username:    user.Username,
-			Status:      user.Status,
-			UsedTraffic: user.UsedTraffic,
-			DataLimit:   user.DataLimit,
-			Expire:      user.Expire,
+			Username:      user.Username,
+			Status:        user.Status,
+			UsedTraffic:   user.UsedTraffic,
+			DataLimit:     user.DataLimit,
+			Expire:        user.Expire,
+			ResetStrategy: user.DataLimitResetStrategy,
 		})
 	}
 	return views, result.Total, nil
@@ -274,6 +277,11 @@ func (b botUserService) Create(ctx context.Context, actor telegrambot.Actor, use
 	}
 	if user.DataLimitGB > 0 {
 		payload["data_limit"] = user.DataLimitGB << 30
+		// A reset period only means something for a limited user.
+		switch user.ResetStrategy {
+		case "day", "week", "month", "year":
+			payload["data_limit_reset_strategy"] = user.ResetStrategy
+		}
 	}
 	if user.Days > 0 {
 		payload["expire"] = time.Now().Add(time.Duration(user.Days) * 24 * time.Hour).Unix()

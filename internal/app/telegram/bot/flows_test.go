@@ -225,3 +225,47 @@ func TestAFailingUpdateDoesNotStopTheBot(t *testing.T) {
 		t.Fatal("the bot should keep answering after a failed update")
 	}
 }
+
+func TestCreateFlowAsksForTheResetPeriodWhenAllowed(t *testing.T) {
+	users := newFakeUsers()
+	b, _, settings := newTestBot(t, users)
+	b.authorizer = fakeAuthorizer{ok: true, canReset: true}
+
+	say(b, settings, 100, 100, "/new")
+	say(b, settings, 100, 100, "monthly_user")
+	press(b, settings, 100, 100, cbNewGB+"50")
+	if conv, ok := b.state.get(context.Background(), 100); !ok || conv.State != stateNewReset {
+		t.Fatalf("after traffic the reset period should be asked, state=%+v", conv)
+	}
+	press(b, settings, 100, 100, cbNewReset+"evil")
+	if conv, _ := b.state.get(context.Background(), 100); conv.State != stateNewReset {
+		t.Fatal("an unknown period must not be taken")
+	}
+	press(b, settings, 100, 100, cbNewReset+"month")
+	press(b, settings, 100, 100, cbNewDays+"30")
+	press(b, settings, 100, 100, cbNewConfirm)
+	if len(users.created) != 1 || users.created[0].ResetStrategy != "month" {
+		t.Fatalf("created = %+v", users.created)
+	}
+}
+
+func TestCreateFlowSkipsTheResetPeriodForUnlimitedOrNotAllowed(t *testing.T) {
+	users := newFakeUsers()
+	b, _, settings := newTestBot(t, users)
+	b.authorizer = fakeAuthorizer{ok: true, canReset: true}
+	say(b, settings, 100, 100, "/new")
+	say(b, settings, 100, 100, "free_user")
+	press(b, settings, 100, 100, cbNewGB+"0")
+	if conv, _ := b.state.get(context.Background(), 100); conv.State != stateNewDays {
+		t.Fatalf("an unlimited user goes straight to days, state=%+v", conv)
+	}
+
+	b.authorizer = fakeAuthorizer{ok: true}
+	say(b, settings, 100, 100, "/cancel")
+	say(b, settings, 100, 100, "/new")
+	say(b, settings, 100, 100, "plain_user")
+	press(b, settings, 100, 100, cbNewGB+"20")
+	if conv, _ := b.state.get(context.Background(), 100); conv.State != stateNewDays {
+		t.Fatalf("an account without the permission is not asked, state=%+v", conv)
+	}
+}

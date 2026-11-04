@@ -159,6 +159,8 @@ type miniAppRequest struct {
 	GB        int64  `json:"gb"`
 	Days      int64  `json:"days"`
 	Status    string `json:"status"`
+	// ResetStrategy is the new user's traffic reset period.
+	ResetStrategy string `json:"reset_strategy"`
 }
 
 type miniAppUser struct {
@@ -171,6 +173,7 @@ type miniAppUser struct {
 	SubUpdatedAt *string  `json:"sub_updated_at,omitempty"`
 	Note         string   `json:"note,omitempty"`
 	Owner        string   `json:"owner,omitempty"`
+	Reset        string   `json:"reset_strategy,omitempty"`
 	Subscription string   `json:"subscription_url,omitempty"`
 	Backups      []string `json:"backup_urls,omitempty"`
 	Links        []string `json:"links,omitempty"`
@@ -187,6 +190,7 @@ func miniAppUserFrom(view telegrambot.UserView) miniAppUser {
 		SubUpdatedAt: view.SubUpdatedAt,
 		Note:         view.Note,
 		Owner:        view.OwnerAdmin,
+		Reset:        view.ResetStrategy,
 		Subscription: view.SubscriptionURL,
 		Backups:      view.BackupSubscriptionURLs,
 		Links:        view.Links,
@@ -238,6 +242,7 @@ func (s *Server) handleMiniAppAPI(w http.ResponseWriter, r *http.Request) {
 			"username":   actor.Username,
 			"owner":      caller.owner,
 			"can_delete": canDelete,
+			"can_reset":  actor.CanPeriodicReset,
 			"counts":     map[string]int64{"all": counts[telegrambot.ListAll], "expiring": counts[telegrambot.ListExpiring], "finished": counts[telegrambot.ListFinished]},
 		})
 	case "users":
@@ -284,7 +289,13 @@ func (s *Server) handleMiniAppAPI(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "traffic and days cannot be negative")
 			return
 		}
-		err := users.Create(ctx, actor, telegrambot.NewUser{Username: strings.TrimSpace(req.Username), ServiceID: req.ServiceID, DataLimitGB: req.GB, Days: req.Days})
+		switch req.ResetStrategy {
+		case "", "no_reset", "day", "week", "month", "year":
+		default:
+			writeError(w, http.StatusBadRequest, "unknown reset period")
+			return
+		}
+		err := users.Create(ctx, actor, telegrambot.NewUser{Username: strings.TrimSpace(req.Username), ServiceID: req.ServiceID, DataLimitGB: req.GB, Days: req.Days, ResetStrategy: req.ResetStrategy})
 		s.writeMiniAppUserResult(ctx, w, users, actor, strings.TrimSpace(req.Username), err)
 	case "renew":
 		if req.GB < 0 || req.Days < 0 || (req.GB == 0 && req.Days == 0) {
