@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-6cb4436",
-  "updated_at": "2026-11-04T10:26:40Z",
+  "latest": "dev-c9c6dc6",
+  "updated_at": "2026-11-04T10:55:57Z",
   "builds": [
+    {
+      "tag": "dev-c9c6dc6",
+      "sha": "c9c6dc630517b4ff92ca0aa333d71a28793665ca",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "41816940756",
+      "run_number": "168",
+      "created_at": "2026-11-04T10:55:57Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-c9c6dc6.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-c9c6dc6.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-c9c6dc6.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-c9c6dc6.zip"
+        }
+      }
+    },
     {
       "tag": "dev-6cb4436",
       "sha": "6cb44363362d83dfe5727685933717d732e34329",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-ea995b0.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ea995b0.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-ca7be31",
-      "sha": "ca7be31a32c8474b9bc59645d5d80538d51fc9f2",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36441757705",
-      "run_number": "60",
-      "created_at": "2026-09-28T15:16:26Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-ca7be31.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ca7be31.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-ca7be31.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-ca7be31.tar.gz"
         }
       }
     }
