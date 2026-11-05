@@ -66,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 	r.HandleFunc("/admin/token", s.handleAdminToken)
 	r.HandleFunc("/internal/admin/validate", s.handleInternalAdminValidate)
 	r.HandleFunc("/internal/node/session-event", s.handleNodeSessionEvent)
+	r.HandleFunc("/internal/tsin/report", s.handleTSinNodeReport)
 	r.HandleFunc("/internal/node/haproxy-template/*", s.handleNodeHAProxyTemplate)
 	r.HandleFunc("/xray/*", s.requireSudo(s.handleXrayHelperPath))
 	r.HandleFunc("/inbounds/full", s.requireSudo(s.handleInboundsFull))

@@ -19,6 +19,20 @@ import type { FC, MouseEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "react-query";
 import { fetch } from "service/http";
+import { classifyTSinError, explainTSinProblem } from "./tsinProblems";
+
+type TSinNodeReport = {
+	age_seconds: number;
+	fresh: boolean;
+	dc: string;
+	tunnel_up: boolean;
+	handshake_age: number;
+	failures: number;
+	log?: string[] | null;
+	ports_total?: number;
+	ports_working?: number;
+	ports_failing?: string[] | null;
+};
 
 type TSinStatusView = {
 	dc: string;
@@ -40,6 +54,9 @@ type TSinStatusView = {
 		proxies: unknown[] | null;
 	};
 	account_error?: string;
+	account_error_code?: string;
+	account_source?: "node";
+	node_report?: TSinNodeReport;
 };
 
 export const tsinStatusQueryKey = "tsin-status";
@@ -101,10 +118,23 @@ const Fact: FC<{
 	</HStack>
 );
 
+type CardState = {
+	label: string;
+	color: string;
+	pulse: boolean;
+	// problem explains a state that needs attention: where, and what to do.
+	problem?: { title: string; hint: string; raw?: string };
+};
+
 // TSinStatusCard is a glance at the T.Sin account behind the country
-// configs: traffic, time left, whether it is active, and the datacenter the
-// tunnel uses. Clicking it opens the full Countries dialog.
-export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
+// configs: traffic, time left, whether it works, the datacenter, and, when a
+// country or the tunnel fails, where the problem is. Clicking it opens the
+// full Countries dialog.
+export const TSinStatusCard: FC<{
+	onOpen: () => void;
+	// wide fills its row instead of sitting in a header beside other things.
+	wide?: boolean;
+}> = ({ onOpen, wide }) => {
 	const { t } = useTranslation();
 	const tt = (
 		key: string,
@@ -117,13 +147,15 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 		[tsinStatusQueryKey],
 		() => fetch<TSinStatusView>("/core/tsin"),
 		{
-			refetchInterval: 120_000,
+			refetchInterval: 60_000,
 			refetchOnWindowFocus: false,
 			retry: false,
 		},
 	);
 
 	if (isLoading) {
+		// On a full-width row a placeholder would flash on panels without T.Sin.
+		if (wide) return null;
 		return (
 			<Skeleton w="full" maxW={{ xl: "560px" }} h="78px" borderRadius="xl" />
 		);
@@ -132,12 +164,13 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 	if (!data || !data.token_set || !data.applied) return null;
 
 	const account = data.account;
+	const report = data.node_report;
 	const onNode = data.target !== "master";
 	const nodeName = onNode
 		? (data.targets?.find((item) => item.id === data.target)?.name ??
 			data.target)
 		: "";
-	const dc = data.registered_dc && !onNode ? data.registered_dc : data.dc;
+	const dc = (onNode ? report?.dc : data.registered_dc) || data.dc || "dc1";
 
 	const used = account?.data_used_gb ?? 0;
 	const limit = account?.data_limit_gb ?? 0;
@@ -152,26 +185,119 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 				: days <= 7
 					? "orange.400"
 					: undefined;
+	const failing = report?.fresh ? (report.ports_failing ?? []) : [];
+	const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
 
-	// The status pill: the account first, then the tunnel this panel can see.
-	let state: { label: string; color: string; pulse: boolean };
-	if (!account) {
+	// The state, worst first: the node gone quiet, the tunnel down, T.Sin
+	// refusing, the account switched off, a few countries failing.
+	const errorCode =
+		data.account_error_code || classifyTSinError(data.account_error);
+	let state: CardState;
+	if (onNode && report && !report.fresh) {
 		state = {
-			label: tt("tsin.card.unreachable", "No answer"),
+			label: tt("tsin.card.nodeSilent", "Node not reporting"),
+			color: "orange.400",
+			pulse: false,
+			problem: {
+				title: tt(
+					"tsin.card.nodeSilentTitle",
+					"No report from {{node}} for {{count}} min",
+					{ node: nodeName, count: minutes(report.age_seconds) },
+				),
+				hint: tt(
+					"tsin.card.nodeSilentHint",
+					"The node is off, its internet is down, or next-tsin-watch stopped on it. Check the node; the users of the countries may be cut too.",
+				),
+			},
+		};
+	} else if (onNode && report?.fresh && !report.tunnel_up) {
+		state = {
+			label: tt("tsin.card.tunnelDown", "Tunnel down"),
 			color: "red.400",
 			pulse: false,
+			problem: {
+				title: tt(
+					"tsin.card.tunnelDownTitle",
+					"The T.Sin tunnel on {{node}} is down; the countries do not work",
+					{ node: nodeName },
+				),
+				hint: errorCode
+					? explainTSinProblem(errorCode, tt).hint
+					: tt(
+							"tsin.card.tunnelDownHint",
+							"The node's watch is repairing it. The last lines of its log are in the Countries dialog.",
+						),
+				raw: report.log?.[report.log.length - 1] ?? data.account_error,
+			},
+		};
+	} else if (!onNode && !data.tunnel.up) {
+		state = {
+			label: tt("tsin.card.tunnelDown", "Tunnel down"),
+			color: "red.400",
+			pulse: false,
+			problem: {
+				title: tt(
+					"tsin.card.tunnelDownPanelTitle",
+					"The T.Sin tunnel on this server is down; the countries do not work",
+				),
+				hint: errorCode
+					? explainTSinProblem(errorCode, tt).hint
+					: tt(
+							"tsin.card.tunnelDownPanelHint",
+							"The panel's watch is repairing it and reports to Telegram.",
+						),
+				raw: data.account_error,
+			},
+		};
+	} else if (!account) {
+		const explained = explainTSinProblem(
+			errorCode || "unknown",
+			tt,
+			onNode && !report,
+		);
+		const expected = onNode && errorCode === "in_use" && !report;
+		state = {
+			label: expected
+				? tt("tsin.card.waitingNode", "Waiting for the node")
+				: explained.where,
+			color: expected ? "blue.300" : "red.400",
+			pulse: false,
+			problem: {
+				title: explained.title,
+				hint: explained.hint,
+				raw: data.account_error,
+			},
 		};
 	} else if (!account.active || (days !== null && days < 0)) {
 		state = {
 			label: tt("tsin.inactive", "Inactive"),
 			color: "red.400",
 			pulse: false,
+			problem: {
+				title: tt(
+					"tsin.card.inactiveTitle",
+					"The T.Sin account is inactive or expired",
+				),
+				hint: tt(
+					"tsin.card.inactiveHint",
+					"The countries do not work until the account is renewed at T.Sin.",
+				),
+			},
 		};
-	} else if (!onNode && !data.tunnel.up) {
+	} else if (failing.length > 0) {
 		state = {
-			label: tt("tsin.tunnelDown", "Tunnel not connected"),
+			label: tt("tsin.card.someFailing", "{{count}} country failing", {
+				count: failing.length,
+			}),
 			color: "orange.400",
-			pulse: false,
+			pulse: true,
+			problem: {
+				title: failing.join(", "),
+				hint: tt(
+					"tsin.card.someFailingHint",
+					"The tunnel works but T.Sin's proxy for these countries does not answer. The problem is on T.Sin's side; the other countries work.",
+				),
+			},
 		};
 	} else {
 		state = {
@@ -182,6 +308,10 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 	}
 
 	const countries = data.countries?.length ?? 0;
+	const countriesValue =
+		report?.fresh && report.ports_total
+			? `${report.ports_working ?? 0}/${report.ports_total}`
+			: String(countries);
 	const gb = (value: number) =>
 		value >= 100 ? value.toFixed(0) : value.toFixed(1);
 
@@ -197,7 +327,7 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 				}
 			}}
 			w="full"
-			maxW={{ xl: "600px" }}
+			maxW={wide ? undefined : { xl: "600px" }}
 			borderWidth="1px"
 			borderColor="panel.border"
 			borderRadius="xl"
@@ -205,7 +335,7 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 			px={4}
 			py={3}
 			cursor="pointer"
-			transition="border-color 0.2s ease, transform 0.2s ease"
+			transition="border-color 0.2s ease"
 			_hover={{ borderColor: "primary.400" }}
 			_focusVisible={{ outline: "2px solid", outlineColor: "primary.400" }}
 			position="relative"
@@ -231,6 +361,7 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 						py={0.5}
 						borderRadius="full"
 						bg={trackBg}
+						flexShrink={0}
 					>
 						<Dot color={state.color} pulse={state.pulse} />
 						<Text fontSize="xs" fontWeight="semibold" color={state.color}>
@@ -238,39 +369,80 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 						</Text>
 					</HStack>
 				</HStack>
-				<Tooltip label={tt("tsin.card.refresh", "Refresh")} hasArrow>
-					<Box
-						as="button"
-						type="button"
-						aria-label={tt("tsin.card.refresh", "Refresh")}
-						onClick={(event: MouseEvent) => {
-							event.stopPropagation();
-							void refetch();
-						}}
-						color="panel.textMuted"
-						_hover={{ color: "primary.400" }}
-						display="flex"
-					>
+				<HStack spacing={2} flexShrink={0}>
+					{report?.fresh && (
+						<Text fontSize="10px" color="panel.textMuted" noOfLines={1}>
+							{tt("tsin.card.reported", "{{node}} · {{count}}s ago", {
+								node: nodeName,
+								count: report.age_seconds,
+							})}
+						</Text>
+					)}
+					<Tooltip label={tt("tsin.card.refresh", "Refresh")} hasArrow>
 						<Box
-							as={ArrowPathIcon}
-							w="16px"
-							h="16px"
-							sx={
-								isFetching
-									? {
-											animation: "tsinSpin 1s linear infinite",
-											"@keyframes tsinSpin": {
-												to: { transform: "rotate(360deg)" },
-											},
-										}
-									: undefined
-							}
-						/>
-					</Box>
-				</Tooltip>
+							as="button"
+							type="button"
+							aria-label={tt("tsin.card.refresh", "Refresh")}
+							onClick={(event: MouseEvent) => {
+								event.stopPropagation();
+								void refetch();
+							}}
+							color="panel.textMuted"
+							_hover={{ color: "primary.400" }}
+							display="flex"
+						>
+							<Box
+								as={ArrowPathIcon}
+								w="16px"
+								h="16px"
+								sx={
+									isFetching
+										? {
+												animation: "tsinSpin 1s linear infinite",
+												"@keyframes tsinSpin": {
+													to: { transform: "rotate(360deg)" },
+												},
+											}
+										: undefined
+								}
+							/>
+						</Box>
+					</Tooltip>
+				</HStack>
 			</HStack>
 
-			{account ? (
+			{state.problem && (
+				<Box
+					mb={account ? 2 : 0}
+					px={2.5}
+					py={2}
+					borderRadius="md"
+					bg={trackBg}
+				>
+					<Text fontSize="xs" fontWeight="semibold" color={state.color}>
+						{state.problem.title}
+					</Text>
+					<Text fontSize="xs" color="panel.textMuted" mt={0.5}>
+						{state.problem.hint}
+					</Text>
+					{state.problem.raw && (
+						<Text
+							fontSize="10px"
+							color="panel.textMuted"
+							opacity={0.75}
+							mt={1}
+							dir="ltr"
+							textAlign="start"
+							noOfLines={2}
+							fontFamily="mono"
+						>
+							{state.problem.raw}
+						</Text>
+					)}
+				</Box>
+			)}
+
+			{account && (
 				<>
 					<HStack justify="space-between" fontSize="xs" mb={1}>
 						<Text color="panel.textMuted">
@@ -278,16 +450,18 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 						</Text>
 						<Text dir="ltr" fontWeight="semibold">
 							{gb(used)} / {limit > 0 ? `${gb(limit)} GB` : "∞"}
-							<Text as="span" color="panel.textMuted" fontWeight="normal">
-								{"  "}({percent.toFixed(0)}%)
-							</Text>
+							{limit > 0 && (
+								<Text as="span" color="panel.textMuted" fontWeight="normal">
+									{"  "}({percent.toFixed(0)}%)
+								</Text>
+							)}
 						</Text>
 					</HStack>
 					<Progress
-						value={percent}
+						value={limit > 0 ? percent : 100}
 						size="xs"
 						borderRadius="full"
-						colorScheme={barScheme}
+						colorScheme={limit > 0 ? barScheme : "green"}
 						bg={trackBg}
 						mb={3}
 					/>
@@ -312,7 +486,11 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 						<Fact
 							icon={ServerStackIcon}
 							label={tt("tsin.card.datacenter", "Datacenter")}
-							value={data.latency_ms ? `${dc} · ${data.latency_ms} ms` : dc}
+							value={
+								!onNode && data.latency_ms
+									? `${dc} · ${data.latency_ms} ms`
+									: dc
+							}
 						/>
 						<Fact
 							icon={LinkIcon}
@@ -323,18 +501,16 @@ export const TSinStatusCard: FC<{ onOpen: () => void }> = ({ onOpen }) => {
 							icon={SignalIcon}
 							label={
 								onNode
-									? tt("tsin.card.onNode", "On node")
+									? tt("tsin.card.onNodeWorking", "Working on {{node}}", {
+											node: nodeName,
+										})
 									: tt("tsin.card.countries", "Countries")
 							}
-							value={onNode ? `${nodeName} · ${countries}` : countries}
+							color={failing.length > 0 ? "orange.400" : undefined}
+							value={countriesValue}
 						/>
 					</HStack>
 				</>
-			) : (
-				<Text fontSize="xs" color="red.300" dir="ltr" noOfLines={2}>
-					{data.account_error ||
-						tt("tsin.card.noAccount", "T.Sin did not answer")}
-				</Text>
 			)}
 		</Box>
 	);

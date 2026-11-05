@@ -104,6 +104,15 @@ func (c Client) get(ctx context.Context, dc, path, token string, out any) error 
 	if err != nil {
 		return err
 	}
+	if response.StatusCode >= 500 {
+		// The datacenter is up enough to answer but its service is not; a
+		// JSON body here is an error page, never an answer.
+		var refusal struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(body, &refusal)
+		return fmt.Errorf("T.Sin %s server error (HTTP %d)%s", dc, response.StatusCode, prefixed(": ", refusal.Error))
+	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("T.Sin %s answered with something that is not JSON (HTTP %d)", dc, response.StatusCode)
 	}
@@ -157,22 +166,39 @@ type Status struct {
 	Proxies     []Proxy `json:"proxies"`
 }
 
+// rawStatus is T.Sin's /status answer as it comes.
+type rawStatus struct {
+	Status            string          `json:"status"`
+	Message           string          `json:"message"`
+	Error             string          `json:"error"`
+	ClientName        string          `json:"client_name"`
+	DataUsedGB        float64         `json:"data_used_gb"`
+	DataLimitGB       float64         `json:"data_limit_gb"`
+	ActiveConnections float64         `json:"active_connections"`
+	ExpiryDate        string          `json:"expiry_date"`
+	IsActive          *float64        `json:"is_active"`
+	ActiveProxies     map[string]rawP `json:"active_proxies"`
+}
+
 func (c Client) Status(ctx context.Context, dc, token string) (Status, error) {
-	var raw struct {
-		Status            string          `json:"status"`
-		Message           string          `json:"message"`
-		Error             string          `json:"error"`
-		ClientName        string          `json:"client_name"`
-		DataUsedGB        float64         `json:"data_used_gb"`
-		DataLimitGB       float64         `json:"data_limit_gb"`
-		ActiveConnections float64         `json:"active_connections"`
-		ExpiryDate        string          `json:"expiry_date"`
-		IsActive          *float64        `json:"is_active"`
-		ActiveProxies     map[string]rawP `json:"active_proxies"`
-	}
+	var raw rawStatus
 	if err := c.get(ctx, dc, "/status", token, &raw); err != nil {
 		return Status{}, err
 	}
+	return raw.status()
+}
+
+// ParseStatus reads a /status answer that something else fetched, such as
+// the report a node sends about its own tunnel.
+func ParseStatus(body []byte) (Status, error) {
+	var raw rawStatus
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return Status{}, errors.New("the T.Sin account details are not JSON")
+	}
+	return raw.status()
+}
+
+func (raw rawStatus) status() (Status, error) {
 	if raw.Status != "success" {
 		return Status{}, fmt.Errorf("T.Sin refused the token: %s", firstNonEmpty(raw.Error, raw.Message, raw.Status, "no reason given"))
 	}
@@ -550,10 +576,28 @@ func tail(out []byte, err error) string {
 // It rebuilds the WireGuard profile from validated fields for the same reason
 // BuildConfig does: wg-quick runs PostUp as root and honours a default route.
 func NodeScript(dc string) string {
+	return NodeScriptReporting(dc, "")
+}
+
+// ReportURLPlaceholder stands for the panel's address in the node script.
+// The dashboard fills it in, because the address the admin reaches the panel
+// at is the one the node can reach it at too; the panel itself cannot tell.
+const ReportURLPlaceholder = "@PANEL_URL@"
+
+var reportKeyPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// NodeScriptReporting is NodeScript with the node also reporting its tunnel to
+// the panel every minute, signed with reportKey. Without a valid key, or with
+// the address left unfilled, the node simply does not report.
+func NodeScriptReporting(dc, reportKey string) string {
 	if !ValidDC(dc) {
 		dc = "dc1"
 	}
+	if !reportKeyPattern.MatchString(reportKey) {
+		reportKey = ""
+	}
 	script := strings.ReplaceAll(nodeScriptTemplate, "@DC@", dc)
+	script = strings.ReplaceAll(script, "@REPORT_KEY@", reportKey)
 	// Pasted straight into a shell, "set -e" in the script would apply to the
 	// admin's own login shell and close the SSH session at the first failed
 	// command. Wrapping it in a file keeps the script's strictness inside the
@@ -568,6 +612,10 @@ const nodeScriptTemplate = `#!/bin/bash
 #   systemctl disable --now next-tsin-watch.timer wg-quick@tsin0
 set -euo pipefail
 DC=@DC@
+# Where this server reports its tunnel, so the panel can show and warn about
+# it. The panel's dashboard fills the address in.
+REPORT_URL='@PANEL_URL@/internal/tsin/report'
+REPORT_KEY='@REPORT_KEY@'
 read -rs -p "T.Sin token: " TOKEN </dev/tty; echo
 if [[ ! "$TOKEN" =~ ^[A-Za-z0-9._~-]{6,200}$ ]]; then echo "That does not look like a T.Sin token"; exit 1; fi
 if ! command -v wg-quick >/dev/null || ! command -v python3 >/dev/null; then
@@ -662,6 +710,8 @@ cat > /usr/local/sbin/next-tsin-watch <<'WATCH_END'
 # and that is retried every five minutes while it stays down. A working
 # tunnel is never touched.
 STATE=/run/next-tsin-watch.failures
+# Whatever this check ends with, the panel hears about it.
+trap '/usr/local/sbin/next-tsin-report "${FAILS:-0}" >/dev/null 2>&1 || true' EXIT
 age() {
   local hs
   hs=$(wg show tsin0 latest-handshakes 2>/dev/null | awk '{print $2}')
@@ -699,6 +749,93 @@ if [ "$RC" -eq 0 ]; then echo 0 > "$STATE"; fi
 exit 0
 WATCH_END
 
+cat > /usr/local/sbin/next-tsin-report <<'REPORT_END'
+#!/bin/bash
+# Sends this server's T.Sin state to the panel, which cannot see a tunnel on
+# a node otherwise: the tunnel, the account as T.Sin shows it to this server,
+# a test of every country's proxy every five minutes, and the watch's recent
+# log. It only reads, and the token never leaves this server.
+CONF=/etc/wireguard/tsin0.report
+[ -f "$CONF" ] || exit 0
+URL=$(sed -n 1p "$CONF"); KEY=$(sed -n 2p "$CONF")
+[[ "$URL" =~ ^https?://[^[:space:]]+$ ]] && [[ "$KEY" =~ ^[0-9a-f]{64}$ ]] || exit 0
+DC=$(cat /etc/wireguard/tsin0.dc 2>/dev/null || true)
+[[ "$DC" =~ ^dc[1-5]$ ]] || exit 0
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+CODE=$(curl -s -m 15 -o "$TMP/status" -w '%{http_code}' "http://$DC.sin-kabir.ir:8080/status?token=$(cat /etc/wireguard/tsin0.token)" || true)
+TMP="$TMP" DC="$DC" CODE="${CODE:-000}" FAILS="${1:-0}" python3 - > "$TMP/report.json" <<'PY' || exit 0
+import json, os, re, subprocess, time
+from concurrent.futures import ThreadPoolExecutor
+tmp = os.environ["TMP"]
+def run(*args):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=20).stdout
+    except Exception:
+        return ""
+now = int(time.time())
+fails = os.environ.get("FAILS", "0")
+report = {"version": 1, "dc": os.environ["DC"], "failures": int(fails) if fails.isdigit() else 0, "handshake_age": -1}
+hs = run("wg", "show", "tsin0", "latest-handshakes").split()
+if len(hs) >= 2 and hs[1].isdigit() and int(hs[1]) > 0:
+    report["handshake_age"] = now - int(hs[1])
+tr = run("wg", "show", "tsin0", "transfer").split()
+if len(tr) >= 3 and tr[1].isdigit() and tr[2].isdigit():
+    report["rx"], report["tx"] = int(tr[1]), int(tr[2])
+code = os.environ.get("CODE", "000")
+body = ""
+try:
+    body = open(tmp + "/status", errors="replace").read()
+except OSError:
+    pass
+account = None
+if code == "200":
+    try:
+        account = json.loads(body)
+    except ValueError:
+        pass
+if isinstance(account, dict) and account.get("status") == "success":
+    report["account"] = account
+else:
+    report["account_error"] = ("HTTP %s: %s" % (code, body.strip()[:300])).strip()
+# Every country's proxy is tried every five minutes; the results are kept in
+# between so that each report carries the latest.
+state = "/run/next-tsin-report.ports"
+ports, ports_at = {}, 0
+try:
+    saved = json.load(open(state))
+    ports, ports_at = saved["ports"], int(saved["at"])
+except Exception:
+    pass
+proxy = "10.0.0.1"
+try:
+    m = re.search(r"(?im)^\s*AllowedIPs\s*=\s*([0-9.]+)/32", open("/etc/wireguard/tsin0.conf").read())
+    if m:
+        proxy = m.group(1)
+except OSError:
+    pass
+if "account" in report and now - ports_at >= 290:
+    def test(port):
+        out = run("curl", "-s", "-m", "8", "-o", "/dev/null", "-w", "%{http_code}",
+                  "-x", "socks5h://%s:%s" % (proxy, port), "https://www.google.com/generate_204")
+        return port, out.strip() == "204"
+    keys = [p for p in (report["account"].get("active_proxies") or {}) if str(p).isdigit()][:64]
+    with ThreadPoolExecutor(8) as pool:
+        ports = dict(pool.map(test, keys))
+    ports_at = now
+    try:
+        json.dump({"ports": ports, "at": ports_at}, open(state, "w"))
+    except OSError:
+        pass
+if ports:
+    report["ports"], report["ports_at"] = ports, ports_at
+log = run("journalctl", "-t", "next-tsin-watch", "-n", "8", "-o", "short-iso", "--no-pager").splitlines()
+report["log"] = [line[:300] for line in log if line and not line.startswith("--")][-8:]
+print(json.dumps(report))
+PY
+curl -s -m 15 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' --data-binary @"$TMP/report.json" "$URL" || true
+REPORT_END
+
 cat > /etc/systemd/system/next-tsin-watch.service <<'UNIT_END'
 [Unit]
 Description=Check the T.Sin tunnel (tsin0) and repair it when it is down
@@ -722,7 +859,7 @@ AccuracySec=10s
 WantedBy=timers.target
 UNIT_END
 
-chmod 700 /usr/local/lib/next-tsin/register.sh /usr/local/sbin/next-tsin-watch
+chmod 700 /usr/local/lib/next-tsin/register.sh /usr/local/sbin/next-tsin-watch /usr/local/sbin/next-tsin-report
 chmod 644 /etc/systemd/system/next-tsin-watch.service /etc/systemd/system/next-tsin-watch.timer
 # A working tunnel for the same datacenter and token is kept as it is: T.Sin
 # refuses a second registration while that session is online ("in use on
@@ -742,4 +879,16 @@ unset TOKEN PREV_TOKEN
 systemctl daemon-reload
 systemctl enable --now next-tsin-watch.timer >/dev/null
 echo "Watch installed: the tunnel is checked every minute and repaired when it is down (journalctl -t next-tsin-watch)"
+if [[ "$REPORT_URL" =~ ^https?://[^[:space:]]+$ ]] && [[ "$REPORT_KEY" =~ ^[0-9a-f]{64}$ ]]; then
+  printf '%s\n%s\n' "$REPORT_URL" "$REPORT_KEY" > /etc/wireguard/tsin0.report
+  echo "Sending the first report to the panel (it tests every country, up to a minute)..."
+  RESULT=$(/usr/local/sbin/next-tsin-report 0 2>/dev/null || true)
+  if [ "$RESULT" = "200" ]; then
+    echo "Reporting to the panel: OK"
+  else
+    echo "Reporting to the panel failed (HTTP ${RESULT:-none}); the tunnel works anyway. Check that this server can open $REPORT_URL"
+  fi
+else
+  rm -f /etc/wireguard/tsin0.report
+fi
 `

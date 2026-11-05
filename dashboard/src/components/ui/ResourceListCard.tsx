@@ -76,7 +76,7 @@ export const ResourceListCard: FC<ResourceListCardProps> = ({
 				<VStack
 					align="flex-start"
 					spacing={3}
-					minW={{ base: "0", xl: "210px" }}
+					minW={{ base: "0", xl: center ? "150px" : "210px" }}
 				>
 					{titleContent}
 					{summaryItems.length > 0 && (
@@ -118,7 +118,8 @@ export const ResourceListCard: FC<ResourceListCardProps> = ({
 				{center && (
 					<Box
 						flex="1"
-						minW={0}
+						// Wide enough to read; the summary tags wrap instead.
+						minW={{ base: 0, xl: "340px" }}
 						display="flex"
 						justifyContent={{ base: "stretch", xl: "center" }}
 					>

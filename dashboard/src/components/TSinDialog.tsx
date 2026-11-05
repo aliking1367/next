@@ -25,6 +25,7 @@ import { Input } from "components/Input";
 import { type FC, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
+import { classifyTSinError, explainTSinProblem } from "./tsinProblems";
 
 type TSinProxy = {
 	port: number;
@@ -69,6 +70,19 @@ type TSinView = {
 	tunnel: { up: boolean; handshake?: string };
 	account?: TSinAccount;
 	account_error?: string;
+	account_error_code?: string;
+	// node_report is what the node running the tunnel last reported.
+	node_report?: {
+		age_seconds: number;
+		fresh: boolean;
+		dc: string;
+		tunnel_up: boolean;
+		handshake_age: number;
+		log?: string[] | null;
+		ports_total?: number;
+		ports_working?: number;
+		ports_failing?: string[] | null;
+	};
 };
 
 type TSinDatacenterRank = {
@@ -77,6 +91,7 @@ type TSinDatacenterRank = {
 	latency_ms: number;
 	countries?: number;
 	error?: string;
+	problem?: string;
 };
 
 type TSinApplyResponse = {
@@ -132,7 +147,29 @@ export const TSinDialog: FC<{
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
 	const [ranked, setRanked] = useState<TSinDatacenterRank[] | null>(null);
-	const script = useClipboard(view?.node_script ?? "");
+	// The node reports to the panel at the address the admin reaches it at.
+	const nodeScript = (view?.node_script ?? "")
+		.split("@PANEL_URL@")
+		.join(window.location.origin);
+	const script = useClipboard(nodeScript);
+
+	// providerError turns a refused request into where the problem is and
+	// what to do, keeping T.Sin's own words underneath.
+	const providerError = (detail: string | undefined, fallback: string) => {
+		const code = classifyTSinError(detail);
+		if (!detail || !code) {
+			toast({ status: "error", isClosable: true, title: detail || fallback });
+			return;
+		}
+		const explained = explainTSinProblem(code, tt, target.startsWith("node:"));
+		toast({
+			status: "error",
+			isClosable: true,
+			duration: 12_000,
+			title: explained.title,
+			description: `${explained.hint} (${detail})`,
+		});
+	};
 
 	// Asks every datacenter at once with the typed token, or the saved one,
 	// and selects the fastest that accepts it.
@@ -158,7 +195,14 @@ export const TSinDialog: FC<{
 				// Shown, not chosen: see nodeTunnel.
 			} else if (data.best) {
 				setDc(data.best);
-			} else {
+			} else if (
+				!(
+					nodeTunnel &&
+					data.datacenters.some((item) => item.problem === "in_use")
+				)
+			) {
+				// With the tunnel on a node, T.Sin answers "in use" to the panel;
+				// the list says so per datacenter, which is not "none accepts it".
 				toast({
 					status: "warning",
 					title: tt(
@@ -169,7 +213,7 @@ export const TSinDialog: FC<{
 			}
 		} catch (error) {
 			const detail = (error as { data?: { detail?: string } })?.data?.detail;
-			toast({ status: "error", title: detail || String(error) });
+			providerError(detail, String(error));
 		} finally {
 			setRanking(false);
 		}
@@ -260,12 +304,10 @@ export const TSinDialog: FC<{
 			onChanged?.();
 			await load();
 		} catch (error: any) {
-			toast({
-				status: "error",
-				isClosable: true,
-				title:
-					error?.data?.detail ?? tt("tsin.failed", "Could not apply T.Sin"),
-			});
+			providerError(
+				error?.data?.detail,
+				tt("tsin.failed", "Could not apply T.Sin"),
+			);
 		} finally {
 			setBusy(false);
 		}
@@ -512,8 +554,14 @@ export const TSinDialog: FC<{
 												})}
 											</Badge>
 										) : (
-											<Badge colorScheme="red" title={item.error}>
-												{tt("tsin.dcUnavailable", "not available")}
+											<Badge
+												colorScheme={item.problem === "in_use" ? "blue" : "red"}
+												title={item.error}
+											>
+												{item.problem
+													? explainTSinProblem(item.problem, tt, nodeTunnel)
+															.where
+													: tt("tsin.dcUnavailable", "not available")}
 											</Badge>
 										)}
 									</HStack>
@@ -540,13 +588,104 @@ export const TSinDialog: FC<{
 						</FormHelperText>
 					</FormControl>
 
-					{view?.account_error && (
-						<Alert status="warning" borderRadius="6px" fontSize="sm">
-							<AlertIcon />
-							<AlertDescription dir="ltr">
-								{view.account_error}
-							</AlertDescription>
-						</Alert>
+					{view?.account_error &&
+						(() => {
+							const code =
+								view.account_error_code ||
+								classifyTSinError(view.account_error) ||
+								"unknown";
+							// "In use" is the expected answer to the panel only while the
+							// node does not report; in a node's report it is the node's own
+							// registration being refused.
+							const expected = nodeTunnel && !view.node_report;
+							const explained = explainTSinProblem(code, tt, expected);
+							return (
+								<Alert
+									status={expected && code === "in_use" ? "info" : "warning"}
+									borderRadius="6px"
+									fontSize="sm"
+									alignItems="flex-start"
+								>
+									<AlertIcon />
+									<Box>
+										<Text fontWeight="semibold">{explained.title}</Text>
+										<Text>{explained.hint}</Text>
+										<Text
+											fontSize="xs"
+											opacity={0.7}
+											mt={1}
+											dir="ltr"
+											fontFamily="mono"
+										>
+											{view.account_error}
+										</Text>
+									</Box>
+								</Alert>
+							);
+						})()}
+
+					{nodeTunnel && view?.node_report && (
+						<Box borderWidth="1px" borderRadius="6px" p={3} fontSize="sm">
+							<HStack justify="space-between" mb={2} flexWrap="wrap">
+								<Text fontWeight="semibold">
+									{tt("tsin.nodeReport.title", "What the node reports")}
+								</Text>
+								<HStack spacing={2}>
+									<Badge
+										colorScheme={
+											!view.node_report.fresh
+												? "orange"
+												: view.node_report.tunnel_up
+													? "green"
+													: "red"
+										}
+									>
+										{!view.node_report.fresh
+											? tt("tsin.card.nodeSilent", "Node not reporting")
+											: view.node_report.tunnel_up
+												? tt("tsin.tunnelUp", "Tunnel up")
+												: tt("tsin.card.tunnelDown", "Tunnel down")}
+									</Badge>
+									<Text fontSize="xs" opacity={0.7}>
+										{tt("tsin.nodeReport.age", "{{count}}s ago", {
+											count: view.node_report.age_seconds,
+										})}
+									</Text>
+								</HStack>
+							</HStack>
+							{view.node_report.ports_total ? (
+								<Text mb={1}>
+									{tt(
+										"tsin.nodeReport.ports",
+										"{{working}} of {{total}} countries answer",
+										{
+											working: view.node_report.ports_working ?? 0,
+											total: view.node_report.ports_total,
+										},
+									)}
+									{(view.node_report.ports_failing ?? []).length > 0 && (
+										<Text as="span" color="orange.400">
+											{" — "}
+											{(view.node_report.ports_failing ?? []).join(", ")}
+										</Text>
+									)}
+								</Text>
+							) : null}
+							{(view.node_report.log ?? []).length > 0 && (
+								<Box
+									fontFamily="mono"
+									fontSize="xs"
+									opacity={0.8}
+									dir="ltr"
+									whiteSpace="pre-wrap"
+									maxH="140px"
+									overflowY="auto"
+									mt={1}
+								>
+									{(view.node_report.log ?? []).join("\n")}
+								</Box>
+							)}
+						</Box>
 					)}
 
 					{account && (
@@ -626,11 +765,11 @@ export const TSinDialog: FC<{
 							<Text fontSize="sm" mb={2}>
 								{tt(
 									"tsin.scriptHelp",
-									"After pressing Apply, run this script on the node's server. It asks for the token itself, so the token is never shown here, and it only brings up the tunnel.",
+									"After pressing Apply, run this script on the node's server. It asks for the token itself, so the token is never shown here. It brings up the tunnel, keeps it up, and reports its state to this panel every minute.",
 								)}
 							</Text>
 							<Textarea
-								value={view.node_script}
+								value={nodeScript}
 								isReadOnly
 								rows={8}
 								fontFamily="mono"

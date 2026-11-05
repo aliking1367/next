@@ -41,6 +41,7 @@ type Server struct {
 	adminRepo            adminapp.Repository
 	adminAuth            adminapp.Authenticator
 	nodeController       nodecontroller.Controller
+	tsinNode             tsinNodeState
 	nodeMutations        nodeapp.Repository
 	systemService        *systemapp.Service
 	maintenance          *systemapp.MaintenanceService

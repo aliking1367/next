@@ -35,6 +35,7 @@ import type { ApexOptions } from "apexcharts";
 import { useDashboard } from "contexts/DashboardContext";
 import { AnimatePresence, motion } from "framer-motion";
 import useGetUser from "hooks/useGetUser";
+import { TSinDashboardPanel } from "components/TSinDashboardPanel";
 import type { TFunction } from "i18next";
 import {
 	type FC,
@@ -1987,6 +1988,8 @@ export const Statistics: FC<BoxProps> = (props) => {
 				</Flex>
 				<DashboardMaintenanceControls channel={systemData.channel} version={systemData.version} />
 			</Flex>
+
+			{canSeeGlobal && <TSinDashboardPanel />}
 
 			<SimpleGrid
 				columns={{ base: 1, sm: 2, xl: 4 }}

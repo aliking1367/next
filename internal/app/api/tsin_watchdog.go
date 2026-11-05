@@ -62,6 +62,15 @@ type tsinWatch struct {
 
 	accountAt time.Time
 	alerted   map[string]time.Time
+
+	// What the reports from a node said last; see checkTSinNode.
+	nodeReportAt    time.Time
+	nodeSilent      bool
+	nodeDown        bool
+	nodeDownReports int
+	nodeDownSince   time.Time
+	nodeFailing     string
+	nodeFailingAt   time.Time
 }
 
 func (s *Server) runTSinWatchdog(ctx context.Context) {
@@ -102,6 +111,9 @@ func (s *Server) checkTSinTunnel(ctx context.Context, watch *tsinWatch) {
 		watch.accountAt = time.Now()
 		s.checkTSinAccount(checkCtx, settings, client, watch)
 	}
+	if settings.Target != xrayconfig.MasterTargetID && tsinAccountWatched(settings) {
+		s.checkTSinNode(ctx, settings, watch)
+	}
 	if !tsinWatched(settings) || !tunnel.ConfigExists() {
 		watch.reset()
 		return
@@ -134,7 +146,11 @@ func (s *Server) checkTSinTunnel(ctx context.Context, watch *tsinWatch) {
 	report := s.repairTSinTunnel(checkCtx, &settings, tunnel, client, watch)
 	logging.Warnf(logging.ComponentTelegram, "T.Sin watchdog: %s", report)
 	if report != watch.lastReport && !strings.HasPrefix(report, "fixed") {
-		s.telegramReports.TSinTunnel(ctx, "تونل T.Sin هنوز وصل نشده", report)
+		lines := []string{report}
+		if explained := tsin.ExplainFA(tsin.ClassifyText(report)); explained != "" {
+			lines = append(lines, explained)
+		}
+		s.telegramReports.TSinTunnel(ctx, "تونل T.Sin هنوز وصل نشده", lines...)
 	}
 	watch.lastReport = report
 }
@@ -155,11 +171,18 @@ func tsinAccountWatched(settings tsinSettings) bool {
 // off, or a chosen country no longer offered. It only reads; each warning is
 // repeated once a day while it holds.
 func (s *Server) checkTSinAccount(ctx context.Context, settings tsinSettings, client tsin.Client, watch *tsinWatch) {
-	dc := settings.RegisteredDC
-	if !tsin.ValidDC(dc) {
-		dc = settings.DC
+	var status tsin.Status
+	var err error
+	if report := s.tsinNode.load(settings.Target); report.fresh() && len(report.Account) > 0 {
+		// T.Sin shows the account to the node holding the session, not here.
+		status, err = tsin.ParseStatus(report.Account)
+	} else {
+		dc := settings.RegisteredDC
+		if !tsin.ValidDC(dc) {
+			dc = settings.DC
+		}
+		status, err = client.Status(ctx, dc, settings.Token)
 	}
-	status, err := client.Status(ctx, dc, settings.Token)
 	if err != nil {
 		return // the tunnel check reports an unreachable datacenter
 	}
@@ -315,4 +338,79 @@ func (s *Server) registerTSinTunnel(ctx context.Context, settings *tsinSettings,
 	}
 	settings.RegisteredDC, settings.RegisteredTokenSum = dc, tokenSum(settings.Token)
 	return s.saveTSinSettings(ctx, *settings)
+}
+
+// tsinFailingRepeat spaces out alerts about countries that fail while the
+// tunnel works, since one country can come and go.
+const tsinFailingRepeat = 30 * time.Minute
+
+// checkTSinNode follows a tunnel on a node through the reports the node sends.
+// The node's own watch repairs it; the panel only tells the admin, with where
+// the problem is.
+func (s *Server) checkTSinNode(ctx context.Context, settings tsinSettings, watch *tsinWatch) {
+	report := s.tsinNode.load(settings.Target)
+	if report == nil {
+		return // a node that never reported runs an older script
+	}
+	alert := func(title string, lines ...string) {
+		s.telegramReports.TSinTunnel(context.WithoutCancel(ctx), title, lines...)
+	}
+	if !report.fresh() {
+		if !watch.nodeSilent {
+			watch.nodeSilent = true
+			alert("نود دیگر وضعیت T.Sin را گزارش نمی‌دهد",
+				fmt.Sprintf("آخرین گزارش: %.0f دقیقه پیش", time.Since(report.ReceivedAt).Minutes()),
+				"یا خود نود خاموش است یا اینترنتش قطع است، یا next-tsin-watch روی آن متوقف شده.")
+		}
+		return
+	}
+	if watch.nodeSilent {
+		watch.nodeSilent = false
+		alert("نود دوباره وضعیت T.Sin را گزارش می‌دهد")
+	}
+	if !report.ReceivedAt.After(watch.nodeReportAt) {
+		return // nothing new since the last check
+	}
+	watch.nodeReportAt = report.ReceivedAt
+
+	if report.tunnelUp() {
+		if watch.nodeDown {
+			alert("تونل T.Sin روی نود دوباره وصل شد",
+				fmt.Sprintf("مدت قطعی: حدود %.0f دقیقه", time.Since(watch.nodeDownSince).Minutes()+2))
+		}
+		watch.nodeDown, watch.nodeDownReports = false, 0
+	} else {
+		watch.nodeDownReports++
+		if watch.nodeDownReports == 2 && !watch.nodeDown {
+			watch.nodeDown, watch.nodeDownSince = true, time.Now()
+			lines := []string{"دیتاسنتر: " + report.DC, "نگهبان روی خود نود در حال تعمیر آن است."}
+			if explained := tsin.ExplainFA(tsin.ClassifyText(report.AccountError)); explained != "" {
+				lines = append(lines, explained)
+			}
+			if n := len(report.Log); n > 0 {
+				lines = append(lines, "آخرین خط نگهبان: "+report.Log[n-1])
+			}
+			alert("تونل T.Sin روی نود قطع است؛ کاربرهای کشورها وصل نمی‌شوند", lines...)
+		}
+	}
+
+	// With the tunnel down every country fails; the tunnel alert covers that.
+	failing := ""
+	if report.tunnelUp() {
+		var status *tsin.Status
+		if parsed, err := tsin.ParseStatus(report.Account); err == nil {
+			status = &parsed
+		}
+		failing = strings.Join(report.failingPorts(status), "، ")
+	}
+	if failing != watch.nodeFailing && time.Since(watch.nodeFailingAt) >= tsinFailingRepeat {
+		switch {
+		case failing != "":
+			alert("این کشورها از طرف T.Sin کار نمی‌کنند", failing,
+				"تونل وصل است ولی پراکسی این کشورها در T.Sin جواب نمی‌دهد؛ مشکل از طرف T.Sin است و بقیهٔ کشورها کار می‌کنند.")
+		case watch.nodeFailing != "":
+			alert("همهٔ کشورهای T.Sin دوباره کار می‌کنند")
+		}
+		watch.nodeFailing, watch.nodeFailingAt = failing, time.Now()
+	}
 }

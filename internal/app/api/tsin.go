@@ -206,7 +206,7 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"transport":    settings.Transport,
 		"gate_host":    settings.GateHost,
 		"gate_port":    settings.GatePort,
-		"node_script":  tsin.NodeScript(settings.DC),
+		"node_script":  tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
 		view["targets"] = targets
@@ -225,7 +225,36 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 	if tsin.ValidDC(settings.RegisteredDC) {
 		view["registered_dc"] = settings.RegisteredDC
 	}
-	if strings.TrimSpace(settings.Token) != "" {
+	s.tsinAccountView(ctx, settings, view)
+	writeJSON(w, http.StatusOK, view)
+}
+
+// tsinAccountView adds the account and, for a node, what the node reported.
+func (s *Server) tsinAccountView(ctx context.Context, settings tsinSettings, view map[string]any) {
+	var report *tsinNodeReport
+	if settings.Target != xrayconfig.MasterTargetID {
+		report = s.tsinNode.load(settings.Target)
+	}
+	switch {
+	case strings.TrimSpace(settings.Token) == "":
+	case report.fresh():
+		// The node holds the session, so it is the one T.Sin answers; asking
+		// from here would only be refused as "in use".
+		view["account_source"] = "node"
+		var status *tsin.Status
+		if len(report.Account) > 0 {
+			if parsed, err := tsin.ParseStatus(report.Account); err == nil {
+				status = &parsed
+				view["account"] = parsed
+			} else {
+				view["account_error"] = err.Error()
+			}
+		} else {
+			view["account_error"] = firstNonEmpty(report.AccountError, "the node got no account details from T.Sin")
+		}
+		view["node_report"] = tsinNodeView(report, status)
+		view["tunnel"] = map[string]any{"up": report.tunnelUp(), "handshake_age": report.HandshakeAge}
+	default:
 		started := time.Now()
 		status, err := tsin.NewClient().Status(ctx, settings.DC, settings.Token)
 		// The time of the status call is what the datacenter ranking shows too.
@@ -235,8 +264,13 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		} else {
 			view["account"] = status
 		}
+		if report != nil {
+			view["node_report"] = tsinNodeView(report, nil)
+		}
 	}
-	writeJSON(w, http.StatusOK, view)
+	if text, ok := view["account_error"].(string); ok {
+		view["account_error_code"] = tsin.ClassifyText(text)
+	}
 }
 
 func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
@@ -602,6 +636,7 @@ func (s *Server) handleCoreTSinDatacenters(w http.ResponseWriter, r *http.Reques
 			}
 		} else {
 			row["error"] = result.Error
+			row["problem"] = tsin.ClassifyText(result.Error)
 		}
 		rows = append(rows, row)
 	}
