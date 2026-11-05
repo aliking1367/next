@@ -132,6 +132,12 @@ func (c Client) Register(ctx context.Context, dc, token string) (RegisterResult,
 	return result, nil
 }
 
+// InUse reports whether T.Sin refused a registration because it still counts
+// a session for the token as online ("in use on another online server").
+func InUse(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "in use")
+}
+
 type Proxy struct {
 	Port    int    `json:"port"`
 	Country string `json:"country"`
@@ -678,6 +684,17 @@ if [ "$(age)" -lt 180 ]; then logger -t next-tsin-watch "fixed by restarting"; e
 logger -t next-tsin-watch "still down; registering again"
 OUT=$(/usr/local/lib/next-tsin/register.sh 2>&1) && RC=0 || RC=$?
 logger -t next-tsin-watch "$OUT"
+DC=$(cat /etc/wireguard/tsin0.dc)
+if [ "$RC" -ne 0 ] && [[ "$DC" =~ ^dc[1-5]$ ]] && printf '%s' "$OUT" | grep -qi "in use"; then
+  # T.Sin still counts this server's dead session as online and refuses until
+  # it drops it, which took about ten minutes once. The tunnel is down, so
+  # ending that session loses nothing.
+  logger -t next-tsin-watch "T.Sin still holds the old session; ending it and registering again"
+  curl -sS -m 15 -o /dev/null "http://$DC.sin-kabir.ir:8080/disconnect?token=$(cat /etc/wireguard/tsin0.token)" || true
+  sleep 5
+  OUT=$(/usr/local/lib/next-tsin/register.sh 2>&1) && RC=0 || RC=$?
+  logger -t next-tsin-watch "$OUT"
+fi
 if [ "$RC" -eq 0 ]; then echo 0 > "$STATE"; fi
 exit 0
 WATCH_END

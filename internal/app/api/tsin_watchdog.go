@@ -45,6 +45,10 @@ const (
 // shorten it.
 var tsinRepairWait = 20 * time.Second
 
+// tsinReleaseWait is the pause between ending a stale session and
+// registering again. Tests shorten it.
+var tsinReleaseWait = 5 * time.Second
+
 // tsinWatch is the watchdog's memory between checks.
 type tsinWatch struct {
 	tunnel tsin.Tunnel
@@ -232,7 +236,22 @@ func (s *Server) repairTSinTunnel(ctx context.Context, settings *tsinSettings, t
 	current := settings.RegisteredDC
 	_, statusErr := client.Status(ctx, current, settings.Token)
 	if statusErr == nil {
-		if err := s.registerTSinTunnel(ctx, settings, tunnel, client, current); err == nil {
+		err := s.registerTSinTunnel(ctx, settings, tunnel, client, current)
+		if tsin.InUse(err) {
+			// T.Sin still counts this machine's dead session as online and
+			// refuses until it drops it on its side, which took about ten
+			// minutes on 2026-11-05. The tunnel here is down, so ending that
+			// session loses nothing.
+			_ = client.Disconnect(ctx, current, settings.Token)
+			select {
+			case <-ctx.Done():
+			case <-time.After(tsinReleaseWait):
+			}
+			if err = s.registerTSinTunnel(ctx, settings, tunnel, client, current); err == nil {
+				return "fixed by ending the stale session and registering again on " + current
+			}
+		}
+		if err == nil {
 			return "fixed by registering again on " + current
 		} else if tunnel.WaitHandshake(ctx, time.Second) {
 			return "fixed"

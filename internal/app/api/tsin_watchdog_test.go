@@ -28,6 +28,7 @@ type fakeTSin struct {
 	healthy       bool
 	restartHeals  bool
 	registerHeals bool
+	heldSession   bool // /register answers "in use" until /disconnect
 	restarts      int
 	registered    []string
 	disconnected  []string
@@ -54,12 +55,18 @@ func (f *fakeTSin) server(t *testing.T) *httptest.Server {
 			fmt.Fprintf(w, `{"status":"success","is_active":1,"active_proxies":{%s}}`, strings.Join(proxies, ","))
 		case "/register":
 			f.registered = append(f.registered, dc)
+			if f.heldSession {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"error": "Token is currently in use on another online server. Stop it first to switch IPs."}`))
+				return
+			}
 			if f.registerHeals {
 				f.healthy = true
 			}
 			fmt.Fprintf(w, `{"status":"success","server_wg_ip":"10.0.0.1","wg_conf":"[Interface]\nPrivateKey = %s\nAddress = 10.66.0.2/32\n[Peer]\nPublicKey = %s\nEndpoint = 192.0.2.10:51820\nAllowedIPs = 10.0.0.1/32\n"}`, key, key)
 		case "/disconnect":
 			f.disconnected = append(f.disconnected, dc)
+			f.heldSession = false
 			_, _ = w.Write([]byte(`{"status":"success"}`))
 		}
 	}))
@@ -90,7 +97,8 @@ func (f *fakeTSin) run(_ context.Context, name string, args ...string) ([]byte, 
 func setupTSinWatch(t *testing.T, fake *fakeTSin) (*Server, *tsinWatch) {
 	t.Helper()
 	tsinRepairWait = 1500 * time.Millisecond
-	t.Cleanup(func() { tsinRepairWait = 20 * time.Second })
+	tsinReleaseWait = 0
+	t.Cleanup(func() { tsinRepairWait, tsinReleaseWait = 20*time.Second, 5*time.Second })
 	server, _ := testBotMigratedServer(t)
 	srv := fake.server(t)
 	dir := t.TempDir()
@@ -157,6 +165,20 @@ func TestTSinWatchRegistersAgainOnTheSameDatacenter(t *testing.T) {
 	settings, _ := server.loadTSinSettings(context.Background())
 	if settings.RegisteredDC != "dc1" || settings.DC != "dc1" {
 		t.Fatalf("settings moved: %+v", settings)
+	}
+}
+
+// On 2026-11-05 T.Sin kept a node's dead session online for about ten
+// minutes and refused every registration as "in use" meanwhile.
+func TestTSinWatchEndsAStaleSessionAndRegistersAgain(t *testing.T) {
+	fake := &fakeTSin{up: map[string]bool{"dc1": true}, ports: map[string]map[string]int{"dc1": {"Germany": 5001}}, registerHeals: true, heldSession: true}
+	server, watch := setupTSinWatch(t, fake)
+	checks(server, watch, 2)
+	if len(fake.disconnected) != 1 || fake.disconnected[0] != "dc1" {
+		t.Fatalf("disconnected = %v, want the stale session on dc1 ended", fake.disconnected)
+	}
+	if len(fake.registered) != 2 || !fake.healthy {
+		t.Fatalf("registered = %v healthy = %v, want a second registration that worked", fake.registered, fake.healthy)
 	}
 }
 
