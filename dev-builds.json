@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-69ad793",
-  "updated_at": "2026-11-05T10:36:40Z",
+  "latest": "dev-6cf7d60",
+  "updated_at": "2026-11-05T13:28:55Z",
   "builds": [
+    {
+      "tag": "dev-6cf7d60",
+      "sha": "6cf7d60fcb218f3963f66e0c46b5652bcce94cf2",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42035443257",
+      "run_number": "176",
+      "created_at": "2026-11-05T13:28:55Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-6cf7d60.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-6cf7d60.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-6cf7d60.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-6cf7d60.zip"
+        }
+      }
+    },
     {
       "tag": "dev-69ad793",
       "sha": "69ad793841993a69f4117d72a89754f48fb91013",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-b97c8c8.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-b97c8c8.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-826611d",
-      "sha": "826611df35f9fffa7f9e13c14a430263242a4598",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36454461585",
-      "run_number": "68",
-      "created_at": "2026-09-28T16:59:43Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-826611d.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-826611d.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-826611d.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-826611d.zip"
         }
       }
     }
