@@ -1989,8 +1989,6 @@ export const Statistics: FC<BoxProps> = (props) => {
 				<DashboardMaintenanceControls channel={systemData.channel} version={systemData.version} />
 			</Flex>
 
-			{canSeeGlobal && <TSinDashboardPanel />}
-
 			<SimpleGrid
 				columns={{ base: 1, sm: 2, xl: 4 }}
 				gap={{ base: 3, md: 4 }}
@@ -2082,6 +2080,7 @@ export const Statistics: FC<BoxProps> = (props) => {
 					footerRight={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.disk_history.map((e) => e.value)), isRTL)}`}
 					isRTL={isRTL}
 				/>
+				{canSeeGlobal && <TSinDashboardPanel />}
 			</SimpleGrid>
 
 			<SimpleGrid

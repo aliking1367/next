@@ -132,9 +132,9 @@ type CardState = {
 // full Countries dialog.
 export const TSinStatusCard: FC<{
 	onOpen: () => void;
-	// wide fills its row instead of sitting in a header beside other things.
-	wide?: boolean;
-}> = ({ onOpen, wide }) => {
+	// tile is the dashboard's square card, beside the CPU and memory cards.
+	tile?: boolean;
+}> = ({ onOpen, tile }) => {
 	const { t } = useTranslation();
 	const tt = (
 		key: string,
@@ -154,8 +154,8 @@ export const TSinStatusCard: FC<{
 	);
 
 	if (isLoading) {
-		// On a full-width row a placeholder would flash on panels without T.Sin.
-		if (wide) return null;
+		// On the dashboard a placeholder would flash on panels without T.Sin.
+		if (tile) return null;
 		return (
 			<Skeleton w="full" maxW={{ xl: "560px" }} h="78px" borderRadius="xl" />
 		);
@@ -315,6 +315,148 @@ export const TSinStatusCard: FC<{
 	const gb = (value: number) =>
 		value >= 100 ? value.toFixed(0) : value.toFixed(1);
 
+	// On the dashboard it is a tile beside the CPU and memory cards: the
+	// state, the countries working, and four numbers. A problem takes the
+	// place of the big number. The full details are a click away.
+	if (tile) {
+		const tileFacts: { label: string; value: string; color?: string }[] =
+			account
+				? [
+						{
+							label: tt("tsin.card.traffic", "Traffic"),
+							value: `${gb(used)}${limit > 0 ? ` / ${gb(limit)}` : ""} GB`,
+							color: limit > 0 && percent >= 90 ? "red.400" : undefined,
+						},
+						{
+							label: tt("tsin.card.timeLeft", "Time left"),
+							value:
+								days === null
+									? "—"
+									: days < 0
+										? tt("tsin.expired", "Expired")
+										: tt("tsin.card.days", "{{count}} days", { count: days }),
+							color: daysColor,
+						},
+						{ label: tt("tsin.card.datacenter", "Datacenter"), value: dc },
+						{
+							label: tt("tsin.card.connections", "Connections"),
+							value: String(account.active_connections),
+						},
+					]
+				: [];
+		return (
+			<Box
+				role="button"
+				tabIndex={0}
+				onClick={onOpen}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						onOpen();
+					}
+				}}
+				h="full"
+				minH="170px"
+				display="flex"
+				flexDirection="column"
+				borderWidth="1px"
+				borderColor="panel.border"
+				borderRadius="xl"
+				bg="panel.surface"
+				p={4}
+				cursor="pointer"
+				transition="border-color 0.2s ease"
+				_hover={{ borderColor: "primary.400" }}
+				_focusVisible={{ outline: "2px solid", outlineColor: "primary.400" }}
+				position="relative"
+				overflow="hidden"
+			>
+				<Box
+					position="absolute"
+					insetInlineStart={0}
+					top={0}
+					bottom={0}
+					w="3px"
+					bg={state.color}
+				/>
+				<HStack justify="space-between" spacing={2}>
+					<HStack spacing={1.5} minW={0}>
+						<Box as={GlobeAltIcon} w="16px" h="16px" color="primary.400" />
+						<Text fontSize="sm" fontWeight="semibold" noOfLines={1}>
+							{tt("tsin.card.title", "Countries (T.Sin)")}
+						</Text>
+					</HStack>
+					<HStack
+						spacing={1.5}
+						px={2}
+						py={0.5}
+						borderRadius="full"
+						bg={trackBg}
+						flexShrink={0}
+					>
+						<Dot color={state.color} pulse={state.pulse} />
+						<Text fontSize="xs" fontWeight="semibold" color={state.color}>
+							{state.label}
+						</Text>
+					</HStack>
+				</HStack>
+
+				<Box flex="1" py={2.5}>
+					{state.problem ? (
+						<Text
+							fontSize="sm"
+							fontWeight="semibold"
+							color={state.color}
+							noOfLines={3}
+							title={state.problem.hint}
+						>
+							{state.problem.title}
+						</Text>
+					) : (
+						<HStack spacing={2} align="baseline">
+							<Text fontSize="2xl" fontWeight="bold" dir="ltr" lineHeight="1.1">
+								{countriesValue}
+							</Text>
+							<Text fontSize="xs" color="panel.textMuted">
+								{tt("tsin.card.countriesWorking", "countries working")}
+							</Text>
+						</HStack>
+					)}
+				</Box>
+
+				{tileFacts.length > 0 && (
+					<Box
+						display="grid"
+						gridTemplateColumns="1fr 1fr"
+						columnGap={3}
+						rowGap={1.5}
+						pt={2}
+						borderTopWidth="1px"
+						borderColor="panel.border"
+					>
+						{tileFacts.map((fact) => (
+							<Box key={fact.label} minW={0}>
+								<Text fontSize="10px" color="panel.textMuted" lineHeight="1.2">
+									{fact.label}
+								</Text>
+								<Text
+									fontSize="xs"
+									fontWeight="semibold"
+									color={fact.color}
+									noOfLines={1}
+									dir="ltr"
+									textAlign="start"
+								>
+									{fact.value}
+								</Text>
+							</Box>
+						))}
+					</Box>
+				)}
+			</Box>
+		);
+	}
+
 	return (
 		<Box
 			role="button"
@@ -327,7 +469,7 @@ export const TSinStatusCard: FC<{
 				}
 			}}
 			w="full"
-			maxW={wide ? undefined : { xl: "600px" }}
+			maxW={{ xl: "600px" }}
 			borderWidth="1px"
 			borderColor="panel.border"
 			borderRadius="xl"

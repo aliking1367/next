@@ -25,6 +25,7 @@ import { Input } from "components/Input";
 import { type FC, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
+import { TSinSetupChecklist } from "./TSinSetupChecklist";
 import { classifyTSinError, explainTSinProblem } from "./tsinProblems";
 
 type TSinProxy = {
@@ -386,6 +387,8 @@ export const TSinDialog: FC<{
 							"Sends each country's config out through that country's T.Sin exit, so users see an address from that country. Each chosen country becomes its own config in the service below.",
 						)}
 					</Text>
+
+					{isOpen && <TSinSetupChecklist reloadKey={view} />}
 
 					<Alert status="info" borderRadius="6px" fontSize="sm">
 						<AlertIcon />
