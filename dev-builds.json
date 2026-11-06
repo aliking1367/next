@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-6cf7d60",
-  "updated_at": "2026-11-05T13:28:55Z",
+  "latest": "dev-9785783",
+  "updated_at": "2026-11-06T10:13:41Z",
   "builds": [
+    {
+      "tag": "dev-9785783",
+      "sha": "9785783edcdef60394b399e2feb433a9c2b7c20a",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42200422277",
+      "run_number": "178",
+      "created_at": "2026-11-06T10:13:41Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-9785783.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-9785783.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-9785783.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-9785783.zip"
+        }
+      }
+    },
     {
       "tag": "dev-6cf7d60",
       "sha": "6cf7d60fcb218f3963f66e0c46b5652bcce94cf2",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-54aa622.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-54aa622.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-b97c8c8",
-      "sha": "b97c8c85f41db9db6e06a23cc6bb4b88d311c27b",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36576883948",
-      "run_number": "70",
-      "created_at": "2026-09-29T13:45:41Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-b97c8c8.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-b97c8c8.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-b97c8c8.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-b97c8c8.zip"
         }
       }
     }
