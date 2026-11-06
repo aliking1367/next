@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-e404a69",
-  "updated_at": "2026-11-06T10:35:57Z",
+  "latest": "dev-2c2a508",
+  "updated_at": "2026-11-06T14:15:04Z",
   "builds": [
+    {
+      "tag": "dev-2c2a508",
+      "sha": "2c2a508d9cc6951e2b39e7af5785a78f694fb829",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42231723109",
+      "run_number": "182",
+      "created_at": "2026-11-06T14:15:04Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-2c2a508.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-2c2a508.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-2c2a508.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-2c2a508.zip"
+        }
+      }
+    },
     {
       "tag": "dev-e404a69",
       "sha": "e404a69219437ed6607ad3b22744b9c3afa25bf6",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-1f1b668.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-1f1b668.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-3ecc1e6",
-      "sha": "3ecc1e61b649a5ccacc6855c702403926a70dfda",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36739036461",
-      "run_number": "80",
-      "created_at": "2026-09-30T15:49:49Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-3ecc1e6.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-3ecc1e6.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-3ecc1e6.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-3ecc1e6.zip"
         }
       }
     }
