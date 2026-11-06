@@ -2,7 +2,7 @@ package system
 
 import dashboardapp "github.com/aliking1367/next/internal/app/dashboard"
 
-const DefaultVersion = "1.37.8"
+const DefaultVersion = "1.37.9"
 
 type UsageStats struct {
 	Current int64   `json:"current"`

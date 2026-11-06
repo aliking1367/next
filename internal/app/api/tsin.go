@@ -99,6 +99,9 @@ type tsinSettings struct {
 	// domain in every country config, and the origin port of its gate.
 	GateHost string
 	GatePort int
+	// DirectCountries also get, in path mode, a config on the server's own IP
+	// without Cloudflare. nil means never chosen.
+	DirectCountries []string
 }
 
 type tsinRequest struct {
@@ -114,6 +117,9 @@ type tsinRequest struct {
 	// values.
 	GateHost string `json:"gate_host"`
 	GatePort int    `json:"gate_port"`
+	// DirectCountries replaces the countries with a direct config. Omitted
+	// keeps the stored list.
+	DirectCountries *[]string `json:"direct_countries"`
 }
 
 func tokenSum(token string) string {
@@ -123,11 +129,11 @@ func tokenSum(token string) string {
 
 func (s *Server) loadTSinSettings(ctx context.Context) (tsinSettings, error) {
 	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID, Transport: xrayconfig.TSinTransportTCP, GatePort: xrayconfig.DefaultTSinGatePort}
-	var token, dc, countries, registeredDC, registeredSum, detail, target, transport, gateHost sql.NullString
+	var token, dc, countries, registeredDC, registeredSum, detail, target, transport, gateHost, direct sql.NullString
 	var gatePort sql.NullInt64
 	err := s.db.QueryRowContext(ctx, `SELECT token, dc, countries, registered_dc, registered_token_hash,
-last_applied_at, last_detail, target, transport, gate_host, gate_port FROM tsin_settings ORDER BY id LIMIT 1`).
-		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort)
+last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries FROM tsin_settings ORDER BY id LIMIT 1`).
+		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort, &direct)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings, nil
 	}
@@ -148,16 +154,25 @@ last_applied_at, last_detail, target, transport, gate_host, gate_port FROM tsin_
 	settings.Transport = xrayconfig.NormalizeTSinTransport(transport.String)
 	settings.GateHost = gateHost.String
 	settings.GatePort = int(gatePort.Int64)
+	if direct.Valid {
+		settings.DirectCountries = []string{}
+		_ = json.Unmarshal([]byte(direct.String), &settings.DirectCountries)
+	}
 	return settings, nil
 }
 
 func (s *Server) saveTSinSettings(ctx context.Context, settings tsinSettings) error {
 	countries, _ := json.Marshal(settings.Countries)
+	var direct any
+	if settings.DirectCountries != nil {
+		encoded, _ := json.Marshal(settings.DirectCountries)
+		direct = string(encoded)
+	}
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE tsin_settings SET token = ?, dc = ?, countries = ?,
-registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?`,
+registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?, direct_countries = ?`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct)
 		if err != nil {
 			return err
 		}
@@ -165,9 +180,9 @@ registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail =
 			return nil
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO tsin_settings
-(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct)
 		return err
 	})
 }
@@ -194,19 +209,20 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := map[string]any{
-		"dc":           settings.DC,
-		"datacenters":  tsin.Datacenters(),
-		"preferred":    tsin.Preferred,
-		"token_set":    strings.TrimSpace(settings.Token) != "",
-		"countries":    settings.Countries,
-		"applied":      len(settings.Countries) > 0 && settings.LastAppliedAt.Valid,
-		"last_detail":  settings.LastDetail,
-		"service_name": s.tsinServiceName(r.Context()),
-		"target":       settings.Target,
-		"transport":    settings.Transport,
-		"gate_host":    settings.GateHost,
-		"gate_port":    settings.GatePort,
-		"node_script":  tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
+		"dc":               settings.DC,
+		"datacenters":      tsin.Datacenters(),
+		"preferred":        tsin.Preferred,
+		"token_set":        strings.TrimSpace(settings.Token) != "",
+		"countries":        settings.Countries,
+		"applied":          len(settings.Countries) > 0 && settings.LastAppliedAt.Valid,
+		"last_detail":      settings.LastDetail,
+		"service_name":     s.tsinServiceName(r.Context()),
+		"target":           settings.Target,
+		"transport":        settings.Transport,
+		"gate_host":        settings.GateHost,
+		"gate_port":        settings.GatePort,
+		"direct_countries": settings.DirectCountries,
+		"node_script":      tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
 		view["targets"] = targets
@@ -350,6 +366,13 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	if request.GatePort > 0 {
 		settings.GatePort = request.GatePort
 	}
+	if request.DirectCountries != nil {
+		settings.DirectCountries = cleanTSinCountries(*request.DirectCountries)
+	}
+	direct := map[string]bool{}
+	for _, name := range settings.DirectCountries {
+		direct[strings.ToLower(name)] = true
+	}
 
 	tunnel := tsin.NewTunnel()
 	address := ""
@@ -405,6 +428,8 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	for _, proxy := range proxies {
 		countries = append(countries, xrayconfig.TSinCountry{
 			Port: proxy.Port, Name: proxy.Country, Code: tsinCountryCode(proxy.Country), Address: address,
+			// Only path mode has a Cloudflare config to add a direct one beside.
+			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
 		})
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,

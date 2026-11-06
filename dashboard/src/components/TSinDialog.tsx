@@ -57,6 +57,9 @@ type TSinView = {
 	transport?: string;
 	gate_host?: string;
 	gate_port?: number;
+	// direct_countries also get a config on the server's own IP in path mode;
+	// null until an admin chooses.
+	direct_countries?: string[] | null;
 	targets?: TSinTarget[];
 	node_script: string;
 	dc: string;
@@ -105,6 +108,17 @@ type TSinApplyResponse = {
 
 const formatGB = (value: number) => `${value.toFixed(2)} GB`;
 
+// DIRECT_SUGGESTED are the countries offered a direct config until the admin
+// chooses: the ones most users pick.
+const DIRECT_SUGGESTED = [
+	"Best ping",
+	"Germany",
+	"The Netherlands",
+	"Turkey",
+	"United Kingdom",
+	"United States",
+];
+
 const expiryText = (
 	value: string,
 	t: (
@@ -144,6 +158,7 @@ export const TSinDialog: FC<{
 	const [gateHost, setGateHost] = useState("");
 	const [gatePort, setGatePort] = useState("2087");
 	const [selected, setSelected] = useState<string[]>([]);
+	const [direct, setDirect] = useState<string[]>([]);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
@@ -244,6 +259,9 @@ export const TSinDialog: FC<{
 			const wanted = data.countries?.length
 				? data.countries
 				: (data.preferred ?? []);
+			// Never chosen yet: suggest the countries most users pick, so the
+			// subscription gains only a few direct configs.
+			setDirect(data.direct_countries ?? DIRECT_SUGGESTED);
 			setSelected(
 				offered.size ? wanted.filter((name) => offered.has(name)) : wanted,
 			);
@@ -288,6 +306,7 @@ export const TSinDialog: FC<{
 				transport,
 				gate_host: gateHost.trim(),
 				gate_port: Number.parseInt(gatePort, 10) || 2087,
+				direct_countries: direct.filter((name) => selected.includes(name)),
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -759,6 +778,38 @@ export const TSinDialog: FC<{
 							</Text>
 						)}
 					</Box>
+
+					{transport === "path" && selected.length > 0 && (
+						<Box borderWidth="1px" borderRadius="6px" p={3}>
+							<Text fontWeight="semibold" mb={1}>
+								{tt("tsin.direct.title", "Direct, without Cloudflare ⚡")} (
+								{direct.filter((name) => selected.includes(name)).length})
+							</Text>
+							<Text fontSize="sm" mb={2} opacity={0.85}>
+								{tt(
+									"tsin.direct.help",
+									"These countries also get a second config, marked ⚡, that goes straight to the server's own IP over REALITY. If Cloudflare or the domain is blocked or slow (for example on Irancell), users switch to it. Pick a few main countries so the subscription stays short. Press Apply to save.",
+								)}
+							</Text>
+							<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+								{selected.map((name) => (
+									<Checkbox
+										key={name}
+										isChecked={direct.includes(name)}
+										onChange={() =>
+											setDirect((current) =>
+												current.includes(name)
+													? current.filter((item) => item !== name)
+													: [...current, name],
+											)
+										}
+									>
+										{name} ⚡
+									</Checkbox>
+								))}
+							</SimpleGrid>
+						</Box>
+					)}
 
 					{target !== "master" && view && (
 						<Box borderWidth="1px" borderRadius="6px" p={3}>

@@ -308,7 +308,8 @@ func tsinGateVerdict(code int, header http.Header) (state, reason string) {
 // tsinCountryPath is the WebSocket path of one country inbound in path mode.
 func (s *Server) tsinCountryPath(ctx context.Context) string {
 	var tag string
-	err := s.db.QueryRowContext(ctx, `SELECT inbound_tag FROM hosts WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? ORDER BY id LIMIT 1`, xrayconfig.TSinGateTag).Scan(&tag)
+	err := s.db.QueryRowContext(ctx, `SELECT inbound_tag FROM hosts WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ?
+AND inbound_tag NOT LIKE ? ORDER BY id LIMIT 1`, xrayconfig.TSinGateTag, "%"+xrayconfig.TSinDirectSuffix).Scan(&tag)
 	if err != nil {
 		return ""
 	}

@@ -26,6 +26,9 @@ type TSinCountry struct {
 	Name    string
 	Code    string
 	Address string
+	// Direct adds, in path mode, a second config for the country that reaches
+	// the server's own IP over REALITY, with no Cloudflare in the way.
+	Direct bool
 }
 
 type TSinInbound struct {
@@ -34,7 +37,23 @@ type TSinInbound struct {
 	Country   string `json:"country"`
 	Transport string `json:"transport"`
 	Created   bool   `json:"created"`
+	// Direct marks the second, Cloudflare-free config of a country.
+	Direct bool `json:"direct,omitempty"`
 }
+
+// TSinDirectSuffix ends the tag of a country's direct inbound.
+const TSinDirectSuffix = "-direct"
+
+// TSinDirectInboundTag is the inbound that serves a country directly on the
+// server's IP, beside its path-mode inbound behind Cloudflare.
+func TSinDirectInboundTag(country string) string {
+	return TSinInboundTag(country) + TSinDirectSuffix
+}
+
+// tsinDirectRemark marks a direct config in the subscription, so users can
+// tell it from the Cloudflare one of the same country.
+const tsinDirectRemark = " ⚡"
+
 
 // Country inbounds are VLESS over REALITY on one of two transports. TCP is
 // the classic one; XHTTP is HTTP-shaped and in practice survived on Iranian
@@ -222,6 +241,9 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 	wanted := map[string]bool{}
 	for _, country := range countries {
 		wanted[TSinInboundTag(country.Name)] = true
+		if country.Direct && transport == TSinTransportPath {
+			wanted[TSinDirectInboundTag(country.Name)] = true
+		}
 	}
 	// Every T.Sin inbound anywhere that is not wanted on this target goes: a
 	// country dropped from the list, or one left on the machine the service
@@ -308,6 +330,14 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 			return nil, err
 		}
 		result = append(result, entry)
+
+		if country.Direct && transport == TSinTransportPath {
+			direct, err := r.ensureTSinDirectInbound(ctx, target, country, used, ranges, portBusy, catalog, usedDests)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, direct)
+		}
 	}
 
 	if err := r.applyTSinGate(ctx, target, transport, gate, result); err != nil {
@@ -322,6 +352,49 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		return nil, fmt.Errorf("save routing: %w", err)
 	}
 	return result, nil
+}
+
+// ensureTSinDirectInbound keeps or makes a country's direct inbound: VLESS
+// over REALITY with XHTTP on the server's own IP, the transport that held up
+// best on Iranian networks without a CDN. It shares the country's exit, so
+// it costs nothing on the T.Sin side.
+func (r Repository) ensureTSinDirectInbound(ctx context.Context, target string, country TSinCountry, used map[int]bool, ranges []portRange, portBusy func(int) bool, catalog Catalog, usedDests map[string]bool) (TSinInbound, error) {
+	tag := TSinDirectInboundTag(country.Name)
+	entry := TSinInbound{Tag: tag, Country: country.Name, Transport: TSinTransportXHTTP, Direct: true}
+	existing, err := r.GetInbound(ctx, tag)
+	if err != nil && !errors.Is(err, ErrInboundNotFound) {
+		return entry, err
+	}
+	if existing != nil && tsinInboundTransport(existing) != TSinTransportXHTTP {
+		if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
+			return entry, fmt.Errorf("rebuild %s: %w", tag, err)
+		}
+		existing = nil
+	}
+	if existing != nil {
+		entry.Port, _ = parseConfigPort(existing["port"])
+	} else {
+		port, err := pickProvisionPort(nil, used, ranges, portBusy)
+		if err != nil {
+			return entry, err
+		}
+		used[port] = true
+		payload, err := buildAutoRealityXHTTP(autoProvisionBuild{
+			tag: tag, port: port, catalog: catalog, usedDests: usedDests, usedPorts: used,
+		})
+		if err != nil {
+			return entry, fmt.Errorf("%s (direct): %w", country.Name, err)
+		}
+		payload["targets"] = []any{target}
+		if _, err := r.CreateInbound(ctx, payload); err != nil {
+			return entry, fmt.Errorf("%s (direct): %w", country.Name, err)
+		}
+		entry.Port, entry.Created = port, true
+	}
+	if err := r.setTSinHost(ctx, tag, tsinHostRemark(country)+tsinDirectRemark, TSinTransportXHTTP, TSinGate{}); err != nil {
+		return entry, err
+	}
+	return entry, nil
 }
 
 // RemoveTSin takes every inbound, outbound and routing rule the panel made
@@ -413,9 +486,13 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 				"servers": []any{map[string]any{"address": address, "port": country.Port}},
 			},
 		})
+		inbounds := []any{TSinInboundTag(country.Name)}
+		if country.Direct {
+			inbounds = append(inbounds, TSinDirectInboundTag(country.Name))
+		}
 		rules = append(rules, map[string]any{
 			"type":        "field",
-			"inboundTag":  []any{TSinInboundTag(country.Name)},
+			"inboundTag":  inbounds,
 			"outboundTag": TSinOutboundTag(country.Port),
 		})
 	}
@@ -460,6 +537,9 @@ func (r Repository) applyTSinGate(ctx context.Context, target, transport string,
 	}
 	fallbacks := make([]any, 0, len(countries))
 	for _, country := range countries {
+		if country.Direct {
+			continue // reached on the server's IP, not through the gate
+		}
 		inbound, err := r.GetInbound(ctx, country.Tag)
 		if err != nil {
 			return err

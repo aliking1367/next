@@ -224,3 +224,73 @@ func TestApplyTSinPathModeBuildsOneGateWithAFallbackPerCountry(t *testing.T) {
 		t.Fatal("path mode accepted a bad domain")
 	}
 }
+
+// In path mode a country can also get a direct config: REALITY on the
+// server's own IP, routed to the same exit, outside the gate.
+func TestApplyTSinAddsDirectConfigsOnlyForTheChosenCountries(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{
+		{Port: 1082, Name: "Germany", Code: "DE", Direct: true},
+		{Port: 1095, Name: "Turkey", Code: "TR"},
+	}
+	applied, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(applied) != 3 {
+		t.Fatalf("applied = %#v, want two countries and one direct config", applied)
+	}
+	direct, err := repo.GetInbound(ctx, TSinDirectInboundTag("Germany"))
+	if err != nil {
+		t.Fatalf("direct inbound: %v", err)
+	}
+	stream := mapValue(direct["streamSettings"])
+	if stringValue(stream["network"]) != "xhttp" || stringValue(stream["security"]) != "reality" {
+		t.Fatalf("direct inbound is not REALITY over XHTTP: %#v", stream)
+	}
+	if _, err := repo.GetInbound(ctx, TSinDirectInboundTag("Turkey")); err == nil {
+		t.Fatal("Turkey got a direct config it was not given")
+	}
+	gate, err := repo.GetInbound(ctx, TSinGateTag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fallbacks := listOfMaps(mapValue(gate["settings"])["fallbacks"]); len(fallbacks) != 2 {
+		t.Fatalf("the gate must only carry the path configs: %#v", fallbacks)
+	}
+	var remark, address string
+	if err := db.QueryRow(`SELECT remark, address FROM hosts WHERE inbound_tag = ?`, TSinDirectInboundTag("Germany")).Scan(&remark, &address); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(remark, "⚡") || address != "{SERVER_IP}" {
+		t.Fatalf("direct host = %q at %q", remark, address)
+	}
+	config, err := repo.GetTargetRawConfig(ctx, "master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	routed := false
+	for _, rule := range listOfMaps(mapValue(config["routing"])["rules"]) {
+		if stringValue(rule["outboundTag"]) != TSinOutboundTag(1082) {
+			continue
+		}
+		for _, tag := range interfaceSlice(rule["inboundTag"]) {
+			if tag == TSinDirectInboundTag("Germany") {
+				routed = true
+			}
+		}
+	}
+	if !routed {
+		t.Fatal("the direct config is not routed to Germany's exit")
+	}
+
+	// Taking Germany off the direct list removes its direct config.
+	countries[0].Direct = false
+	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetInbound(ctx, TSinDirectInboundTag("Germany")); err == nil {
+		t.Fatal("the direct config survived being turned off")
+	}
+}

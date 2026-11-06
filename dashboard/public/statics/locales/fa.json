@@ -3304,6 +3304,8 @@
 	"services.editAdminLimits": "Edit limits",
 	"services.sort": "Order",
 	"services.listHeader": "Service list",
+	"tsin.direct.title": "مستقیم، بدون Cloudflare ⚡",
+	"tsin.direct.help": "این کشورها یک کانفیگ دوم هم با علامت ⚡ می‌گیرند که مستقیم با REALITY به آی‌پی خود سرور وصل می‌شود. اگر Cloudflare یا دامنه بسته یا کند شد (مثلاً روی ایرانسل)، کاربرها از این استفاده می‌کنند. چند کشور اصلی را انتخاب کن تا ساب شلوغ نشود. برای ذخیره «اعمال» را بزن.",
 	"settings.telegram.events.nodeLoad": "فشار روی نود",
 	"settings.telegram.events.nodeLoadHint": "وقتی پردازنده یا حافظهٔ یک نود ۵ دقیقه پشت سر هم بالای ۸۰٪ بماند خبر بده، و وقتی عادی شد هم بگو.",
 	"settings.abuse.title": "محافظت در برابر abuse",
