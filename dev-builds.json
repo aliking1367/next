@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-2c2a508",
-  "updated_at": "2026-11-06T14:15:04Z",
+  "latest": "dev-eb7ccba",
+  "updated_at": "2026-11-06T14:30:11Z",
   "builds": [
+    {
+      "tag": "dev-eb7ccba",
+      "sha": "eb7ccba21461b2832362d1bd43749024a66bc467",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42233828132",
+      "run_number": "184",
+      "created_at": "2026-11-06T14:30:11Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-eb7ccba.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-eb7ccba.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-eb7ccba.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-eb7ccba.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-2c2a508",
       "sha": "2c2a508d9cc6951e2b39e7af5785a78f694fb829",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-eeeb439.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-eeeb439.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-1f1b668",
-      "sha": "1f1b668c56faadd6017848736a63fe73d6c61837",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36742432890",
-      "run_number": "82",
-      "created_at": "2026-09-30T16:16:27Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-1f1b668.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-1f1b668.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-1f1b668.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-1f1b668.tar.gz"
         }
       }
     }
