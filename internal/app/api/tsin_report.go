@@ -77,9 +77,30 @@ func (r *tsinNodeReport) tunnelUp() bool {
 	return r.HandshakeAge >= 0 && r.HandshakeAge < int64(tsinHandshakeFresh/time.Second)
 }
 
-// failingPorts lists the countries whose proxy failed the node's last test,
-// by name where the account names them.
-func (r *tsinNodeReport) failingPorts(status *tsin.Status) []string {
+// countedPorts is the node's last test of the countries in use: the node
+// tests every country of the account, but one nobody was given is no
+// concern. Without the account to tell ports apart, every port counts.
+func (r *tsinNodeReport) countedPorts(status *tsin.Status, inUse []string) map[string]bool {
+	if status == nil || len(inUse) == 0 {
+		return r.Ports
+	}
+	wanted := map[string]bool{}
+	for _, name := range inUse {
+		wanted[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+	counted := map[string]bool{}
+	for _, proxy := range status.Proxies {
+		port := strconv.Itoa(proxy.Port)
+		if ok, tested := r.Ports[port]; tested && wanted[strings.ToLower(strings.TrimSpace(proxy.Country))] {
+			counted[port] = ok
+		}
+	}
+	return counted
+}
+
+// failingPorts lists the countries in use whose proxy failed the node's last
+// test, by name where the account names them.
+func (r *tsinNodeReport) failingPorts(status *tsin.Status, inUse []string) []string {
 	names := map[string]string{}
 	if status != nil {
 		for _, proxy := range status.Proxies {
@@ -87,7 +108,7 @@ func (r *tsinNodeReport) failingPorts(status *tsin.Status) []string {
 		}
 	}
 	var failing []string
-	for port, ok := range r.Ports {
+	for port, ok := range r.countedPorts(status, inUse) {
 		if ok {
 			continue
 		}
@@ -163,7 +184,7 @@ func (s *Server) handleTSinNodeReport(w http.ResponseWriter, r *http.Request) {
 }
 
 // tsinNodeView is what the dashboard gets from a node report.
-func tsinNodeView(report *tsinNodeReport, status *tsin.Status) map[string]any {
+func tsinNodeView(report *tsinNodeReport, status *tsin.Status, inUse []string) map[string]any {
 	view := map[string]any{
 		"age_seconds":   int64(time.Since(report.ReceivedAt).Seconds()),
 		"fresh":         report.fresh(),
@@ -175,16 +196,16 @@ func tsinNodeView(report *tsinNodeReport, status *tsin.Status) map[string]any {
 		"tx":            report.TX,
 		"log":           report.Log,
 	}
-	if len(report.Ports) > 0 {
+	if counted := report.countedPorts(status, inUse); len(counted) > 0 {
 		working := 0
-		for _, ok := range report.Ports {
+		for _, ok := range counted {
 			if ok {
 				working++
 			}
 		}
-		view["ports_total"] = len(report.Ports)
+		view["ports_total"] = len(counted)
 		view["ports_working"] = working
-		view["ports_failing"] = report.failingPorts(status)
+		view["ports_failing"] = report.failingPorts(status, inUse)
 		view["ports_age_seconds"] = time.Now().Unix() - report.PortsAt
 	}
 	return view

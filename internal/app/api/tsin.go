@@ -268,7 +268,7 @@ func (s *Server) tsinAccountView(ctx context.Context, settings tsinSettings, vie
 		} else {
 			view["account_error"] = firstNonEmpty(report.AccountError, "the node got no account details from T.Sin")
 		}
-		view["node_report"] = tsinNodeView(report, status)
+		view["node_report"] = tsinNodeView(report, status, settings.Countries)
 		view["tunnel"] = map[string]any{"up": report.tunnelUp(), "handshake_age": report.HandshakeAge}
 	default:
 		started := time.Now()
@@ -281,7 +281,7 @@ func (s *Server) tsinAccountView(ctx context.Context, settings tsinSettings, vie
 			view["account"] = status
 		}
 		if report != nil {
-			view["node_report"] = tsinNodeView(report, nil)
+			view["node_report"] = tsinNodeView(report, nil, settings.Countries)
 		}
 	}
 	if text, ok := view["account_error"].(string); ok {
@@ -338,6 +338,13 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 
 	client := tsin.NewClient()
 	status, err := client.Status(ctx, settings.DC, settings.Token)
+	if tsin.Classify(err) == tsin.ProblemInUse {
+		// The countries run on a node that holds the session, and T.Sin shows
+		// the account only to that node now; its latest report has it.
+		if fromNode, ok := s.tsinAccountFromNode(firstNonEmpty(request.Target, settings.Target)); ok {
+			status, err = fromNode, nil
+		}
+	}
 	if err != nil {
 		writeError(w, tsinProviderStatus, err.Error())
 		return
@@ -494,6 +501,21 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		response["warning"] = note
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+// tsinAccountFromNode is the account as the node running target last
+// reported it, when that report is fresh.
+func (s *Server) tsinAccountFromNode(target string) (tsin.Status, bool) {
+	normalized, err := normalizeTSinTarget(target)
+	if err != nil || normalized == xrayconfig.MasterTargetID {
+		return tsin.Status{}, false
+	}
+	report := s.tsinNode.load(normalized)
+	if !report.fresh() || len(report.Account) == 0 {
+		return tsin.Status{}, false
+	}
+	status, err := tsin.ParseStatus(report.Account)
+	return status, err == nil
 }
 
 // normalizeTSinTarget accepts "master" or "node:<id>" and nothing else.

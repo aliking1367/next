@@ -401,7 +401,7 @@ func (s *Server) checkTSinNode(ctx context.Context, settings tsinSettings, watch
 		if parsed, err := tsin.ParseStatus(report.Account); err == nil {
 			status = &parsed
 		}
-		failing = strings.Join(report.failingPorts(status), "، ")
+		failing = strings.Join(report.failingPorts(status, settings.Countries), "، ")
 	}
 	if failing != watch.nodeFailing && time.Since(watch.nodeFailingAt) >= tsinFailingRepeat {
 		switch {

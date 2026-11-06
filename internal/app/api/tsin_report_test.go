@@ -29,6 +29,7 @@ func setupTSinNodeReports(t *testing.T) (*Server, *tsinWatch) {
 		t.Fatal(err)
 	}
 	settings.Target, settings.RegisteredDC = tsinNodeTarget, ""
+	settings.Countries = []string{"Germany", "Italy"}
 	if err := server.saveTSinSettings(ctx, settings); err != nil {
 		t.Fatal(err)
 	}
@@ -149,5 +150,45 @@ func TestTSinWatchFollowsTheNodeReports(t *testing.T) {
 	checks(server, watch, 1)
 	if !watch.nodeSilent {
 		t.Fatal("a silent node was not noticed")
+	}
+}
+
+// The node tests every country of the account; one no user was given does
+// not count as failing.
+func TestTSinNodeReportCountsOnlyTheCountriesInUse(t *testing.T) {
+	server, _ := setupTSinNodeReports(t)
+	key := server.tsinReportKey(context.Background())
+	postTSinReport(server, key, map[string]any{
+		"dc": "dc1", "handshake_age": 40,
+		"account": nodeAccount(map[string]string{"1080": "Germany", "1093": "Italy", "2015": "Norway"}),
+		"ports":   map[string]bool{"1080": true, "1093": true, "2015": false}, "ports_at": time.Now().Unix(),
+	})
+	settings, _ := server.loadTSinSettings(context.Background())
+	got := map[string]any{}
+	server.tsinAccountView(context.Background(), settings, got)
+	report := got["node_report"].(map[string]any)
+	if report["ports_total"] != 2 || report["ports_working"] != 2 || len(report["ports_failing"].([]string)) != 0 {
+		t.Fatalf("node_report = %v, want 2 of 2 with Norway, unused, left out", report)
+	}
+}
+
+// Apply needs the account's country list; for a node holding the session it
+// comes from the node's report, since T.Sin refuses the panel as "in use".
+func TestTSinAccountFromNodeIsTheFreshReport(t *testing.T) {
+	server, _ := setupTSinNodeReports(t)
+	if _, ok := server.tsinAccountFromNode(tsinNodeTarget); ok {
+		t.Fatal("an account came from a node that never reported")
+	}
+	key := server.tsinReportKey(context.Background())
+	postTSinReport(server, key, map[string]any{
+		"dc": "dc1", "handshake_age": 40,
+		"account": nodeAccount(map[string]string{"1080": "Germany", "1093": "Italy"}),
+	})
+	status, ok := server.tsinAccountFromNode(tsinNodeTarget)
+	if !ok || len(status.Proxies) != 2 {
+		t.Fatalf("status = %+v ok = %v", status, ok)
+	}
+	if _, ok := server.tsinAccountFromNode("master"); ok {
+		t.Fatal("the panel's own tunnel must not borrow a node's report")
 	}
 }

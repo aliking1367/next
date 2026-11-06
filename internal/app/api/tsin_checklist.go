@@ -182,8 +182,9 @@ func (s *Server) tsinChecklist(ctx context.Context, settings tsinSettings, origi
 	case !report.fresh() || len(report.Ports) == 0:
 		countries.State, countries.Reason = "skip", "no_test"
 	default:
-		failing := report.failingPorts(status)
-		countries.Params = map[string]any{"working": len(report.Ports) - len(failing), "total": len(report.Ports)}
+		failing := report.failingPorts(status, settings.Countries)
+		counted := report.countedPorts(status, settings.Countries)
+		countries.Params = map[string]any{"working": len(counted) - len(failing), "total": len(counted)}
 		if len(failing) == 0 {
 			countries.State = "ok"
 		} else {
