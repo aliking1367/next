@@ -150,6 +150,9 @@ func (c Controller) buildRuntimeConfigWithData(ctx context.Context, node NodeRow
 	if compatibilityWarning != "" {
 		logging.Warnf(logging.ComponentNode, "node=%d %s", node.ID, compatibilityWarning)
 	}
+	if c.repo.AbuseProtection(ctx) {
+		raw = withAbuseProtection(raw)
+	}
 	if err := inlineTLSCertificateFiles(raw); err != nil {
 		return "", err
 	}

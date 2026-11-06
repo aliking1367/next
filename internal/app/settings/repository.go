@@ -137,7 +137,7 @@ func (r Repository) UpdateRuntimeSettings(ctx context.Context, raw map[string]js
 			add(key, strings.TrimSpace(rawStringDefault(value, "")))
 		case "phpmyadmin_password":
 			add(key, rawStringDefault(value, ""))
-		case "record_node_usage", "record_node_user_usages", "subscription_read_only", "api_docs_enabled":
+		case "record_node_usage", "record_node_user_usages", "subscription_read_only", "api_docs_enabled", "abuse_protection":
 			add(key, rawBoolDefault(value, false))
 		case "phpmyadmin_enabled":
 			add(key, rawBoolDefault(value, false))
@@ -350,7 +350,8 @@ SELECT
 	COALESCE(phpmyadmin_public_url, ''),
 	COALESCE(phpmyadmin_login_mode, 'next'),
 	COALESCE(phpmyadmin_username, ''),
-	COALESCE(phpmyadmin_password, '')
+	COALESCE(phpmyadmin_password, ''),
+	COALESCE(abuse_protection, 1)
 FROM settings
 WHERE id = 1
 LIMIT 1`).Scan(
@@ -366,6 +367,7 @@ LIMIT 1`).Scan(
 		&result.PHPMyAdminLoginMode,
 		&result.PHPMyAdminUsername,
 		&result.PHPMyAdminPassword,
+		&result.AbuseProtection,
 	)
 	if err != nil {
 		return RuntimeSettings{}, err

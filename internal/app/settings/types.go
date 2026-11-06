@@ -28,6 +28,9 @@ type RuntimeSettings struct {
 	PHPMyAdminLoginMode  string `json:"phpmyadmin_login_mode"`
 	PHPMyAdminUsername   string `json:"phpmyadmin_username"`
 	PHPMyAdminPassword   string `json:"phpmyadmin_password"`
+	// AbuseProtection blocks, on every Xray the panel runs, the traffic that
+	// brings abuse reports to a server: BitTorrent and outgoing mail on 25.
+	AbuseProtection bool `json:"abuse_protection"`
 }
 
 type RuntimeSettingsUpdate struct {

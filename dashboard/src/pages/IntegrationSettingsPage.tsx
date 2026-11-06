@@ -213,6 +213,67 @@ const TelegramSwitchRow = ({
 	</FormControl>
 );
 
+// AbuseProtectionRow is the switch that blocks BitTorrent and outgoing mail
+// on port 25 on every node. It saves at once and sends every node its config
+// again, apart from the page's Save button.
+const AbuseProtectionRow = () => {
+	const { t } = useTranslation();
+	const toast = useToast();
+	const queryClient = useQueryClient();
+	const { data } = useQuery(["abuse-protection"], () =>
+		apiFetch<{ enabled: boolean }>("/settings/abuse-protection"),
+	);
+	const mutation = useMutation(
+		(enabled: boolean) =>
+			apiFetch<{ enabled: boolean }>("/settings/abuse-protection", {
+				method: "PUT",
+				body: { enabled },
+			}),
+		{
+			onSuccess: (result) => {
+				queryClient.setQueryData(["abuse-protection"], result);
+				toast({
+					status: "success",
+					isClosable: true,
+					title: result.enabled
+						? t("settings.abuse.on", {
+								defaultValue:
+									"Abuse protection is on; the nodes get it within a minute",
+							})
+						: t("settings.abuse.off", {
+								defaultValue: "Abuse protection is off",
+							}),
+				});
+			},
+			onError: (error: any) => {
+				toast({
+					status: "error",
+					isClosable: true,
+					title: error?.data?.detail ?? String(error),
+				});
+			},
+		},
+	);
+	return (
+		<TelegramSwitchRow
+			title={t("settings.abuse.title", {
+				defaultValue: "Abuse protection",
+			})}
+			description={t("settings.abuse.hint", {
+				defaultValue:
+					"Blocks BitTorrent and outgoing mail on port 25 on every node, the two things hosting providers send abuse reports and suspend servers over. Normal browsing, apps and mail apps are not affected. Changing it resends every node's config; users reconnect for a second.",
+			})}
+			control={
+				<Switch
+					isChecked={data?.enabled ?? true}
+					isDisabled={!data || mutation.isLoading}
+					onChange={(event) => mutation.mutate(event.target.checked)}
+				/>
+			}
+		/>
+	);
+};
+
 const TOGGLE_KEY_PLACEHOLDER = "__dot__";
 const encodeToggleKey = (key: string) =>
 	key.replace(/\./g, TOGGLE_KEY_PLACEHOLDER);
@@ -2181,6 +2242,7 @@ export const IntegrationSettingsPage = () => {
 											/>
 										}
 									/>
+									<AbuseProtectionRow />
 									<Box
 										borderWidth="1px"
 										borderColor="whiteAlpha.200"
