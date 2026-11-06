@@ -158,6 +158,15 @@ func (r Reporter) TSinTunnel(ctx context.Context, title string, lines ...string)
 	r.sendHTML(ctx, "errors.tsin", strings.Join(parts, "\n"))
 }
 
+// NodeLoad reports a node staying busy (CPU or memory) and calming down.
+func (r Reporter) NodeLoad(ctx context.Context, title string, lines ...string) {
+	parts := []string{"📈 <b>#NodeLoad</b> " + EscapeHTML(title)}
+	for _, item := range lines {
+		parts = append(parts, EscapeHTML(item))
+	}
+	r.sendHTML(ctx, "node.load", strings.Join(parts, "\n"))
+}
+
 func (r Reporter) AdminLimitReached(ctx context.Context, report AdminLimitReport) {
 	event := "admin.limit.data"
 	title := "📉 <b>#AdminDataLimit</b>"

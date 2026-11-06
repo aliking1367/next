@@ -3304,6 +3304,8 @@
 	"services.editAdminLimits": "Edit limits",
 	"services.sort": "Order",
 	"services.listHeader": "Service list",
+	"settings.telegram.events.nodeLoad": "فشار روی نود",
+	"settings.telegram.events.nodeLoadHint": "وقتی پردازنده یا حافظهٔ یک نود ۵ دقیقه پشت سر هم بالای ۸۰٪ بماند خبر بده، و وقتی عادی شد هم بگو.",
 	"settings.abuse.title": "محافظت در برابر abuse",
 	"settings.abuse.hint": "تورنت و ارسال ایمیل از پورت 25 را روی همهٔ نودها می‌بندد؛ دو چیزی که دیتاسنترها به خاطرشان شکایت (abuse) می‌فرستند و سرور را می‌بندند. وبگردی، برنامه‌ها و اپ‌های ایمیل عادی تغییری نمی‌کنند. با تغییر این کلید کانفیگ همهٔ نودها دوباره فرستاده می‌شود و کاربرها یک لحظه دوباره وصل می‌شوند.",
 	"settings.abuse.on": "محافظت در برابر abuse روشن شد؛ تا یک دقیقه روی نودها اعمال می‌شود",

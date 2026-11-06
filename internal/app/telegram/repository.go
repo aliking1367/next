@@ -51,6 +51,7 @@ var defaultEventToggles = map[string]bool{
 	"login":                     true,
 	"errors.node":               true,
 	"errors.tsin":               true,
+	"node.load":                 true,
 }
 
 type Repository struct {

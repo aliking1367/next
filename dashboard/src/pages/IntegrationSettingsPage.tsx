@@ -564,6 +564,14 @@ const EVENT_TOGGLE_GROUPS: EventToggleGroup[] = [
 				defaultHint:
 					"Notify when the T.Sin tunnel goes down, comes back or moves to another datacenter.",
 			},
+			{
+				key: "node.load",
+				labelKey: "settings.telegram.events.nodeLoad",
+				defaultLabel: "Node under load",
+				hintKey: "settings.telegram.events.nodeLoadHint",
+				defaultHint:
+					"Notify when a node's CPU or memory stays above 80% for 5 minutes, and when it calms down.",
+			},
 		],
 	},
 ];
