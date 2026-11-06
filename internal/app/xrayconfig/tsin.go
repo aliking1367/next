@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -54,7 +55,6 @@ func TSinDirectInboundTag(country string) string {
 // tell it from the Cloudflare one of the same country.
 const tsinDirectRemark = " ⚡"
 
-
 // Country inbounds are VLESS over REALITY on one of two transports. TCP is
 // the classic one; XHTTP is HTTP-shaped and in practice survived on Iranian
 // networks where long TCP-REALITY connections kept being cut every few
@@ -101,7 +101,15 @@ func tsinInboundPath(inbound map[string]any) string {
 type TSinGate struct {
 	Host string
 	Port int
+	// DirectAddress is where the direct configs point: an extra IP of the
+	// server kept only for them, so the server's main IP never appears in a
+	// user's config. Empty uses the server's own address.
+	DirectAddress string
 }
+
+// tsinDirectPorts are the ports direct configs take, in order: the ones
+// ordinary HTTPS sites use, so a direct config looks like one.
+var tsinDirectPorts = []int{443, 8443, 2053, 2083, 2096, 9443}
 
 // buildTSinPathInbound is one country in path mode: VLESS over WebSocket on
 // loopback only. Nothing reaches it except the gate's fallback for its path.
@@ -332,7 +340,7 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		result = append(result, entry)
 
 		if country.Direct && transport == TSinTransportPath {
-			direct, err := r.ensureTSinDirectInbound(ctx, target, country, used, ranges, portBusy, catalog, usedDests)
+			direct, err := r.ensureTSinDirectInbound(ctx, target, country, gate.DirectAddress, used, ranges, portBusy, catalog, usedDests)
 			if err != nil {
 				return nil, err
 			}
@@ -358,14 +366,21 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 // over REALITY with XHTTP on the server's own IP, the transport that held up
 // best on Iranian networks without a CDN. It shares the country's exit, so
 // it costs nothing on the T.Sin side.
-func (r Repository) ensureTSinDirectInbound(ctx context.Context, target string, country TSinCountry, used map[int]bool, ranges []portRange, portBusy func(int) bool, catalog Catalog, usedDests map[string]bool) (TSinInbound, error) {
+func (r Repository) ensureTSinDirectInbound(ctx context.Context, target string, country TSinCountry, address string, used map[int]bool, ranges []portRange, portBusy func(int) bool, catalog Catalog, usedDests map[string]bool) (TSinInbound, error) {
 	tag := TSinDirectInboundTag(country.Name)
 	entry := TSinInbound{Tag: tag, Country: country.Name, Transport: TSinTransportXHTTP, Direct: true}
 	existing, err := r.GetInbound(ctx, tag)
 	if err != nil && !errors.Is(err, ErrInboundNotFound) {
 		return entry, err
 	}
-	if existing != nil && tsinInboundTransport(existing) != TSinTransportXHTTP {
+	rebuild := existing != nil && tsinInboundTransport(existing) != TSinTransportXHTTP
+	if existing != nil && !rebuild {
+		// One made on a random port moves to an HTTPS-looking one once one is
+		// free; one already on such a port stays, so links do not churn.
+		port, _ := parseConfigPort(existing["port"])
+		rebuild = portBusy != nil && !slices.Contains(tsinDirectPorts, port) && tsinDirectPortFree(used, ranges, portBusy)
+	}
+	if rebuild {
 		if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
 			return entry, fmt.Errorf("rebuild %s: %w", tag, err)
 		}
@@ -374,7 +389,14 @@ func (r Repository) ensureTSinDirectInbound(ctx context.Context, target string, 
 	if existing != nil {
 		entry.Port, _ = parseConfigPort(existing["port"])
 	} else {
-		port, err := pickProvisionPort(nil, used, ranges, portBusy)
+		// The HTTPS ports are tried only where it can be checked that nothing
+		// else listens on them: Xray failing to bind one would take every
+		// config on that server down. Otherwise a random high port, as before.
+		var preferred []int
+		if portBusy != nil {
+			preferred = tsinDirectPorts
+		}
+		port, err := pickProvisionPort(preferred, used, ranges, portBusy)
 		if err != nil {
 			return entry, err
 		}
@@ -391,10 +413,22 @@ func (r Repository) ensureTSinDirectInbound(ctx context.Context, target string, 
 		}
 		entry.Port, entry.Created = port, true
 	}
-	if err := r.setTSinHost(ctx, tag, tsinHostRemark(country)+tsinDirectRemark, TSinTransportXHTTP, TSinGate{}); err != nil {
-		return entry, err
+	if strings.TrimSpace(address) == "" {
+		address = "{SERVER_IP}"
 	}
-	return entry, nil
+	_, err = r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = NULL, sni = NULL, host = NULL,
+security = 'inbound_default', alpn = 'none', fingerprint = 'none' WHERE inbound_tag = ?`,
+		tsinHostRemark(country)+tsinDirectRemark, strings.TrimSpace(address), tag)
+	return entry, err
+}
+
+func tsinDirectPortFree(used map[int]bool, ranges []portRange, portBusy func(int) bool) bool {
+	for _, port := range tsinDirectPorts {
+		if !isPortUsed(port, used, ranges) && !portBusy(port) {
+			return true
+		}
+	}
+	return false
 }
 
 // RemoveTSin takes every inbound, outbound and routing rule the panel made

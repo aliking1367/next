@@ -410,6 +410,48 @@ const stepText = (
 			}
 			return { title, summary: skipped };
 		}
+		case "direct": {
+			const title = tt("tsin.setup.direct.title", "⚡ configs on {{address}}", {
+				address:
+					p.address || tt("tsin.setup.direct.serverIp", "the server's IP"),
+			});
+			if (step.state === "ok")
+				return {
+					title,
+					summary:
+						reason === "untested"
+							? tt(
+									"tsin.setup.direct.untested",
+									"{{count}} configs; not tested",
+									p,
+								)
+							: tt("tsin.setup.direct.ok", "{{count}} configs answer", p),
+				};
+			if (reason === "not_applied")
+				return {
+					title,
+					summary: tt("tsin.setup.todo", "Not done yet"),
+					action: tt(
+						"tsin.setup.direct.notApplied",
+						"The ⚡ countries are chosen but not made yet. Press Apply below.",
+					),
+				};
+			if (reason === "closed")
+				return {
+					title,
+					summary: tt(
+						"tsin.setup.direct.closedShort",
+						"No answer on port {{ports}}",
+						p,
+					),
+					action: tt(
+						"tsin.setup.direct.closed",
+						"Nothing answers on {{address}} port {{ports}}. If {{address}} is an extra IP, it is probably not set up on the server yet: ask the provider how to attach it to this server, or add it to the server's network settings. Also make sure the server's firewall allows these ports. The Cloudflare configs are not affected.",
+						p,
+					),
+				};
+			return { title, summary: skipped };
+		}
 		case "node": {
 			const title = tt(
 				"tsin.setup.node.title",

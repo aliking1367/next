@@ -152,6 +152,9 @@ func (s *Server) tsinChecklist(ctx context.Context, settings tsinSettings, origi
 	// 4: in path mode, the Cloudflare side of the countries' domain.
 	if pathMode {
 		steps = append(steps, s.tsinGateStep(ctx, settings, applied))
+		if len(settings.DirectCountries) > 0 {
+			steps = append(steps, s.tsinDirectStep(ctx, settings, applied))
+		}
 	}
 
 	// 5: the tunnel. On a node it is known only from what the node reports, so
@@ -304,6 +307,65 @@ func tsinGateVerdict(code int, header http.Header) (state, reason string) {
 		return "fail", "waf_block"
 	}
 	return "fail", "gate_answer"
+}
+
+// tsinDirectStep checks that every direct config answers on its address and
+// port. The panel connects from outside Iran, so this proves the address is
+// set up on the server and the port open, not that Iran lets it through.
+func (s *Server) tsinDirectStep(ctx context.Context, settings tsinSettings, applied bool) tsinStep {
+	step := tsinStep{ID: "direct", Params: map[string]any{}, Values: map[string]string{}}
+	address := settings.DirectAddress
+	if address == "" {
+		address = s.tsinTargetAddress(ctx, settings.Target)
+	}
+	step.Params["address"] = address
+	if !applied {
+		step.State = "skip"
+		return step
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT inbound_tag FROM hosts WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag LIKE ?`, "%"+xrayconfig.TSinDirectSuffix)
+	if err != nil {
+		step.State, step.Reason, step.Raw = "fail", "unreachable", err.Error()
+		return step
+	}
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if rows.Scan(&tag) == nil {
+			tags = append(tags, tag)
+		}
+	}
+	_ = rows.Close()
+	if len(tags) == 0 {
+		step.State, step.Reason = "todo", "not_applied"
+		return step
+	}
+	step.Params["count"] = len(tags)
+	if address == "" {
+		step.State, step.Reason = "ok", "untested"
+		return step
+	}
+	var closed []string
+	for _, tag := range tags {
+		inbound, err := s.configRepo.GetInbound(ctx, tag)
+		if err != nil {
+			continue
+		}
+		port := fmt.Sprint(inbound["port"])
+		conn, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(address, port))
+		if err != nil {
+			closed = append(closed, port)
+			continue
+		}
+		_ = conn.Close()
+	}
+	if len(closed) == 0 {
+		step.State = "ok"
+		return step
+	}
+	step.State, step.Reason = "fail", "closed"
+	step.Params["ports"] = strings.Join(closed, ", ")
+	return step
 }
 
 // tsinCountryPath is the WebSocket path of one country inbound in path mode.

@@ -294,3 +294,58 @@ func TestApplyTSinAddsDirectConfigsOnlyForTheChosenCountries(t *testing.T) {
 		t.Fatal("the direct config survived being turned off")
 	}
 }
+
+// Where the machine's free ports are known, direct configs take the ports
+// HTTPS sites use, skipping one something else listens on, and point at the
+// extra IP kept for them.
+func TestApplyTSinDirectConfigsTakeHTTPSPortsAndTheExtraIP(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{
+		{Port: 1082, Name: "Germany", Code: "DE", Direct: true},
+		{Port: 1095, Name: "Turkey", Code: "TR", Direct: true},
+	}
+	busy := func(port int) bool { return port == 443 } // say a web server holds it
+	gate := TSinGate{Host: "g1.example.com", DirectAddress: "203.0.113.7"}
+	if _, err := repo.ApplyTSin(ctx, "master", "path", gate, countries, busy); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	ports := map[int]bool{}
+	for _, name := range []string{"Germany", "Turkey"} {
+		inbound, err := repo.GetInbound(ctx, TSinDirectInboundTag(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		port, _ := parseConfigPort(inbound["port"])
+		ports[port] = true
+		var address string
+		if err := db.QueryRow(`SELECT address FROM hosts WHERE inbound_tag = ?`, TSinDirectInboundTag(name)).Scan(&address); err != nil {
+			t.Fatal(err)
+		}
+		if address != "203.0.113.7" {
+			t.Fatalf("%s points at %q, want the extra IP", name, address)
+		}
+	}
+	if !ports[8443] || !ports[2053] {
+		t.Fatalf("ports = %v, want 8443 and 2053 with 443 taken", ports)
+	}
+
+	// Without a way to check the machine, a random high port, as before.
+	repo2, _ := provisionTestRepository(t)
+	if _, err := repo2.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries[:1], nil); err != nil {
+		t.Fatal(err)
+	}
+	inbound, _ := repo2.GetInbound(ctx, TSinDirectInboundTag("Germany"))
+	if port, _ := parseConfigPort(inbound["port"]); slicesContains(tsinDirectPorts, port) {
+		t.Fatalf("an unchecked machine got port %d", port)
+	}
+}
+
+func slicesContains(list []int, value int) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}

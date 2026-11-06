@@ -192,3 +192,18 @@ func TestTSinAccountFromNodeIsTheFreshReport(t *testing.T) {
 		t.Fatal("the panel's own tunnel must not borrow a node's report")
 	}
 }
+
+func TestTSinDirectAddressAcceptsAnIPOrAHostName(t *testing.T) {
+	for input, want := range map[string]string{
+		"": "", " 203.0.113.7 ": "203.0.113.7", "2001:db8::1": "2001:db8::1", "Direct.Example.com": "direct.example.com",
+	} {
+		if got, err := normalizeTSinDirectAddress(input); err != nil || got != want {
+			t.Errorf("%q: got %q, %v; want %q", input, got, err, want)
+		}
+	}
+	for _, bad := range []string{"203.0.113.7:443", "http://x.example.com", "not a host", "a;b.com"} {
+		if _, err := normalizeTSinDirectAddress(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

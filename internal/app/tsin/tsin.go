@@ -828,6 +828,15 @@ if "account" in report and now - ports_at >= 290:
         pass
 if ports:
     report["ports"], report["ports_at"] = ports, ports_at
+# The TCP ports something listens on here, so the panel gives new configs
+# only free ones. Left out when ss says nothing, which would read as "all free".
+listening = set()
+for line in run("ss", "-Hltn").splitlines():
+    fields = line.split()
+    if len(fields) >= 4 and fields[3].rpartition(":")[2].isdigit():
+        listening.add(int(fields[3].rpartition(":")[2]))
+if listening:
+    report["listening"] = sorted(listening)
 log = run("journalctl", "-t", "next-tsin-watch", "-n", "8", "-o", "short-iso", "--no-pager").splitlines()
 report["log"] = [line[:300] for line in log if line and not line.startswith("--")][-8:]
 print(json.dumps(report))

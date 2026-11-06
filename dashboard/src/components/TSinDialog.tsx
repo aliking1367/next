@@ -60,6 +60,7 @@ type TSinView = {
 	// direct_countries also get a config on the server's own IP in path mode;
 	// null until an admin chooses.
 	direct_countries?: string[] | null;
+	direct_address?: string;
 	targets?: TSinTarget[];
 	node_script: string;
 	dc: string;
@@ -159,6 +160,7 @@ export const TSinDialog: FC<{
 	const [gatePort, setGatePort] = useState("2087");
 	const [selected, setSelected] = useState<string[]>([]);
 	const [direct, setDirect] = useState<string[]>([]);
+	const [directAddress, setDirectAddress] = useState("");
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
@@ -262,6 +264,7 @@ export const TSinDialog: FC<{
 			// Never chosen yet: suggest the countries most users pick, so the
 			// subscription gains only a few direct configs.
 			setDirect(data.direct_countries ?? DIRECT_SUGGESTED);
+			setDirectAddress(data.direct_address ?? "");
 			setSelected(
 				offered.size ? wanted.filter((name) => offered.has(name)) : wanted,
 			);
@@ -307,6 +310,7 @@ export const TSinDialog: FC<{
 				gate_host: gateHost.trim(),
 				gate_port: Number.parseInt(gatePort, 10) || 2087,
 				direct_countries: direct.filter((name) => selected.includes(name)),
+				direct_address: directAddress.trim(),
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -808,6 +812,25 @@ export const TSinDialog: FC<{
 									</Checkbox>
 								))}
 							</SimpleGrid>
+							<FormControl mt={3}>
+								<FormLabel fontSize="sm" mb={1}>
+									{tt("tsin.direct.address", "Separate IP for the ⚡ configs")}
+								</FormLabel>
+								<Input
+									value={directAddress}
+									onChange={(event) => setDirectAddress(event.target.value)}
+									placeholder="203.0.113.7"
+									dir="ltr"
+									autoComplete="off"
+									spellCheck={false}
+								/>
+								<FormHelperText fontSize="xs">
+									{tt(
+										"tsin.direct.addressHelp",
+										"Recommended: buy an extra IP for this server from your provider and enter it here, so the server's main IP never appears in users' configs. If it gets filtered, buy another, enter it and press Apply; the Cloudflare configs keep working meanwhile. Empty uses the server's own IP. The ⚡ configs take the ports HTTPS sites use (443, 8443, 2053, …) when the node reports them free.",
+									)}
+								</FormHelperText>
+							</FormControl>
 						</Box>
 					)}
 

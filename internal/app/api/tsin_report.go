@@ -40,6 +40,9 @@ type tsinNodeReport struct {
 	Ports        map[string]bool `json:"ports,omitempty"`
 	PortsAt      int64           `json:"ports_at,omitempty"`
 	Log          []string        `json:"log,omitempty"`
+	// Listening is the TCP ports something listens on at the node, so new
+	// configs there take only free ones. nil from an older node script.
+	Listening []int `json:"listening,omitempty"`
 
 	// Target is the node the report was accepted for; ReceivedAt is when.
 	Target     string    `json:"-"`
@@ -177,6 +180,9 @@ func (s *Server) handleTSinNodeReport(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(report.Ports) > 64 {
 		report.Ports = nil
+	}
+	if len(report.Listening) > 4096 {
+		report.Listening = nil
 	}
 	report.Target, report.ReceivedAt = settings.Target, time.Now()
 	s.tsinNode.store(&report)
