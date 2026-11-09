@@ -24,6 +24,9 @@ type tsinEmergencyRequest struct {
 	SSPort    *int `json:"ss_port"`
 	// Enabled shows or hides the configs. Omitted keeps it.
 	Enabled *bool `json:"enabled"`
+	// Protocols is both, vmess or shadowsocks: which configs are shown, for
+	// an admin with a single tunnel port. Omitted keeps it.
+	Protocols *string `json:"protocols"`
 }
 
 func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +84,9 @@ func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request)
 	if request.Enabled != nil {
 		settings.EmergencyEnabled = *request.Enabled
 	}
+	if request.Protocols != nil {
+		settings.EmergencyProtocols = xrayconfig.NormalizeTSinEmergencyProtocols(*request.Protocols)
+	}
 	if settings.EmergencyEnabled && settings.EmergencyAddress == "" {
 		writeError(w, http.StatusUnprocessableEntity, "enter the Iranian tunnel's address first")
 		return
@@ -91,7 +97,7 @@ func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "Failed to set up the emergency tunnel: "+err.Error())
 		return
 	}
-	if err := s.configRepo.SetTSinEmergencyHosts(ctx, settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled); err != nil {
+	if err := s.configRepo.SetTSinEmergencyHosts(ctx, settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -143,6 +149,7 @@ func (s *Server) tsinEmergencyView(ctx context.Context, settings tsinSettings) m
 		"vmess_port": settings.EmergencyVMessPort,
 		"ss_port":    settings.EmergencySSPort,
 		"enabled":    settings.EmergencyEnabled,
+		"protocols":  xrayconfig.NormalizeTSinEmergencyProtocols(settings.EmergencyProtocols),
 	}
 	ports := map[string]int{}
 	for key, tag := range map[string]string{"vmess": xrayconfig.TSinEmergencyVMessTag, "shadowsocks": xrayconfig.TSinEmergencySSTag} {

@@ -114,6 +114,8 @@ type tsinSettings struct {
 	EmergencyVMessPort int
 	EmergencySSPort    int
 	EmergencyEnabled   bool
+	// EmergencyProtocols is both, vmess or shadowsocks.
+	EmergencyProtocols string
 }
 
 type tsinRequest struct {
@@ -146,14 +148,14 @@ func (s *Server) loadTSinSettings(ctx context.Context) (tsinSettings, error) {
 	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID, Transport: xrayconfig.TSinTransportTCP, GatePort: xrayconfig.DefaultTSinGatePort}
 	var token, dc, countries, registeredDC, registeredSum, detail, target, transport, gateHost, direct, directAddress sql.NullString
 	var gatePort sql.NullInt64
-	var emergencyAddress sql.NullString
+	var emergencyAddress, emergencyProtocols sql.NullString
 	var emergencyVMess, emergencySS sql.NullInt64
 	var emergencyEnabled sql.NullBool
 	err := s.db.QueryRowContext(ctx, `SELECT token, dc, countries, registered_dc, registered_token_hash,
 last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address,
-emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled FROM tsin_settings ORDER BY id LIMIT 1`).
+emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, emergency_protocols FROM tsin_settings ORDER BY id LIMIT 1`).
 		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort, &direct, &directAddress,
-			&emergencyAddress, &emergencyVMess, &emergencySS, &emergencyEnabled)
+			&emergencyAddress, &emergencyVMess, &emergencySS, &emergencyEnabled, &emergencyProtocols)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings, nil
 	}
@@ -179,6 +181,7 @@ emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled FR
 	settings.EmergencyVMessPort = int(emergencyVMess.Int64)
 	settings.EmergencySSPort = int(emergencySS.Int64)
 	settings.EmergencyEnabled = emergencyEnabled.Bool
+	settings.EmergencyProtocols = xrayconfig.NormalizeTSinEmergencyProtocols(emergencyProtocols.String)
 	if direct.Valid {
 		settings.DirectCountries = []string{}
 		_ = json.Unmarshal([]byte(direct.String), &settings.DirectCountries)
@@ -196,10 +199,10 @@ func (s *Server) saveTSinSettings(ctx context.Context, settings tsinSettings) er
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE tsin_settings SET token = ?, dc = ?, countries = ?,
 registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?, direct_countries = ?, direct_address = ?,
-emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergency_enabled = ?`,
+emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergency_enabled = ?, emergency_protocols = ?`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
 			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress,
-			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled)
+			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols)
 		if err != nil {
 			return err
 		}
@@ -208,10 +211,10 @@ emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergenc
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO tsin_settings
 (token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address,
-emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, emergency_protocols) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
 			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress,
-			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled)
+			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols)
 		return err
 	})
 }

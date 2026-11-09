@@ -22,6 +22,25 @@ const (
 	tsinEmergencyOutbound = "emergency-direct"
 )
 
+// The emergency configs an admin shows: both, or one of them when a single
+// tunnel port was bought, since one Iranian port reaches one port here.
+const (
+	TSinEmergencyBoth  = "both"
+	TSinEmergencyVMess = "vmess"
+	TSinEmergencySS    = "shadowsocks"
+)
+
+// NormalizeTSinEmergencyProtocols maps anything unknown to both.
+func NormalizeTSinEmergencyProtocols(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case TSinEmergencyVMess:
+		return TSinEmergencyVMess
+	case TSinEmergencySS, "ss":
+		return TSinEmergencySS
+	}
+	return TSinEmergencyBoth
+}
+
 // TSinEmergencyTags are both emergency inbounds.
 var TSinEmergencyTags = []string{TSinEmergencyVMessTag, TSinEmergencySSTag}
 
@@ -203,18 +222,19 @@ func stripTSinEmergencyRouting(config map[string]any) bool {
 // SetTSinEmergencyHosts points the emergency hosts at the Iranian tunnel and
 // shows or hides them. A port of 0 keeps the inbound's own port, for a tunnel
 // that forwards each port to the same number.
-func (r Repository) SetTSinEmergencyHosts(ctx context.Context, address string, vmessPort, ssPort int, enabled bool) error {
-	disabled := 1
-	if enabled {
-		disabled = 0
-	}
+func (r Repository) SetTSinEmergencyHosts(ctx context.Context, address string, vmessPort, ssPort int, enabled bool, protocols string) error {
+	protocols = NormalizeTSinEmergencyProtocols(protocols)
 	for _, item := range []struct {
-		tag, remark string
-		port        int
+		tag, remark, protocol string
+		port                  int
 	}{
-		{TSinEmergencyVMessTag, "🆘 تونل اضطراری VMess", vmessPort},
-		{TSinEmergencySSTag, "🆘 تونل اضطراری Shadowsocks", ssPort},
+		{TSinEmergencyVMessTag, "🆘 تونل اضطراری VMess", TSinEmergencyVMess, vmessPort},
+		{TSinEmergencySSTag, "🆘 تونل اضطراری Shadowsocks", TSinEmergencySS, ssPort},
 	} {
+		disabled := 1
+		if enabled && (protocols == TSinEmergencyBoth || protocols == item.protocol) {
+			disabled = 0
+		}
 		var port any
 		if item.port > 0 {
 			port = item.port

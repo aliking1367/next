@@ -100,6 +100,7 @@ type TSinEmergency = {
 	vmess_port: number;
 	ss_port: number;
 	enabled: boolean;
+	protocols?: "both" | "vmess" | "shadowsocks";
 	node_address?: string;
 	node_ports?: { vmess?: number; shadowsocks?: number };
 };
@@ -179,6 +180,7 @@ export const TSinDialog: FC<{
 	const [emVMessPort, setEmVMessPort] = useState("");
 	const [emSSPort, setEmSSPort] = useState("");
 	const [emBusy, setEmBusy] = useState(false);
+	const [emProtocols, setEmProtocols] = useState("both");
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
@@ -284,6 +286,7 @@ export const TSinDialog: FC<{
 			setDirect(data.direct_countries ?? DIRECT_SUGGESTED);
 			setDirectAddress(data.direct_address ?? "");
 			setEmAddress(data.emergency?.address ?? "");
+			setEmProtocols(data.emergency?.protocols ?? "both");
 			setEmVMessPort(
 				data.emergency?.vmess_port ? String(data.emergency.vmess_port) : "",
 			);
@@ -372,6 +375,7 @@ export const TSinDialog: FC<{
 				address: emAddress.trim(),
 				vmess_port: Number.parseInt(emVMessPort, 10) || 0,
 				ss_port: Number.parseInt(emSSPort, 10) || 0,
+				protocols: emProtocols,
 			};
 			if (enabled !== undefined) body.enabled = enabled;
 			const result = await fetch<TSinEmergency>("/core/tsin/emergency", {
@@ -956,6 +960,41 @@ export const TSinDialog: FC<{
 									</AlertDescription>
 								</Alert>
 							)}
+							<FormControl mb={2}>
+								<FormLabel fontSize="sm" mb={1}>
+									{tt("tsin.emergency.protocols", "Configs to show")}
+								</FormLabel>
+								<Select
+									size="sm"
+									value={emProtocols}
+									onChange={(event) => setEmProtocols(event.target.value)}
+								>
+									<option value="both">
+										{tt(
+											"tsin.emergency.both",
+											"VMess and Shadowsocks (two tunnel ports)",
+										)}
+									</option>
+									<option value="vmess">
+										{tt(
+											"tsin.emergency.vmessOnly",
+											"VMess only (one tunnel port)",
+										)}
+									</option>
+									<option value="shadowsocks">
+										{tt(
+											"tsin.emergency.ssOnly",
+											"Shadowsocks only (one tunnel port)",
+										)}
+									</option>
+								</Select>
+								<FormHelperText fontSize="xs">
+									{tt(
+										"tsin.emergency.protocolsHelp",
+										"Each tunnel port you buy reaches one config. With one port, pick one: VMess works on every tunnel; Shadowsocks also carries calls if the tunnel forwards UDP.",
+									)}
+								</FormHelperText>
+							</FormControl>
 							<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2}>
 								<FormControl>
 									<FormLabel fontSize="sm" mb={1}>
@@ -970,7 +1009,9 @@ export const TSinDialog: FC<{
 										spellCheck={false}
 									/>
 								</FormControl>
-								<FormControl>
+								<FormControl
+									display={emProtocols === "shadowsocks" ? "none" : undefined}
+								>
 									<FormLabel fontSize="sm" mb={1}>
 										{tt("tsin.emergency.vmessPort", "Tunnel port for VMess")}
 									</FormLabel>
@@ -985,7 +1026,9 @@ export const TSinDialog: FC<{
 										inputMode="numeric"
 									/>
 								</FormControl>
-								<FormControl>
+								<FormControl
+									display={emProtocols === "vmess" ? "none" : undefined}
+								>
 									<FormLabel fontSize="sm" mb={1}>
 										{tt("tsin.emergency.ssPort", "Tunnel port for Shadowsocks")}
 									</FormLabel>
@@ -1009,13 +1052,18 @@ export const TSinDialog: FC<{
 											"Set your Iranian tunnel to forward to these (TCP; for Shadowsocks also UDP):",
 										)}
 									</Text>
-									<Text dir="ltr" fontFamily="mono" fontSize="xs">
-										VMess → {view.emergency.node_address}:
-										{view.emergency.node_ports.vmess}
-										<br />
-										Shadowsocks → {view.emergency.node_address}:
-										{view.emergency.node_ports.shadowsocks}
-									</Text>
+									{emProtocols !== "shadowsocks" && (
+										<Text dir="ltr" fontFamily="mono" fontSize="xs">
+											VMess → {view.emergency.node_address}:
+											{view.emergency.node_ports.vmess}
+										</Text>
+									)}
+									{emProtocols !== "vmess" && (
+										<Text dir="ltr" fontFamily="mono" fontSize="xs">
+											Shadowsocks → {view.emergency.node_address}:
+											{view.emergency.node_ports.shadowsocks}
+										</Text>
+									)}
 								</Box>
 							) : (
 								<Text mt={3} fontSize="xs" opacity={0.75}>
