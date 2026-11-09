@@ -54,19 +54,22 @@ var (
 )
 
 type UserPermissionSettings struct {
-	Create               bool   `json:"create"`
-	Delete               bool   `json:"delete"`
-	ResetUsage           bool   `json:"reset_usage"`
-	PeriodicUsageReset   bool   `json:"periodic_usage_reset"`
-	Revoke               bool   `json:"revoke"`
-	CreateOnHold         bool   `json:"create_on_hold"`
-	AllowUnlimitedData   bool   `json:"allow_unlimited_data"`
-	AllowUnlimitedExpire bool   `json:"allow_unlimited_expire"`
-	AllowNextPlan        bool   `json:"allow_next_plan"`
-	AdvancedActions      bool   `json:"advanced_actions"`
-	SetFlow              bool   `json:"set_flow"`
-	AllowCustomKey       bool   `json:"allow_custom_key"`
-	MaxDataLimitPerUser  *int64 `json:"max_data_limit_per_user"`
+	Create               bool `json:"create"`
+	Delete               bool `json:"delete"`
+	ResetUsage           bool `json:"reset_usage"`
+	PeriodicUsageReset   bool `json:"periodic_usage_reset"`
+	Revoke               bool `json:"revoke"`
+	CreateOnHold         bool `json:"create_on_hold"`
+	AllowUnlimitedData   bool `json:"allow_unlimited_data"`
+	AllowUnlimitedExpire bool `json:"allow_unlimited_expire"`
+	AllowNextPlan        bool `json:"allow_next_plan"`
+	AdvancedActions      bool `json:"advanced_actions"`
+	SetFlow              bool `json:"set_flow"`
+	AllowCustomKey       bool `json:"allow_custom_key"`
+	// EmergencyTunnel lets the admin turn the T.Sin emergency tunnel on for
+	// their own users; the owner's switch turns it on for everyone.
+	EmergencyTunnel     bool   `json:"emergency_tunnel"`
+	MaxDataLimitPerUser *int64 `json:"max_data_limit_per_user"`
 }
 
 type AdminManagementPermissions struct {

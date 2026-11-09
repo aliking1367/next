@@ -29,6 +29,7 @@ type runtimeUserRow struct {
 	CredentialKey string
 	Flow          string
 	ServiceID     sql.NullInt64
+	AdminID       sql.NullInt64
 	Protocol      string
 	Settings      map[string]any
 }
@@ -41,6 +42,7 @@ type runtimeUserIdentity struct {
 type runtimeConfigData struct {
 	users        []runtimeUserRow
 	serviceTags  map[int64]map[string]bool
+	adminTags    adminAllowedTags
 	serviceFlows map[int64]string
 	masks        map[string][]byte
 }
@@ -297,7 +299,7 @@ func (c Controller) includeDBUsers(ctx context.Context, raw map[string]any, data
 		}
 		for _, inbound := range targets {
 			tag := stringValue(inbound["tag"])
-			if !data.serviceTags[user.ServiceID.Int64][tag] {
+			if !data.serviceTags[user.ServiceID.Int64][tag] && !data.adminTags.allows(user.ServiceID, user.AdminID, tag) {
 				continue
 			}
 			settings := maps.Clone(baseSettings)
@@ -391,7 +393,7 @@ func (c Controller) loadRuntimeConfigDataForProtocols(ctx context.Context, proto
 	if err != nil {
 		return nil, err
 	}
-	return &runtimeConfigData{users: users, serviceTags: serviceTags, serviceFlows: serviceFlows, masks: masks}, nil
+	return &runtimeConfigData{users: users, serviceTags: serviceTags, adminTags: c.repo.AdminAllowedTags(ctx), serviceFlows: serviceFlows, masks: masks}, nil
 }
 
 func applyRuntimeAPI(raw map[string]any, apiPort int) {

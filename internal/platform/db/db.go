@@ -103,7 +103,11 @@ func sqliteDSN(path string) string {
 	if strings.HasPrefix(path, "file:") {
 		return path
 	}
-	query := "_busy_timeout=30000&_journal_mode=WAL&_synchronous=NORMAL"
+	// modernc.org/sqlite reads pragmas only from _pragma; the other names are
+	// another driver's and were ignored, which left no busy timeout at all, so
+	// two writes at once failed at once with SQLITE_BUSY. Only the timeout is
+	// added: the journal mode stays as the database file already has it.
+	query := "_pragma=busy_timeout(30000)&_busy_timeout=30000&_journal_mode=WAL&_synchronous=NORMAL"
 	if strings.Contains(path, "?") {
 		return "file:" + path + "&" + query
 	}

@@ -92,6 +92,7 @@ func (c Controller) grpcAddUserToNode(ctx context.Context, client *nodeclient.Cl
 	if err != nil {
 		return err
 	}
+	adminTags := c.repo.AdminAllowedTags(ctx)
 	masks, err := c.repo.UUIDMasks(ctx)
 	if err != nil {
 		return err
@@ -112,7 +113,7 @@ func (c Controller) grpcAddUserToNode(ctx context.Context, client *nodeclient.Cl
 			if tag == "" || protocol == "" || protocol != runtimeUser.Protocol {
 				continue
 			}
-			if !serviceTags[runtimeUser.ServiceID.Int64][tag] {
+			if !serviceTags[runtimeUser.ServiceID.Int64][tag] && !adminTags.allows(runtimeUser.ServiceID, runtimeUser.AdminID, tag) {
 				continue
 			}
 			matched++

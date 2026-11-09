@@ -82,6 +82,10 @@ const userPermissionKeys: Array<{ key: UserPermissionToggle; label: string }> =
 			key: UserPermissionToggle.AllowCustomKey,
 			label: "admins.permissions.customKey",
 		},
+		{
+			key: UserPermissionToggle.EmergencyTunnel,
+			label: "admins.permissions.emergencyTunnel",
+		},
 	];
 
 const adminManagementKeys: Array<{

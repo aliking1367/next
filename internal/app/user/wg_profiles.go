@@ -89,7 +89,7 @@ func (s Service) wgProfiles(ctx context.Context, userID int64, hostTag string, i
 	for i, tag := range inboundOrder {
 		inboundIndex[tag] = i
 	}
-	selectedHosts := selectConfigHosts(hosts, item.ServiceID)
+	selectedHosts := selectConfigHosts(hosts, item.ServiceID, item.AdminID)
 	sortConfigHosts(selectedHosts, item.ServiceHostOrders, inboundIndex)
 	variables := configFormatVariables(item)
 	profiles := make([]WGProfile, 0)

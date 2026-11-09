@@ -261,11 +261,11 @@ func (r Repository) ConfigLinkUser(ctx context.Context, userID int64) (ConfigLin
 		return ConfigLinkUser{}, fmt.Errorf("user_id is required")
 	}
 	var item ConfigLinkUser
-	var dataLimit, expire, holdDuration, serviceID sql.NullInt64
+	var dataLimit, expire, holdDuration, serviceID, adminID sql.NullInt64
 	var credentialKey, flow sql.NullString
 	err := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, username, status, COALESCE(used_traffic, 0), data_limit, expire, on_hold_expire_duration, service_id, credential_key, flow FROM users WHERE id = ? AND status != 'deleted' LIMIT 1`,
+		`SELECT id, username, status, COALESCE(used_traffic, 0), data_limit, expire, on_hold_expire_duration, service_id, credential_key, flow, admin_id FROM users WHERE id = ? AND status != 'deleted' LIMIT 1`,
 		userID,
 	).Scan(
 		&item.ID,
@@ -278,6 +278,7 @@ func (r Repository) ConfigLinkUser(ctx context.Context, userID int64) (ConfigLin
 		&serviceID,
 		&credentialKey,
 		&flow,
+		&adminID,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -289,6 +290,7 @@ func (r Repository) ConfigLinkUser(ctx context.Context, userID int64) (ConfigLin
 	item.Expire = int64Ptr(expire)
 	item.OnHoldExpireDuration = int64Ptr(holdDuration)
 	item.ServiceID = int64Ptr(serviceID)
+	item.AdminID = int64Ptr(adminID)
 	if credentialKey.Valid {
 		item.CredentialKey = credentialKey.String
 	}
@@ -580,7 +582,34 @@ func (r Repository) hosts(ctx context.Context) ([]Host, error) {
 	if err := r.attachHostServices(ctx, result); err != nil {
 		return nil, err
 	}
+	r.attachHostEnabledAdmins(ctx, result)
 	return result, nil
+}
+
+// attachHostEnabledAdmins reads which admins' users still get a disabled
+// host. Read apart from the hosts themselves and ignored on any error, so it
+// can never stop a subscription from being built.
+func (r Repository) attachHostEnabledAdmins(ctx context.Context, hosts []Host) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, enabled_admins FROM hosts WHERE COALESCE(enabled_admins, '') <> ''`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	byID := map[int64][]int64{}
+	for rows.Next() {
+		var id int64
+		var raw string
+		if rows.Scan(&id, &raw) != nil {
+			return
+		}
+		var admins []int64
+		if json.Unmarshal([]byte(raw), &admins) == nil {
+			byID[id] = admins
+		}
+	}
+	for i := range hosts {
+		hosts[i].EnabledAdmins = byID[hosts[i].ID]
+	}
 }
 
 func parseHostOptionJSON(value sql.NullString) []string {

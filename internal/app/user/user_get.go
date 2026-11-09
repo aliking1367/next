@@ -107,6 +107,7 @@ func (r Repository) UserGet(ctx context.Context, req UserGetRequest) (UserDetail
 		Expire:               row.Expire,
 		OnHoldExpireDuration: row.OnHoldExpireDuration,
 		ServiceID:            row.ServiceID,
+		AdminID:              row.AdminID,
 		CredentialKey:        row.CredentialKey,
 		Proxies:              proxies,
 		Inbounds:             row.Inbounds,

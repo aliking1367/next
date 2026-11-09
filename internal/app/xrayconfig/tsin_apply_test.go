@@ -382,7 +382,7 @@ func TestTSinEmergencyInboundsSurviveAppliesAndToggleByHost(t *testing.T) {
 		t.Fatalf("routing = %v, outbounds = %v", config["routing"], outbounds)
 	}
 
-	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, true, "both"); err != nil {
+	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, true, "both", nil); err != nil {
 		t.Fatal(err)
 	}
 	var address string
@@ -407,17 +407,18 @@ func TestTSinEmergencyInboundsSurviveAppliesAndToggleByHost(t *testing.T) {
 	}
 
 	// With one tunnel port only the chosen protocol is shown.
-	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, true, "vmess"); err != nil {
+	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, true, "vmess", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRow(`SELECT COALESCE(is_disabled, 0) FROM hosts WHERE inbound_tag = ?`, TSinEmergencySSTag).Scan(&disabled); err != nil || disabled != 1 {
 		t.Fatalf("Shadowsocks shown though only VMess was chosen: %d %v", disabled, err)
 	}
-	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, false, "both"); err != nil {
+	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, false, "both", []int64{7}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT COALESCE(is_disabled, 0) FROM hosts WHERE inbound_tag = ?`, TSinEmergencyVMessTag).Scan(&disabled); err != nil || disabled != 1 {
-		t.Fatalf("turning it off did not hide the host: %d %v", disabled, err)
+	var admins string
+	if err := db.QueryRow(`SELECT COALESCE(is_disabled, 0), COALESCE(enabled_admins, '') FROM hosts WHERE inbound_tag = ?`, TSinEmergencyVMessTag).Scan(&disabled, &admins); err != nil || disabled != 1 || admins != "[7]" {
+		t.Fatalf("with the owner's switch off and admin 7 on: disabled=%d admins=%q %v", disabled, admins, err)
 	}
 
 	if err := repo.RemoveTSinEmergency(ctx); err != nil {

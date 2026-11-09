@@ -50,7 +50,7 @@ func (s Service) PPTPInfos(ctx context.Context, user UserDetail, subscriptionURL
 	for i, tag := range inboundOrder {
 		inboundIndex[tag] = i
 	}
-	selectedHosts := selectConfigHosts(hosts, item.ServiceID)
+	selectedHosts := selectConfigHosts(hosts, item.ServiceID, item.AdminID)
 	sortConfigHosts(selectedHosts, item.ServiceHostOrders, inboundIndex)
 	variables := configFormatVariables(item)
 	password, err := PPTPPasswordFromCredentialKey(item.CredentialKey)

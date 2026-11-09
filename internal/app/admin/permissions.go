@@ -35,6 +35,7 @@ func RoleDefaultPermissions(role AdminRole) AdminPermissions {
 		baseSections = allSectionPermissions()
 		baseSudo = allSudoPermissions()
 	case RoleFullAccess:
+		baseUsers.EmergencyTunnel = true
 		baseUsers.Delete = true
 		baseUsers.ResetUsage = true
 		baseUsers.SetFlow = true

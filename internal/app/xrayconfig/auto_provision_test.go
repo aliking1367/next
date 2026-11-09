@@ -58,6 +58,7 @@ func provisionTestRepository(t *testing.T) (Repository, *sql.DB) {
 		`ALTER TABLE hosts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT 'none'`,
 		`ALTER TABLE hosts ADD COLUMN pinned_peer_cert_sha256 TEXT NULL`,
 		`ALTER TABLE hosts ADD COLUMN is_disabled INTEGER DEFAULT 0`,
+		`ALTER TABLE hosts ADD COLUMN enabled_admins TEXT NULL`,
 		`CREATE TABLE service_hosts (service_id INTEGER, host_id INTEGER, sort INTEGER DEFAULT 0, created_at DATETIME NULL)`,
 	} {
 		if _, err := db.Exec(statement); err != nil {

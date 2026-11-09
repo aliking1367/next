@@ -29,6 +29,7 @@ export enum UserPermissionToggle {
 	AdvancedActions = "advanced_actions",
 	SetFlow = "set_flow",
 	AllowCustomKey = "allow_custom_key",
+	EmergencyTunnel = "emergency_tunnel",
 }
 
 export enum AdminManagementPermission {

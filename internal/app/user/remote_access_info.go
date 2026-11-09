@@ -71,7 +71,7 @@ func (s Service) remoteAccessInfos(ctx context.Context, user UserDetail, protoco
 	for i, tag := range order {
 		index[tag] = i
 	}
-	selected := selectConfigHosts(hosts, item.ServiceID)
+	selected := selectConfigHosts(hosts, item.ServiceID, item.AdminID)
 	sortConfigHosts(selected, item.ServiceHostOrders, index)
 	password := ""
 	if protocol == "ikev2" {

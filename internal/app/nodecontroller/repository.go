@@ -313,6 +313,7 @@ SELECT
 	COALESCE(u.credential_key, ''),
 	COALESCE(u.flow, ''),
 	u.service_id,
+	u.admin_id,
 	protocols.type,
 	COALESCE(p.settings, '{}')
 FROM users u
@@ -359,6 +360,7 @@ WHERE u.status IN ('active', 'on_hold') AND u.service_id IS NOT NULL AND u.servi
 			&credentialKey,
 			&flow,
 			&row.ServiceID,
+			&row.AdminID,
 			&row.Protocol,
 			&settings,
 		); err != nil {

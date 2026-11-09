@@ -97,7 +97,7 @@ func BuildConfigLinks(
 		}
 	}
 
-	selectedHosts := selectConfigHosts(hosts, item.ServiceID)
+	selectedHosts := selectConfigHosts(hosts, item.ServiceID, item.AdminID)
 	sortConfigHosts(selectedHosts, item.ServiceHostOrders, inboundIndex)
 	hostsByTag := make(map[string][]configHost)
 	for _, host := range selectedHosts {
@@ -281,10 +281,13 @@ func configLinkFinalMask(inbound ResolvedInbound) map[string]any {
 	return mergeV2RayFinalMask(finalMask, legacy)
 }
 
-func selectConfigHosts(hosts []Host, serviceID *int64) []configHost {
+func selectConfigHosts(hosts []Host, serviceID *int64, adminID *int64) []configHost {
 	result := make([]configHost, 0, len(hosts))
 	for i, host := range hosts {
-		if host.IsDisabled || strings.EqualFold(strings.TrimSpace(host.InboundTag), "info") {
+		if host.IsDisabled && !hostEnabledForAdmin(host, adminID) {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(host.InboundTag), "info") {
 			continue
 		}
 		if serviceID != nil && !hostHasService(host, *serviceID) {
@@ -293,6 +296,20 @@ func selectConfigHosts(hosts []Host, serviceID *int64) []configHost {
 		result = append(result, configHost{host: host, position: i})
 	}
 	return result
+}
+
+// hostEnabledForAdmin reports whether a disabled host is still shown to the
+// users of adminID.
+func hostEnabledForAdmin(host Host, adminID *int64) bool {
+	if adminID == nil {
+		return false
+	}
+	for _, candidate := range host.EnabledAdmins {
+		if candidate == *adminID {
+			return true
+		}
+	}
+	return false
 }
 
 func hostHasService(host Host, serviceID int64) bool {

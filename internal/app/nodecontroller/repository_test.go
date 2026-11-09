@@ -792,6 +792,7 @@ CREATE TABLE users (
 	credential_key TEXT,
 	flow TEXT,
 	service_id INTEGER,
+	admin_id INTEGER,
 	status TEXT
 );
 CREATE TABLE proxies (
@@ -925,6 +926,7 @@ CREATE TABLE users (
 	credential_key TEXT,
 	flow TEXT,
 	service_id INTEGER,
+	admin_id INTEGER,
 	status TEXT
 );
 CREATE TABLE nodes (
@@ -1588,6 +1590,7 @@ CREATE TABLE users (
 	credential_key TEXT,
 	flow TEXT,
 	service_id INTEGER,
+	admin_id INTEGER,
 	status TEXT NOT NULL,
 	ip_limit INTEGER NOT NULL DEFAULT 0
 );

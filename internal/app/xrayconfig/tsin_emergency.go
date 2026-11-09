@@ -2,6 +2,7 @@ package xrayconfig
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -222,7 +223,10 @@ func stripTSinEmergencyRouting(config map[string]any) bool {
 // SetTSinEmergencyHosts points the emergency hosts at the Iranian tunnel and
 // shows or hides them. A port of 0 keeps the inbound's own port, for a tunnel
 // that forwards each port to the same number.
-func (r Repository) SetTSinEmergencyHosts(ctx context.Context, address string, vmessPort, ssPort int, enabled bool, protocols string) error {
+//
+// enabledAdmins are admins who turned the tunnel on for their own users: with
+// the owner's switch off, the hosts stay hidden from everyone else.
+func (r Repository) SetTSinEmergencyHosts(ctx context.Context, address string, vmessPort, ssPort int, enabled bool, protocols string, enabledAdmins []int64) error {
 	protocols = NormalizeTSinEmergencyProtocols(protocols)
 	for _, item := range []struct {
 		tag, remark, protocol string
@@ -231,17 +235,23 @@ func (r Repository) SetTSinEmergencyHosts(ctx context.Context, address string, v
 		{TSinEmergencyVMessTag, "🆘 تونل اضطراری VMess", TSinEmergencyVMess, vmessPort},
 		{TSinEmergencySSTag, "🆘 تونل اضطراری Shadowsocks", TSinEmergencySS, ssPort},
 	} {
+		shown := protocols == TSinEmergencyBoth || protocols == item.protocol
 		disabled := 1
-		if enabled && (protocols == TSinEmergencyBoth || protocols == item.protocol) {
+		if enabled && shown {
 			disabled = 0
+		}
+		var admins any
+		if shown && len(enabledAdmins) > 0 {
+			encoded, _ := json.Marshal(enabledAdmins)
+			admins = string(encoded)
 		}
 		var port any
 		if item.port > 0 {
 			port = item.port
 		}
 		if _, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = ?, sni = NULL, host = NULL,
-security = 'inbound_default', alpn = 'none', fingerprint = 'none', is_disabled = ? WHERE inbound_tag = ?`,
-			item.remark, strings.TrimSpace(address), port, disabled, item.tag); err != nil {
+security = 'inbound_default', alpn = 'none', fingerprint = 'none', is_disabled = ?, enabled_admins = ? WHERE inbound_tag = ?`,
+			item.remark, strings.TrimSpace(address), port, disabled, admins, item.tag); err != nil {
 			return err
 		}
 	}

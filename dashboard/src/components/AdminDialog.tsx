@@ -104,6 +104,7 @@ const adminPermissionsSchema: z.ZodType<AdminPermissions> = z.object({
 		advanced_actions: z.boolean(),
 		set_flow: z.boolean(),
 		allow_custom_key: z.boolean(),
+		emergency_tunnel: z.boolean(),
 		max_data_limit_per_user: z.number().nullable(),
 	}),
 	admin_management: z.object({

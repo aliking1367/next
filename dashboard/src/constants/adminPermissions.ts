@@ -26,6 +26,7 @@ const USER_ONLY_TEMPLATE: PermissionTemplate = {
 		[UserPermissionToggle.AdvancedActions]: true,
 		[UserPermissionToggle.SetFlow]: false,
 		[UserPermissionToggle.AllowCustomKey]: false,
+		[UserPermissionToggle.EmergencyTunnel]: false,
 		max_data_limit_per_user: null,
 	},
 	admin_management: {
@@ -78,6 +79,7 @@ const SUDO_TEMPLATE: PermissionTemplate = {
 		[UserPermissionToggle.AdvancedActions]: true,
 		[UserPermissionToggle.SetFlow]: true,
 		[UserPermissionToggle.AllowCustomKey]: true,
+		[UserPermissionToggle.EmergencyTunnel]: false,
 		max_data_limit_per_user: null,
 	},
 	admin_management: {
@@ -130,6 +132,7 @@ const FULL_ACCESS_TEMPLATE: PermissionTemplate = {
 		[UserPermissionToggle.AdvancedActions]: true,
 		[UserPermissionToggle.SetFlow]: true,
 		[UserPermissionToggle.AllowCustomKey]: true,
+		[UserPermissionToggle.EmergencyTunnel]: false,
 		max_data_limit_per_user: null,
 	},
 	admin_management: {

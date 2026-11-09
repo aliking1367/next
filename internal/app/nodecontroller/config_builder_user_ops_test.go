@@ -25,6 +25,7 @@ CREATE TABLE users (
 	credential_key TEXT,
 	flow TEXT,
 	service_id INTEGER,
+	admin_id INTEGER,
 	status TEXT
 );
 CREATE TABLE proxies (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, settings TEXT);

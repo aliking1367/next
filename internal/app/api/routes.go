@@ -187,6 +187,7 @@ func (s *Server) registerSettingsRoutes(r chi.Router) {
 	r.HandleFunc("/settings", s.requireAdmin(s.handleRuntimeSettings))
 	r.HandleFunc("/settings/all", s.requireSudo(s.handleAllSettings))
 	r.HandleFunc("/settings/abuse-protection", s.requireSudo(s.handleAbuseProtection))
+	r.HandleFunc("/emergency-tunnel", s.requireAdmin(s.handleEmergencyTunnel))
 	r.HandleFunc("/settings/backup/export", s.requireSudo(s.handleBackupExport))
 	r.HandleFunc("/settings/backup/import", s.requireSudo(s.handleBackupImport))
 	r.HandleFunc("/settings/user-migration/inspect", s.requireAdmin(s.handleUserMigrationInspect))

@@ -156,6 +156,7 @@ func (r Repository) UsersList(ctx context.Context, req UsersListRequest) (UsersR
 				Expire:               item.Expire,
 				OnHoldExpireDuration: row.onHoldExpireDuration,
 				ServiceID:            item.ServiceID,
+				AdminID:              item.AdminID,
 				CredentialKey:        row.credentialKey,
 				Flow:                 row.flow,
 				Proxies:              proxiesByUser[row.id],

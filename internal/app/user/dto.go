@@ -62,23 +62,25 @@ type ConfigLinkMetadata struct {
 }
 
 type ConfigLinkUser struct {
-	ID                   int64                      `json:"id"`
-	Username             string                     `json:"username"`
-	Status               string                     `json:"status"`
-	UsedTraffic          int64                      `json:"used_traffic"`
-	DataLimit            *int64                     `json:"data_limit,omitempty"`
-	Expire               *int64                     `json:"expire,omitempty"`
-	OnHoldExpireDuration *int64                     `json:"on_hold_expire_duration,omitempty"`
-	ServiceID            *int64                     `json:"service_id,omitempty"`
-	CredentialKey        string                     `json:"credential_key,omitempty"`
-	Flow                 string                     `json:"flow,omitempty"`
-	Proxies              []StoredProxy              `json:"proxies,omitempty"`
-	Inbounds             map[string][]string        `json:"inbounds,omitempty"`
-	ServiceHostOrders    map[int64]int64            `json:"service_host_orders,omitempty"`
-	XrayInboundsByTag    map[string]ResolvedInbound `json:"xray_inbounds_by_tag,omitempty"`
-	XrayInboundOrder     []string                   `json:"xray_inbound_order,omitempty"`
-	Hosts                []Host                     `json:"hosts,omitempty"`
-	ServerIP             string                     `json:"server_ip,omitempty"`
+	ID                   int64  `json:"id"`
+	Username             string `json:"username"`
+	Status               string `json:"status"`
+	UsedTraffic          int64  `json:"used_traffic"`
+	DataLimit            *int64 `json:"data_limit,omitempty"`
+	Expire               *int64 `json:"expire,omitempty"`
+	OnHoldExpireDuration *int64 `json:"on_hold_expire_duration,omitempty"`
+	ServiceID            *int64 `json:"service_id,omitempty"`
+	// AdminID is the user's admin, for hosts shown to chosen admins' users.
+	AdminID           *int64                     `json:"admin_id,omitempty"`
+	CredentialKey     string                     `json:"credential_key,omitempty"`
+	Flow              string                     `json:"flow,omitempty"`
+	Proxies           []StoredProxy              `json:"proxies,omitempty"`
+	Inbounds          map[string][]string        `json:"inbounds,omitempty"`
+	ServiceHostOrders map[int64]int64            `json:"service_host_orders,omitempty"`
+	XrayInboundsByTag map[string]ResolvedInbound `json:"xray_inbounds_by_tag,omitempty"`
+	XrayInboundOrder  []string                   `json:"xray_inbound_order,omitempty"`
+	Hosts             []Host                     `json:"hosts,omitempty"`
+	ServerIP          string                     `json:"server_ip,omitempty"`
 	// Locations are the nodes serving the shared config; with two or more,
 	// {SERVER_IP} hosts are repeated once per node (multi-location).
 	Locations          []ConfigLocation  `json:"-"`
@@ -268,39 +270,42 @@ type Inbound struct {
 type ResolvedInbound map[string]any
 
 type Host struct {
-	ID                   int64          `json:"id"`
-	InboundTag           string         `json:"inbound_tag"`
-	Remark               string         `json:"remark"`
-	Address              string         `json:"address"`
-	DNSPrimary           string         `json:"dns_primary"`
-	DNSSecondary         string         `json:"dns_secondary"`
-	AddressOptions       []string       `json:"address_options,omitempty"`
-	AddressMode          string         `json:"address_selection_mode,omitempty"`
-	AddressTTL           *int64         `json:"address_ttl_seconds,omitempty"`
-	Port                 *int64         `json:"port"`
-	Path                 *string        `json:"path"`
-	SNI                  *string        `json:"sni"`
-	SNIOptions           []string       `json:"sni_options,omitempty"`
-	SNIMode              string         `json:"sni_selection_mode,omitempty"`
-	SNITTL               *int64         `json:"sni_ttl_seconds,omitempty"`
-	Host                 *string        `json:"host"`
-	HostOptions          []string       `json:"host_options,omitempty"`
-	HostMode             string         `json:"host_selection_mode,omitempty"`
-	HostTTL              *int64         `json:"host_ttl_seconds,omitempty"`
-	Security             string         `json:"security"`
-	ALPN                 string         `json:"alpn"`
-	Fingerprint          string         `json:"fingerprint"`
-	VerifyPeerCertByName string         `json:"verify_peer_cert_by_name"`
-	PinnedPeerCertSHA256 string         `json:"pinned_peer_cert_sha256"`
-	AllowInsecure        *bool          `json:"allowinsecure"`
-	IsDisabled           bool           `json:"is_disabled"`
-	MuxEnable            bool           `json:"mux_enable"`
-	FragmentSetting      *string        `json:"fragment_setting"`
-	NoiseSetting         *string        `json:"noise_setting"`
-	FinalMask            map[string]any `json:"finalmask,omitempty"`
-	RandomUserAgent      bool           `json:"random_user_agent"`
-	UseSNIAsHost         bool           `json:"use_sni_as_host"`
-	ServiceIDs           []int64        `json:"service_ids,omitempty"`
+	ID                   int64    `json:"id"`
+	InboundTag           string   `json:"inbound_tag"`
+	Remark               string   `json:"remark"`
+	Address              string   `json:"address"`
+	DNSPrimary           string   `json:"dns_primary"`
+	DNSSecondary         string   `json:"dns_secondary"`
+	AddressOptions       []string `json:"address_options,omitempty"`
+	AddressMode          string   `json:"address_selection_mode,omitempty"`
+	AddressTTL           *int64   `json:"address_ttl_seconds,omitempty"`
+	Port                 *int64   `json:"port"`
+	Path                 *string  `json:"path"`
+	SNI                  *string  `json:"sni"`
+	SNIOptions           []string `json:"sni_options,omitempty"`
+	SNIMode              string   `json:"sni_selection_mode,omitempty"`
+	SNITTL               *int64   `json:"sni_ttl_seconds,omitempty"`
+	Host                 *string  `json:"host"`
+	HostOptions          []string `json:"host_options,omitempty"`
+	HostMode             string   `json:"host_selection_mode,omitempty"`
+	HostTTL              *int64   `json:"host_ttl_seconds,omitempty"`
+	Security             string   `json:"security"`
+	ALPN                 string   `json:"alpn"`
+	Fingerprint          string   `json:"fingerprint"`
+	VerifyPeerCertByName string   `json:"verify_peer_cert_by_name"`
+	PinnedPeerCertSHA256 string   `json:"pinned_peer_cert_sha256"`
+	AllowInsecure        *bool    `json:"allowinsecure"`
+	IsDisabled           bool     `json:"is_disabled"`
+	// EnabledAdmins are admins whose users still get this host while it is
+	// disabled (the T.Sin emergency tunnel turned on by an admin).
+	EnabledAdmins   []int64        `json:"enabled_admins,omitempty"`
+	MuxEnable       bool           `json:"mux_enable"`
+	FragmentSetting *string        `json:"fragment_setting"`
+	NoiseSetting    *string        `json:"noise_setting"`
+	FinalMask       map[string]any `json:"finalmask,omitempty"`
+	RandomUserAgent bool           `json:"random_user_agent"`
+	UseSNIAsHost    bool           `json:"use_sni_as_host"`
+	ServiceIDs      []int64        `json:"service_ids,omitempty"`
 }
 
 type ClientRoutingRule struct {

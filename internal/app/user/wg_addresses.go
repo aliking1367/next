@@ -194,7 +194,7 @@ func (r Repository) populateTunnelAddresses(ctx context.Context, item *ConfigLin
 	if item.WireGuardAddresses == nil {
 		item.WireGuardAddresses = map[string]string{}
 	}
-	for _, selected := range selectConfigHosts(item.Hosts, item.ServiceID) {
+	for _, selected := range selectConfigHosts(item.Hosts, item.ServiceID, item.AdminID) {
 		tag := selected.host.InboundTag
 		inbound, ok := inbounds[tag]
 		if !ok || normalizeProxyProtocol(stringValue(inbound["protocol"])) != protocol || item.WireGuardAddresses[tag] != "" {

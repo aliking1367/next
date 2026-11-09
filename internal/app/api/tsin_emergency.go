@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -92,36 +94,50 @@ func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ports, err := s.configRepo.EnsureTSinEmergency(ctx, settings.Target, s.tsinPortBusy(settings.Target))
+	ports, err := s.applyTSinEmergency(ctx, settings)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to set up the emergency tunnel: "+err.Error())
-		return
-	}
-	if err := s.configRepo.SetTSinEmergencyHosts(ctx, settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	serviceID, err := s.attachTSinService(ctx, []xrayconfig.TSinInbound{{Tag: xrayconfig.TSinEmergencyVMessTag}, {Tag: xrayconfig.TSinEmergencySSTag}})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to add the emergency tunnel to the service: "+err.Error())
-		return
-	}
-	// Who may use an inbound follows whether its host is shown, so the users
-	// are resent either way; adding or dropping users needs no restart.
-	if err := s.withTx(ctx, func(tx *sql.Tx) error {
-		return enqueueAffectedServicesUsersTx(ctx, tx, map[int64]bool{serviceID: true})
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	s.kickNodeOperationsSoon()
-	if err := s.saveTSinSettings(ctx, settings); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	view := s.tsinEmergencyView(ctx, settings)
 	view["node_ports"] = ports
 	writeJSON(w, http.StatusOK, view)
+}
+
+// applyTSinEmergency puts the emergency tunnel in settings into effect and
+// saves it: the inbounds on the countries' server, their hosts shown to
+// everyone, to the chosen admins' users only, or to nobody, and the node
+// told who may use them now.
+func (s *Server) applyTSinEmergency(ctx context.Context, settings tsinSettings) (xrayconfig.TSinEmergencyPorts, error) {
+	var ports xrayconfig.TSinEmergencyPorts
+	// The emergency configs join the service the countries are in; without
+	// country configs there is no such service to join yet.
+	if serviceID, err := findTSinServiceID(ctx, s.db); err != nil {
+		return ports, err
+	} else if serviceID == 0 {
+		return ports, errors.New("apply the countries first; the emergency tunnel joins their service")
+	}
+	ports, err := s.configRepo.EnsureTSinEmergency(ctx, settings.Target, s.tsinPortBusy(settings.Target))
+	if err != nil {
+		return ports, fmt.Errorf("Failed to set up the emergency tunnel: %w", err)
+	}
+	if err := s.configRepo.SetTSinEmergencyHosts(ctx, settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort,
+		settings.EmergencyEnabled, settings.EmergencyProtocols, settings.EmergencyAdmins); err != nil {
+		return ports, err
+	}
+	serviceID, err := s.attachTSinService(ctx, []xrayconfig.TSinInbound{{Tag: xrayconfig.TSinEmergencyVMessTag}, {Tag: xrayconfig.TSinEmergencySSTag}})
+	if err != nil {
+		return ports, fmt.Errorf("Failed to add the emergency tunnel to the service: %w", err)
+	}
+	// Who may use an inbound follows whether its host is shown, so the node
+	// gets its users again either way.
+	if err := s.withTx(ctx, func(tx *sql.Tx) error {
+		return enqueueAffectedServicesUsersTx(ctx, tx, map[int64]bool{serviceID: true})
+	}); err != nil {
+		return ports, err
+	}
+	s.kickNodeOperationsSoon()
+	return ports, s.saveTSinSettings(ctx, settings)
 }
 
 // tsinPortBusy says which ports are taken on target's machine, where that can
