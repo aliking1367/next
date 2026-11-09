@@ -28,6 +28,8 @@ type UserReport struct {
 	Proxies       []string
 	ResetStrategy string
 	HasNextPlan   bool
+	// TelegramID is the buyer's Telegram ID, when the account has one.
+	TelegramID string
 }
 
 type AdminReport struct {
@@ -281,6 +283,9 @@ func userReportText(title string, report UserReport, extras []string) string {
 		title,
 		separator(),
 		line("Username", report.Username),
+	}
+	if strings.TrimSpace(report.TelegramID) != "" {
+		lines = append(lines, line("Telegram ID", report.TelegramID))
 	}
 	lines = append(lines, extras...)
 	lines = append(lines,

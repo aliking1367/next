@@ -103,8 +103,14 @@ func userReportForTelegram(result userapp.MutationResult, owner string, actor st
 		Expire                 *int64           `json:"expire"`
 		DataLimitResetStrategy string           `json:"data_limit_reset_strategy"`
 		NextPlans              []map[string]any `json:"next_plans"`
+		TelegramID             *string          `json:"telegram_id"`
+		Note                   *string          `json:"note"`
 	}
 	_ = json.Unmarshal(raw, &payload)
+	buyer := strings.TrimSpace(stringValueOrEmpty(payload.TelegramID))
+	if buyer == "" {
+		buyer = userapp.BuyerTelegramID(stringValueOrEmpty(payload.Note))
+	}
 	return telegramapp.UserReport{
 		Username:      result.Username,
 		Owner:         owner,
@@ -114,7 +120,15 @@ func userReportForTelegram(result userapp.MutationResult, owner string, actor st
 		Expire:        payload.Expire,
 		ResetStrategy: payload.DataLimitResetStrategy,
 		HasNextPlan:   len(payload.NextPlans) > 0,
+		TelegramID:    buyer,
 	}
+}
+
+func stringValueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func telegramAdminLimitReport(username string, reason string, actor string) telegramapp.AdminLimitReport {
