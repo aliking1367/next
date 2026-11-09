@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-89a3953",
-  "updated_at": "2026-11-09T08:18:40Z",
+  "latest": "dev-3e19f22",
+  "updated_at": "2026-11-09T08:41:34Z",
   "builds": [
+    {
+      "tag": "dev-3e19f22",
+      "sha": "3e19f22a476a82ad7454d0d45fca5d575d20d68c",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42587325331",
+      "run_number": "190",
+      "created_at": "2026-11-09T08:41:34Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-3e19f22.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-3e19f22.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-3e19f22.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-3e19f22.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-89a3953",
       "sha": "89a39536acc1830d4266207333725f19345bcb2f",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-143b6cf.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-143b6cf.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-4371871",
-      "sha": "43718710cf37541935688f670fbe9aa462f6d462",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36987029823",
-      "run_number": "89",
-      "created_at": "2026-10-02T09:01:44Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-4371871.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-4371871.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-4371871.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-4371871.tar.gz"
         }
       }
     }
