@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-3e19f22",
-  "updated_at": "2026-11-09T08:41:34Z",
+  "latest": "dev-5c2a87a",
+  "updated_at": "2026-11-09T11:30:43Z",
   "builds": [
+    {
+      "tag": "dev-5c2a87a",
+      "sha": "5c2a87a7fc74e35048358c12e21705285e247d2f",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42609145301",
+      "run_number": "192",
+      "created_at": "2026-11-09T11:30:43Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-5c2a87a.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5c2a87a.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-5c2a87a.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-5c2a87a.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-3e19f22",
       "sha": "3e19f22a476a82ad7454d0d45fca5d575d20d68c",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-c81b2ad.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-c81b2ad.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-143b6cf",
-      "sha": "143b6cf43bb7fff39364a5f55ec602f01f7dfb51",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "36993553797",
-      "run_number": "91",
-      "created_at": "2026-10-02T10:09:55Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-143b6cf.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-143b6cf.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-143b6cf.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-143b6cf.tar.gz"
         }
       }
     }
