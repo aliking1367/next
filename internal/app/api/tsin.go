@@ -107,6 +107,13 @@ type tsinSettings struct {
 	// DirectAddress is the extra IP those configs point at; empty uses the
 	// server's own address.
 	DirectAddress string
+	// The emergency tunnel, for when T.Sin is down: an Iranian tunnel's
+	// address and the ports it forwards on (0 for the same as the server's),
+	// and whether its configs are shown.
+	EmergencyAddress   string
+	EmergencyVMessPort int
+	EmergencySSPort    int
+	EmergencyEnabled   bool
 }
 
 type tsinRequest struct {
@@ -139,9 +146,14 @@ func (s *Server) loadTSinSettings(ctx context.Context) (tsinSettings, error) {
 	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID, Transport: xrayconfig.TSinTransportTCP, GatePort: xrayconfig.DefaultTSinGatePort}
 	var token, dc, countries, registeredDC, registeredSum, detail, target, transport, gateHost, direct, directAddress sql.NullString
 	var gatePort sql.NullInt64
+	var emergencyAddress sql.NullString
+	var emergencyVMess, emergencySS sql.NullInt64
+	var emergencyEnabled sql.NullBool
 	err := s.db.QueryRowContext(ctx, `SELECT token, dc, countries, registered_dc, registered_token_hash,
-last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address FROM tsin_settings ORDER BY id LIMIT 1`).
-		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort, &direct, &directAddress)
+last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address,
+emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled FROM tsin_settings ORDER BY id LIMIT 1`).
+		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort, &direct, &directAddress,
+			&emergencyAddress, &emergencyVMess, &emergencySS, &emergencyEnabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings, nil
 	}
@@ -163,6 +175,10 @@ last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_co
 	settings.GateHost = gateHost.String
 	settings.GatePort = int(gatePort.Int64)
 	settings.DirectAddress = directAddress.String
+	settings.EmergencyAddress = emergencyAddress.String
+	settings.EmergencyVMessPort = int(emergencyVMess.Int64)
+	settings.EmergencySSPort = int(emergencySS.Int64)
+	settings.EmergencyEnabled = emergencyEnabled.Bool
 	if direct.Valid {
 		settings.DirectCountries = []string{}
 		_ = json.Unmarshal([]byte(direct.String), &settings.DirectCountries)
@@ -179,9 +195,11 @@ func (s *Server) saveTSinSettings(ctx context.Context, settings tsinSettings) er
 	}
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE tsin_settings SET token = ?, dc = ?, countries = ?,
-registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?, direct_countries = ?, direct_address = ?`,
+registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?, direct_countries = ?, direct_address = ?,
+emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergency_enabled = ?`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress,
+			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled)
 		if err != nil {
 			return err
 		}
@@ -189,9 +207,11 @@ registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail =
 			return nil
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO tsin_settings
-(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+(token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address,
+emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
-			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress)
+			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress,
+			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled)
 		return err
 	})
 }
@@ -232,6 +252,7 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"gate_port":        settings.GatePort,
 		"direct_countries": settings.DirectCountries,
 		"direct_address":   settings.DirectAddress,
+		"emergency":        s.tsinEmergencyView(r.Context(), settings),
 		"node_script":      tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
@@ -460,13 +481,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	if !onPanelHost {
 		// What the node listens on, as it last reported, so new configs only
 		// take ports that are free there.
-		if report := s.tsinNode.load(target); report.fresh() && report.Listening != nil {
-			listening := map[int]bool{}
-			for _, port := range report.Listening {
-				listening[port] = true
-			}
-			portBusy = func(port int) bool { return listening[port] }
-		}
+		portBusy = s.tsinPortBusy(target)
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
 		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress}, countries, portBusy)
@@ -585,6 +600,10 @@ func (s *Server) tsinRemove(w http.ResponseWriter, r *http.Request) {
 	defer tsinApplyMu.Unlock()
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
+	if err := s.configRepo.RemoveTSinEmergency(ctx); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to remove the emergency tunnel: "+err.Error())
+		return
+	}
 	if err := s.configRepo.RemoveTSin(ctx); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to remove the T.Sin configuration: "+err.Error())
 		return

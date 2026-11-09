@@ -390,6 +390,9 @@ func (s *Server) checkTSinNode(ctx context.Context, settings tsinSettings, watch
 			if n := len(report.Log); n > 0 {
 				lines = append(lines, "آخرین خط نگهبان: "+report.Log[n-1])
 			}
+			if settings.EmergencyAddress != "" && !settings.EmergencyEnabled {
+				lines = append(lines, "اگر قطعی طول کشید، «تونل اضطراری» را در پنجرهٔ Countries روشن کن تا کاربرها وصل بمانند.")
+			}
 			alert("تونل T.Sin روی نود قطع است؛ کاربرهای کشورها وصل نمی‌شوند", lines...)
 		}
 	}

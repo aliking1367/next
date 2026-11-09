@@ -349,3 +349,74 @@ func slicesContains(list []int, value int) bool {
 	}
 	return false
 }
+
+// The emergency tunnel's inbounds are made once, routed straight out, kept
+// by later applies of the countries, and only shown or hidden by the switch.
+func TestTSinEmergencyInboundsSurviveAppliesAndToggleByHost(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{{Port: 1082, Name: "Germany", Code: "DE"}}
+	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	ports, err := repo.EnsureTSinEmergency(ctx, "master", nil)
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+	if ports.VMess == 0 || ports.Shadowsocks == 0 || ports.VMess == ports.Shadowsocks {
+		t.Fatalf("ports = %+v", ports)
+	}
+	again, err := repo.EnsureTSinEmergency(ctx, "master", nil)
+	if err != nil || again != ports {
+		t.Fatalf("a second ensure moved the ports: %+v -> %+v (%v)", ports, again, err)
+	}
+	config, _ := repo.GetTargetRawConfig(ctx, "master")
+	routed := 0
+	for _, rule := range listOfMaps(mapValue(config["routing"])["rules"]) {
+		if stringValue(rule["outboundTag"]) == tsinEmergencyOutbound {
+			routed++
+		}
+	}
+	outbounds := listOfMaps(config["outbounds"])
+	if routed != 1 || stringValue(outbounds[len(outbounds)-1]["tag"]) != tsinEmergencyOutbound {
+		t.Fatalf("routing = %v, outbounds = %v", config["routing"], outbounds)
+	}
+
+	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	var address string
+	var disabled int
+	var port sql.NullInt64
+	if err := db.QueryRow(`SELECT address, port, COALESCE(is_disabled, 0) FROM hosts WHERE inbound_tag = ?`, TSinEmergencyVMessTag).Scan(&address, &port, &disabled); err != nil {
+		t.Fatal(err)
+	}
+	if address != "185.1.2.3" || port.Int64 != 4433 || disabled != 0 {
+		t.Fatalf("vmess host = %s:%d disabled=%d", address, port.Int64, disabled)
+	}
+	if err := db.QueryRow(`SELECT port FROM hosts WHERE inbound_tag = ?`, TSinEmergencySSTag).Scan(&port); err != nil || port.Valid {
+		t.Fatalf("a 0 port must keep the inbound's own: %v %v", port, err)
+	}
+
+	// Applying the countries again keeps them.
+	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetInbound(ctx, TSinEmergencyVMessTag); err != nil {
+		t.Fatalf("an apply removed the emergency tunnel: %v", err)
+	}
+
+	if err := repo.SetTSinEmergencyHosts(ctx, "185.1.2.3", 4433, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COALESCE(is_disabled, 0) FROM hosts WHERE inbound_tag = ?`, TSinEmergencyVMessTag).Scan(&disabled); err != nil || disabled != 1 {
+		t.Fatalf("turning it off did not hide the host: %d %v", disabled, err)
+	}
+
+	if err := repo.RemoveTSinEmergency(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetInbound(ctx, TSinEmergencySSTag); err == nil {
+		t.Fatal("the emergency inbound survived removal")
+	}
+}

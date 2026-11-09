@@ -13,6 +13,7 @@ import {
 	Progress,
 	SimpleGrid,
 	Stack,
+	Switch,
 	Text,
 	Textarea,
 	useClipboard,
@@ -61,6 +62,7 @@ type TSinView = {
 	// null until an admin chooses.
 	direct_countries?: string[] | null;
 	direct_address?: string;
+	emergency?: TSinEmergency;
 	targets?: TSinTarget[];
 	node_script: string;
 	dc: string;
@@ -88,6 +90,18 @@ type TSinView = {
 		ports_working?: number;
 		ports_failing?: string[] | null;
 	};
+};
+
+// TSinEmergency is the emergency tunnel for when T.Sin is down: an Iranian
+// tunnel forwarding to the countries' server, whose configs go out from that
+// server directly.
+type TSinEmergency = {
+	address: string;
+	vmess_port: number;
+	ss_port: number;
+	enabled: boolean;
+	node_address?: string;
+	node_ports?: { vmess?: number; shadowsocks?: number };
 };
 
 type TSinDatacenterRank = {
@@ -161,6 +175,10 @@ export const TSinDialog: FC<{
 	const [selected, setSelected] = useState<string[]>([]);
 	const [direct, setDirect] = useState<string[]>([]);
 	const [directAddress, setDirectAddress] = useState("");
+	const [emAddress, setEmAddress] = useState("");
+	const [emVMessPort, setEmVMessPort] = useState("");
+	const [emSSPort, setEmSSPort] = useState("");
+	const [emBusy, setEmBusy] = useState(false);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
@@ -265,6 +283,13 @@ export const TSinDialog: FC<{
 			// subscription gains only a few direct configs.
 			setDirect(data.direct_countries ?? DIRECT_SUGGESTED);
 			setDirectAddress(data.direct_address ?? "");
+			setEmAddress(data.emergency?.address ?? "");
+			setEmVMessPort(
+				data.emergency?.vmess_port ? String(data.emergency.vmess_port) : "",
+			);
+			setEmSSPort(
+				data.emergency?.ss_port ? String(data.emergency.ss_port) : "",
+			);
 			setSelected(
 				offered.size ? wanted.filter((name) => offered.has(name)) : wanted,
 			);
@@ -334,6 +359,52 @@ export const TSinDialog: FC<{
 			);
 		} finally {
 			setBusy(false);
+		}
+	};
+
+	// saveEmergency stores the emergency tunnel and, with enabled, shows or
+	// hides its configs for every user of the countries.
+	const saveEmergency = async (enabled?: boolean) => {
+		if (emBusy) return;
+		setEmBusy(true);
+		try {
+			const body: Record<string, unknown> = {
+				address: emAddress.trim(),
+				vmess_port: Number.parseInt(emVMessPort, 10) || 0,
+				ss_port: Number.parseInt(emSSPort, 10) || 0,
+			};
+			if (enabled !== undefined) body.enabled = enabled;
+			const result = await fetch<TSinEmergency>("/core/tsin/emergency", {
+				method: "POST",
+				body,
+			});
+			setView((current) =>
+				current ? { ...current, emergency: result } : current,
+			);
+			toast({
+				status: result.enabled ? "warning" : "success",
+				isClosable: true,
+				duration: 10_000,
+				title: result.enabled
+					? tt(
+							"tsin.emergency.turnedOn",
+							"Emergency tunnel is on. Users must update their subscription to get the 🆘 configs.",
+						)
+					: enabled === false
+						? tt(
+								"tsin.emergency.turnedOff",
+								"Emergency tunnel is off. The 🆘 configs disappear when users update their subscription.",
+							)
+						: tt("tsin.emergency.saved", "Emergency tunnel saved"),
+			});
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? String(error),
+			});
+		} finally {
+			setEmBusy(false);
 		}
 	};
 
@@ -831,6 +902,139 @@ export const TSinDialog: FC<{
 									)}
 								</FormHelperText>
 							</FormControl>
+						</Box>
+					)}
+
+					{view?.applied && (
+						<Box
+							borderWidth="1px"
+							borderRadius="6px"
+							p={3}
+							borderColor={view.emergency?.enabled ? "red.400" : undefined}
+						>
+							<HStack justify="space-between" mb={1} spacing={3}>
+								<Text fontWeight="semibold">
+									{tt(
+										"tsin.emergency.title",
+										"🆘 Emergency tunnel (when T.Sin is down)",
+									)}
+								</Text>
+								<HStack spacing={2} flexShrink={0}>
+									<Text
+										fontSize="sm"
+										fontWeight="semibold"
+										color={view.emergency?.enabled ? "red.400" : undefined}
+									>
+										{view.emergency?.enabled
+											? tt("tsin.emergency.on", "On")
+											: tt("tsin.emergency.off", "Off")}
+									</Text>
+									<Switch
+										colorScheme="red"
+										isChecked={Boolean(view.emergency?.enabled)}
+										isDisabled={emBusy || !emAddress.trim()}
+										onChange={(event) =>
+											void saveEmergency(event.target.checked)
+										}
+									/>
+								</HStack>
+							</HStack>
+							<Text fontSize="sm" mb={3} opacity={0.85}>
+								{tt(
+									"tsin.emergency.help",
+									"For the hours T.Sin itself is down. Turned on, every user of the countries gets two more configs, “🆘 Emergency tunnel” (VMess and Shadowsocks), that reach this server through your Iranian tunnel and go out from here directly, without T.Sin: users show this server's country instead of their chosen one, but stay connected. Turn it off when T.Sin is back. Users update their subscription to get or drop the configs.",
+								)}
+							</Text>
+							{view.emergency?.enabled && (
+								<Alert status="error" borderRadius="6px" fontSize="sm" mb={3}>
+									<AlertIcon />
+									<AlertDescription>
+										{tt(
+											"tsin.emergency.onWarning",
+											"The emergency tunnel is on. Its users go out from this server, not T.Sin. Turn it off once T.Sin works again.",
+										)}
+									</AlertDescription>
+								</Alert>
+							)}
+							<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2}>
+								<FormControl>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.emergency.address", "Iranian tunnel address")}
+									</FormLabel>
+									<Input
+										value={emAddress}
+										onChange={(event) => setEmAddress(event.target.value)}
+										placeholder="185.x.x.x"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+								</FormControl>
+								<FormControl>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.emergency.vmessPort", "Tunnel port for VMess")}
+									</FormLabel>
+									<Input
+										value={emVMessPort}
+										onChange={(event) => setEmVMessPort(event.target.value)}
+										placeholder={tt(
+											"tsin.emergency.samePort",
+											"same as server",
+										)}
+										dir="ltr"
+										inputMode="numeric"
+									/>
+								</FormControl>
+								<FormControl>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.emergency.ssPort", "Tunnel port for Shadowsocks")}
+									</FormLabel>
+									<Input
+										value={emSSPort}
+										onChange={(event) => setEmSSPort(event.target.value)}
+										placeholder={tt(
+											"tsin.emergency.samePort",
+											"same as server",
+										)}
+										dir="ltr"
+										inputMode="numeric"
+									/>
+								</FormControl>
+							</SimpleGrid>
+							{view.emergency?.node_ports?.vmess ? (
+								<Box mt={3} fontSize="sm">
+									<Text mb={1}>
+										{tt(
+											"tsin.emergency.forward",
+											"Set your Iranian tunnel to forward to these (TCP; for Shadowsocks also UDP):",
+										)}
+									</Text>
+									<Text dir="ltr" fontFamily="mono" fontSize="xs">
+										VMess → {view.emergency.node_address}:
+										{view.emergency.node_ports.vmess}
+										<br />
+										Shadowsocks → {view.emergency.node_address}:
+										{view.emergency.node_ports.shadowsocks}
+									</Text>
+								</Box>
+							) : (
+								<Text mt={3} fontSize="xs" opacity={0.75}>
+									{tt(
+										"tsin.emergency.firstSave",
+										"Press Save once: the panel makes the two configs on this server and shows the ports your Iranian tunnel must forward to. Making them makes the server's users reconnect for a second, once.",
+									)}
+								</Text>
+							)}
+							<Button
+								size="sm"
+								mt={3}
+								variant="outline"
+								isLoading={emBusy}
+								isDisabled={!emAddress.trim()}
+								onClick={() => void saveEmergency()}
+							>
+								{tt("tsin.emergency.save", "Save")}
+							</Button>
 						</Box>
 					)}
 

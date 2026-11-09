@@ -57,6 +57,7 @@ type TSinStatusView = {
 	account_error_code?: string;
 	account_source?: "node";
 	node_report?: TSinNodeReport;
+	emergency?: { enabled: boolean };
 };
 
 export const tsinStatusQueryKey = "tsin-status";
@@ -304,6 +305,22 @@ export const TSinStatusCard: FC<{
 			label: tt("tsin.card.connected", "Connected"),
 			color: "green.400",
 			pulse: true,
+		};
+	}
+
+	// A switched-on emergency tunnel is shown until it is turned off again,
+	// so it is not left on after T.Sin comes back.
+	if (data.emergency?.enabled) {
+		state = {
+			...state,
+			label: `🆘 ${state.label}`,
+			problem: state.problem ?? {
+				title: tt("tsin.card.emergencyOn", "The emergency tunnel is on"),
+				hint: tt(
+					"tsin.card.emergencyOnHint",
+					"Users on the 🆘 configs go out from the server, not T.Sin. Turn it off in the Countries window once T.Sin works again.",
+				),
+			},
 		};
 	}
 
