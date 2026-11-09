@@ -215,7 +215,6 @@ func (s *Server) StartBackground(ctx context.Context) {
 		go s.runTelegramBot(ctx)
 		go s.runTSinWatchdog(ctx)
 		go s.runNodeLoadWatch(ctx)
-		go s.runBuyerTelegramFill(ctx)
 		go s.runOutboundSubscriptionRefresher(ctx)
 	})
 }
