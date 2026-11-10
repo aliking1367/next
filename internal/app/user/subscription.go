@@ -29,6 +29,8 @@ type SubscriptionClientConfig struct {
 	Reverse     bool
 	TemplateKey string
 	AutoCurrent bool
+	// Smart is the ?smart= mode for Xray JSON output (see smart_configs.go).
+	Smart string
 }
 
 const maxMKCPMTU int64 = 1<<32 - 1
@@ -47,6 +49,10 @@ type SubscriptionRenderRequest struct {
 	End        string
 	ReadOnly   bool
 	Usage      usage.Service
+	// Smart is the ?smart= query value and SmartLevel the owner's switch
+	// (see smart_configs.go).
+	Smart      string
+	SmartLevel int
 }
 
 type SubscriptionHTTPResponse struct {
@@ -156,8 +162,12 @@ func (s Service) RenderSubscription(ctx context.Context, req SubscriptionRenderR
 		return s.generateAWGProfile(ctx, user, req)
 	}
 	clientType := req.ClientType
+	plainType := ""
 	if clientType == "" {
 		clientType = selectSubscriptionClientType(req.UserAgent, settings)
+		if smartType := smartClientType(clientType, req.UserAgent, req.SmartLevel); smartType != clientType {
+			plainType, clientType = clientType, smartType
+		}
 	}
 	if clientType == "blocked" {
 		return SubscriptionHTTPResponse{
@@ -170,7 +180,17 @@ func (s Service) RenderSubscription(ctx context.Context, req SubscriptionRenderR
 		return SubscriptionHTTPResponse{}, clientError(404, "Unsupported client type")
 	}
 	config.AutoCurrent = req.ClientType == "" && config.Format == "v2ray-json"
+	config.Smart = smartMode(req.Smart, req.SmartLevel)
 	body, err := s.generateSubscriptionConfig(ctx, user, config, placeholderRemark, subscriptionInfoLinks(user, settings, config.Format))
+	if err != nil && plainType != "" {
+		// The smart switch sent this app JSON; when this user's configs
+		// cannot become JSON, it gets the links it always got instead of
+		// an error.
+		if plain, ok := subscriptionClientConfigs[plainType]; ok {
+			config = plain
+			body, err = s.generateSubscriptionConfig(ctx, user, config, placeholderRemark, subscriptionInfoLinks(user, settings, config.Format))
+		}
+	}
 	if err != nil {
 		return SubscriptionHTTPResponse{}, err
 	}
@@ -505,7 +525,7 @@ func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail
 	case "v2ray-json", "xray-json":
 		templateKey := firstNonEmptyString(config.TemplateKey, "v2ray_subscription_template")
 		current := config.Format == "xray-json" || (config.AutoCurrent && configLinksRequireCurrentFinalMask(connectable))
-		return renderXrayJSONSubscriptionWithMetadata(
+		body, err := renderXrayJSONSubscriptionWithMetadata(
 			raw,
 			connectable.Metadata,
 			false,
@@ -513,6 +533,10 @@ func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail
 			s.subscriptionTemplateContent(ctx, "mux_template", user.AdminID),
 			current,
 		)
+		if err != nil {
+			return "", err
+		}
+		return addSmartConfigs(body, config.Smart), nil
 	case "sing-box":
 		if configLinksHaveUnrepresentedFinalMask(connectable, "") {
 			return "", fmt.Errorf("sing-box cannot safely represent Xray FinalMask; use xray-json output")

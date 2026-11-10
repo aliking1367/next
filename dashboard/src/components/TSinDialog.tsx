@@ -63,6 +63,9 @@ type TSinView = {
 	direct_countries?: string[] | null;
 	direct_address?: string;
 	emergency?: TSinEmergency;
+	// smart_config is the smart config switch: 0 off, 1 in the JSON
+	// subscriptions apps already get, 2 also sending V2Box the JSON one.
+	smart_config?: number;
 	// front_script turns a new server into a front for the countries' server.
 	front_script?: string;
 	// iran_reach is the latest check, from test servers inside Iran, of the
@@ -192,6 +195,7 @@ export const TSinDialog: FC<{
 	const [emVMessPort, setEmVMessPort] = useState("");
 	const [emSSPort, setEmSSPort] = useState("");
 	const [emBusy, setEmBusy] = useState(false);
+	const [smartBusy, setSmartBusy] = useState(false);
 	const [emProtocols, setEmProtocols] = useState("both");
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
@@ -422,6 +426,45 @@ export const TSinDialog: FC<{
 			});
 		} finally {
 			setEmBusy(false);
+		}
+	};
+
+	// saveSmart flips the smart config. It only changes what subscriptions
+	// render, so nothing restarts; users get it on their next update.
+	const saveSmart = async (level: number) => {
+		if (smartBusy) return;
+		setSmartBusy(true);
+		try {
+			const result = await fetch<{ level: number }>("/core/tsin/smart", {
+				method: "POST",
+				body: { level },
+			});
+			setView((current) =>
+				current ? { ...current, smart_config: result.level } : current,
+			);
+			toast({
+				status: "success",
+				isClosable: true,
+				duration: 8_000,
+				title:
+					result.level > 0
+						? tt(
+								"tsin.smart.turnedOn",
+								"Smart config is on. Users get it when they update their subscription.",
+							)
+						: tt(
+								"tsin.smart.turnedOff",
+								"Smart config is off. It disappears when users update their subscription.",
+							),
+			});
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? String(error),
+			});
+		} finally {
+			setSmartBusy(false);
 		}
 	};
 
@@ -974,6 +1017,67 @@ export const TSinDialog: FC<{
 							)}
 						</Box>
 					)}
+
+					{view?.applied &&
+						view.transport === "path" &&
+						(view.direct_countries?.length ?? 0) > 0 && (
+							<Box borderWidth="1px" borderRadius="6px" p={3}>
+								<HStack justify="space-between" mb={1} spacing={3}>
+									<Text fontWeight="semibold">
+										{tt("tsin.smart.title", "⭐ Smart config")}
+									</Text>
+									<Badge colorScheme={view.smart_config ? "green" : "gray"}>
+										{view.smart_config
+											? tt("tsin.smart.on", "On")
+											: tt("tsin.smart.off", "Off")}
+									</Badge>
+								</HStack>
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.smart.help",
+										"Adds one config, «⭐ Smart (best location)», at the top of the subscription. It goes over ⚡ and, if ⚡ stops answering, moves to Cloudflare by itself within seconds, so users stay connected without changing config. Only apps that read JSON subscriptions show it; the other configs stay as they are. Users get it when they update their subscription; nothing restarts.",
+									)}
+								</Text>
+								<FormControl>
+									<Select
+										size="sm"
+										value={String(view.smart_config ?? 0)}
+										isDisabled={smartBusy}
+										onChange={(event) =>
+											saveSmart(Number.parseInt(event.target.value, 10) || 0)
+										}
+									>
+										<option value="0">{tt("tsin.smart.level0", "Off")}</option>
+										<option value="1">
+											{tt(
+												"tsin.smart.level1",
+												"On for Happ, Streisand and other JSON apps",
+											)}
+										</option>
+										<option value="2">
+											{tt(
+												"tsin.smart.level2",
+												"On, and V2Box also gets the JSON subscription",
+											)}
+										</option>
+									</Select>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.smart.testHelp",
+											"Test first on your own phone: add ?smart=1 to the end of a subscription link (?smart=fail turns ⚡ off, ?smart=nocdn turns Cloudflare off, to see each way carry the traffic alone).",
+										)}
+									</FormHelperText>
+								</FormControl>
+								{view.smart_config === 2 && (
+									<Text fontSize="xs" mt={2} color="orange.400">
+										{tt(
+											"tsin.smart.v2boxNote",
+											"V2Box users now get their subscription as JSON. All configs stay, but after the update the app may ask them to pick a config again.",
+										)}
+									</Text>
+								)}
+							</Box>
+						)}
 
 					{view?.applied && (
 						<Box
