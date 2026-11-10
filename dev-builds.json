@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-08dfd69",
-  "updated_at": "2026-11-10T12:17:52Z",
+  "latest": "dev-430d136",
+  "updated_at": "2026-11-10T13:09:09Z",
   "builds": [
+    {
+      "tag": "dev-430d136",
+      "sha": "430d1364ebdbc62a71654a5b463d7548e1120382",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42821163599",
+      "run_number": "201",
+      "created_at": "2026-11-10T13:09:09Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-430d136.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-430d136.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-430d136.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-430d136.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-08dfd69",
       "sha": "08dfd6930f56118d24324bec581a4ddc1ac0e474",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-fcb6c2d.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-fcb6c2d.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-846c648",
-      "sha": "846c6489f52042f77e45591226ba49883f63e52f",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "37019661078",
-      "run_number": "101",
-      "created_at": "2026-10-02T14:29:35Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-846c648.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-846c648.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-846c648.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-846c648.zip"
         }
       }
     }
