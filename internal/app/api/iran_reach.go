@@ -157,6 +157,47 @@ func (s *Server) checkIranReach(ctx context.Context) {
 // checkHostTCPFromIran asks check-host.net's Iranian test servers to open a
 // TCP connection to target and counts how many could.
 func checkHostTCPFromIran(ctx context.Context, client *http.Client, base, target string) (open, total int, err error) {
+	return checkHostFromIran(ctx, client, base, "check-tcp", target)
+}
+
+// checkHostHTTPFromIran asks the same servers to fetch an HTTPS address and
+// counts how many got any HTTP answer: a domain whose name (SNI) is blocked
+// gets none.
+func checkHostHTTPFromIran(ctx context.Context, client *http.Client, base, target string) (open, total int, err error) {
+	return checkHostFromIran(ctx, client, base, "check-http", target)
+}
+
+// checkHostReached reads one test server's result. A TCP check answers with
+// an object that has "error" when it failed. An HTTP check answers with an
+// array [ok, seconds, message, status code, address]; check-host sets ok to 0
+// for any 5xx too, but a 5xx from Cloudflare still means the domain got
+// through to Cloudflare, which is what is asked here, so any status code
+// counts as reached.
+func checkHostReached(result []any) bool {
+	if len(result) == 0 || result[0] == nil {
+		return false
+	}
+	switch first := result[0].(type) {
+	case map[string]any:
+		_, failed := first["error"]
+		return !failed
+	case []any:
+		if len(first) == 0 {
+			return false
+		}
+		if ok, _ := first[0].(float64); ok == 1 {
+			return true
+		}
+		if len(first) > 3 {
+			code, _ := first[3].(string)
+			return strings.TrimSpace(code) != ""
+		}
+		return false
+	}
+	return false
+}
+
+func checkHostFromIran(ctx context.Context, client *http.Client, base, kind, target string) (open, total int, err error) {
 	getJSON := func(path string, out any) error {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
 		if err != nil {
@@ -194,7 +235,7 @@ func checkHostTCPFromIran(ctx context.Context, client *http.Client, base, target
 	var started struct {
 		RequestID string `json:"request_id"`
 	}
-	if err := getJSON("/check-tcp?"+query.Encode(), &started); err != nil {
+	if err := getJSON("/"+kind+"?"+query.Encode(), &started); err != nil {
 		return 0, 0, err
 	}
 	if started.RequestID == "" {
@@ -209,7 +250,7 @@ func checkHostTCPFromIran(ctx context.Context, client *http.Client, base, target
 			return 0, total, ctx.Err()
 		case <-time.After(checkHostPollDelay):
 		}
-		var results map[string][]map[string]any
+		var results map[string][]any
 		if err := getJSON("/check-result/"+url.PathEscape(started.RequestID), &results); err != nil {
 			continue
 		}
@@ -219,10 +260,8 @@ func checkHostTCPFromIran(ctx context.Context, client *http.Client, base, target
 				continue
 			}
 			done++
-			if len(result) > 0 && result[0] != nil {
-				if _, failed := result[0]["error"]; !failed {
-					reached++
-				}
+			if checkHostReached(result) {
+				reached++
 			}
 		}
 		if done >= total {

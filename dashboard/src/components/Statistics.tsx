@@ -36,6 +36,7 @@ import { useDashboard } from "contexts/DashboardContext";
 import { AnimatePresence, motion } from "framer-motion";
 import useGetUser from "hooks/useGetUser";
 import { TSinDashboardPanel } from "components/TSinDashboardPanel";
+import { CDNDomainsPanel } from "components/CDNDomainsPanel";
 import { EmergencyTunnelTile } from "components/EmergencyTunnelTile";
 import type { TFunction } from "i18next";
 import {
@@ -2082,6 +2083,7 @@ export const Statistics: FC<BoxProps> = (props) => {
 					isRTL={isRTL}
 				/>
 				{canSeeGlobal && <TSinDashboardPanel />}
+				{canSeeGlobal && <CDNDomainsPanel />}
 				<EmergencyTunnelTile />
 			</SimpleGrid>
 

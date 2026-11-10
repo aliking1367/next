@@ -606,3 +606,27 @@ func (r Repository) applyTSinGate(ctx context.Context, target, transport string,
 	_, err = r.db.ExecContext(ctx, `DELETE FROM hosts WHERE inbound_tag = ?`, TSinGateTag)
 	return err
 }
+
+// SetTSinGateHost points every country config that goes through the gate at
+// another Cloudflare domain. Only the host rows change: the gate answers any
+// name, because Cloudflare's Full mode does not check the origin's
+// certificate, so nothing is sent to Xray and nobody reconnects. Users get the
+// new domain when they update their subscription. It returns how many host
+// rows moved.
+func (r Repository) SetTSinGateHost(ctx context.Context, oldHost, newHost string) (int64, error) {
+	newHost, err := NormalizeCDNDomain(newHost)
+	if err != nil || newHost == "" {
+		return 0, errors.New("enter a plain domain such as g2.example.com")
+	}
+	oldHost = strings.ToLower(strings.TrimSpace(oldHost))
+	if oldHost == "" {
+		return 0, errors.New("there is no domain in use to replace")
+	}
+	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?, sni = ?, host = ?
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND LOWER(address) = ?`,
+		newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, oldHost)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

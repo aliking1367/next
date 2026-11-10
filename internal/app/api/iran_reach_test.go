@@ -54,3 +54,23 @@ func TestIranReachVerdicts(t *testing.T) {
 		t.Fatal("healthy means at least half reached it")
 	}
 }
+
+func TestCheckHostReachedReadsTCPAndHTTPResults(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		result []any
+		want   bool
+	}{
+		{"tcp ok", []any{map[string]any{"time": 0.1, "address": "1.2.3.4"}}, true},
+		{"tcp error", []any{map[string]any{"error": "Connection timed out"}}, false},
+		{"http ok", []any{[]any{float64(1), 0.12, "Bad Request", "400", "104.21.0.1"}}, true},
+		{"http failed", []any{[]any{float64(0), 10.0, "Connection timed out", nil, nil}}, false},
+		{"http 520 from Cloudflare", []any{[]any{float64(0), 0.29, "<none>", "520", "188.114.96.3"}}, true},
+		{"empty", []any{}, false},
+		{"null", []any{nil}, false},
+	} {
+		if got := checkHostReached(tc.result); got != tc.want {
+			t.Fatalf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

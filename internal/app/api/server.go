@@ -217,6 +217,7 @@ func (s *Server) StartBackground(ctx context.Context) {
 		go s.runTSinWatchdog(ctx)
 		go s.runNodeLoadWatch(ctx)
 		go s.runIranReachWatch(ctx)
+		go s.runCDNDomainWatch(ctx)
 		go s.runOutboundSubscriptionRefresher(ctx)
 	})
 }
