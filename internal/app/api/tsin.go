@@ -118,6 +118,10 @@ type tsinSettings struct {
 	EmergencyProtocols string
 	// EmergencyAdmins turned the emergency tunnel on for their own users.
 	EmergencyAdmins []int64
+	// FastlyHost is the Fastly service's domain; FastlyCountries also get, in
+	// path mode, a config through Fastly. Empty adds none.
+	FastlyHost      string
+	FastlyCountries []string
 }
 
 type tsinRequest struct {
@@ -139,6 +143,10 @@ type tsinRequest struct {
 	// DirectAddress replaces the address of the direct configs; "" clears it
 	// and omitted keeps it.
 	DirectAddress *string `json:"direct_address"`
+	// FastlyHost replaces the Fastly service's domain ("" clears it) and
+	// FastlyCountries the countries with a Fastly config. Omitted keeps them.
+	FastlyHost      *string   `json:"fastly_host"`
+	FastlyCountries *[]string `json:"fastly_countries"`
 }
 
 func tokenSum(token string) string {
@@ -150,14 +158,16 @@ func (s *Server) loadTSinSettings(ctx context.Context) (tsinSettings, error) {
 	settings := tsinSettings{DC: "dc1", Target: xrayconfig.MasterTargetID, Transport: xrayconfig.TSinTransportTCP, GatePort: xrayconfig.DefaultTSinGatePort}
 	var token, dc, countries, registeredDC, registeredSum, detail, target, transport, gateHost, direct, directAddress sql.NullString
 	var gatePort sql.NullInt64
-	var emergencyAddress, emergencyProtocols, emergencyAdmins sql.NullString
+	var emergencyAddress, emergencyProtocols, emergencyAdmins, fastlyHost, fastlyCountries sql.NullString
 	var emergencyVMess, emergencySS sql.NullInt64
 	var emergencyEnabled sql.NullBool
 	err := s.db.QueryRowContext(ctx, `SELECT token, dc, countries, registered_dc, registered_token_hash,
 last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address,
-emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, emergency_protocols, emergency_admins FROM tsin_settings ORDER BY id LIMIT 1`).
+emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, emergency_protocols, emergency_admins,
+fastly_host, fastly_countries FROM tsin_settings ORDER BY id LIMIT 1`).
 		Scan(&token, &dc, &countries, &registeredDC, &registeredSum, &settings.LastAppliedAt, &detail, &target, &transport, &gateHost, &gatePort, &direct, &directAddress,
-			&emergencyAddress, &emergencyVMess, &emergencySS, &emergencyEnabled, &emergencyProtocols, &emergencyAdmins)
+			&emergencyAddress, &emergencyVMess, &emergencySS, &emergencyEnabled, &emergencyProtocols, &emergencyAdmins,
+			&fastlyHost, &fastlyCountries)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings, nil
 	}
@@ -189,6 +199,8 @@ emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, e
 		settings.DirectCountries = []string{}
 		_ = json.Unmarshal([]byte(direct.String), &settings.DirectCountries)
 	}
+	settings.FastlyHost = fastlyHost.String
+	_ = json.Unmarshal([]byte(fastlyCountries.String), &settings.FastlyCountries)
 	return settings, nil
 }
 
@@ -204,13 +216,19 @@ func (s *Server) saveTSinSettings(ctx context.Context, settings tsinSettings) er
 		encoded, _ := json.Marshal(settings.DirectCountries)
 		direct = string(encoded)
 	}
+	fastlyCountries, _ := json.Marshal(settings.FastlyCountries)
+	if settings.FastlyCountries == nil {
+		fastlyCountries = []byte("[]")
+	}
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE tsin_settings SET token = ?, dc = ?, countries = ?,
 registered_dc = ?, registered_token_hash = ?, last_applied_at = ?, last_detail = ?, target = ?, transport = ?, gate_host = ?, gate_port = ?, direct_countries = ?, direct_address = ?,
-emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergency_enabled = ?, emergency_protocols = ?, emergency_admins = ?`,
+emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergency_enabled = ?, emergency_protocols = ?, emergency_admins = ?,
+fastly_host = ?, fastly_countries = ?`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
 			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress,
-			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols, emergencyAdmins)
+			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols, emergencyAdmins,
+			settings.FastlyHost, string(fastlyCountries))
 		if err != nil {
 			return err
 		}
@@ -219,10 +237,12 @@ emergency_address = ?, emergency_vmess_port = ?, emergency_ss_port = ?, emergenc
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO tsin_settings
 (token, dc, countries, registered_dc, registered_token_hash, last_applied_at, last_detail, target, transport, gate_host, gate_port, direct_countries, direct_address,
-emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, emergency_protocols, emergency_admins) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+emergency_address, emergency_vmess_port, emergency_ss_port, emergency_enabled, emergency_protocols, emergency_admins,
+fastly_host, fastly_countries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Token, settings.DC, string(countries), settings.RegisteredDC, settings.RegisteredTokenSum,
 			settings.LastAppliedAt, settings.LastDetail, settings.Target, settings.Transport, settings.GateHost, settings.GatePort, direct, settings.DirectAddress,
-			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols, emergencyAdmins)
+			settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort, settings.EmergencyEnabled, settings.EmergencyProtocols, emergencyAdmins,
+			settings.FastlyHost, string(fastlyCountries))
 		return err
 	})
 }
@@ -267,6 +287,10 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"front_script":     tsin.FrontScript(s.tsinTargetAddress(r.Context(), settings.Target)),
 		"iran_reach":       s.iranReach.load(),
 		"smart_config":     s.tsinSmartConfig(r.Context()),
+		"fastly_host":      settings.FastlyHost,
+		"fastly_countries": settings.FastlyCountries,
+		"fastly_backends":  s.configRepo.TSinFastlyBackends(r.Context(), settings.FastlyCountries),
+		"origin_ip":        s.tsinTargetAddress(r.Context(), settings.Target),
 		"node_script":      tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
@@ -433,6 +457,23 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	for _, name := range settings.DirectCountries {
 		direct[strings.ToLower(name)] = true
 	}
+	if request.FastlyHost != nil {
+		host, err := xrayconfig.NormalizeCDNDomain(*request.FastlyHost)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "the Fastly domain must be a plain domain such as name.global.ssl.fastly.net, without https:// or a path")
+			return
+		}
+		settings.FastlyHost = host
+	}
+	if request.FastlyCountries != nil {
+		settings.FastlyCountries = cleanTSinCountries(*request.FastlyCountries)
+	}
+	fastly := map[string]bool{}
+	if settings.FastlyHost != "" {
+		for _, name := range settings.FastlyCountries {
+			fastly[strings.ToLower(name)] = true
+		}
+	}
 
 	tunnel := tsin.NewTunnel()
 	address := ""
@@ -490,6 +531,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			Port: proxy.Port, Name: proxy.Country, Code: tsinCountryCode(proxy.Country), Address: address,
 			// Only path mode has a Cloudflare config to add a direct one beside.
 			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
+			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
 		})
 	}
 	if !onPanelHost {
@@ -498,7 +540,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		portBusy = s.tsinPortBusy(target)
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
-		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress}, countries, portBusy)
+		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return

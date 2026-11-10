@@ -62,6 +62,22 @@ type TSinTarget = {
 	status?: string;
 };
 
+type TSinFastlyBackend = {
+	country: string;
+	tag: string;
+	port: number;
+	path: string;
+};
+
+type TSinFastlyCheck = {
+	country: string;
+	port: number;
+	state: string;
+	reason?: string;
+	status?: number;
+	detail?: string;
+};
+
 type TSinView = {
 	target: string;
 	transport?: string;
@@ -71,6 +87,12 @@ type TSinView = {
 	// null until an admin chooses.
 	direct_countries?: string[] | null;
 	direct_address?: string;
+	// fastly_host is the Fastly service's domain; fastly_countries also get a
+	// config through Fastly, and fastly_backends are the backends to create.
+	fastly_host?: string;
+	fastly_countries?: string[] | null;
+	fastly_backends?: TSinFastlyBackend[] | null;
+	origin_ip?: string;
 	emergency?: TSinEmergency;
 	// smart_config is the smart config switch: 0 off, 1 in the JSON
 	// subscriptions apps already get, 2 also sending V2Box the JSON one.
@@ -242,6 +264,12 @@ export const TSinDialog: FC<{
 	const [selected, setSelected] = useState<string[]>([]);
 	const [direct, setDirect] = useState<string[]>([]);
 	const [directAddress, setDirectAddress] = useState("");
+	const [fastlyHost, setFastlyHost] = useState("");
+	const [fastly, setFastly] = useState<string[]>([]);
+	const [fastlyBusy, setFastlyBusy] = useState(false);
+	const [fastlyResults, setFastlyResults] = useState<TSinFastlyCheck[] | null>(
+		null,
+	);
 	const [emAddress, setEmAddress] = useState("");
 	const [emVMessPort, setEmVMessPort] = useState("");
 	const [emSSPort, setEmSSPort] = useState("");
@@ -353,6 +381,8 @@ export const TSinDialog: FC<{
 			// subscription gains only a few direct configs.
 			setDirect(data.direct_countries ?? DIRECT_SUGGESTED);
 			setDirectAddress(data.direct_address ?? "");
+			setFastlyHost(data.fastly_host ?? "");
+			setFastly(data.fastly_countries ?? ["Best ping"]);
 			setEmAddress(data.emergency?.address ?? "");
 			setEmProtocols(data.emergency?.protocols ?? "both");
 			setEmVMessPort(
@@ -407,6 +437,8 @@ export const TSinDialog: FC<{
 				gate_port: Number.parseInt(gatePort, 10) || 2087,
 				direct_countries: direct.filter((name) => selected.includes(name)),
 				direct_address: directAddress.trim(),
+				fastly_host: fastlyHost.trim(),
+				fastly_countries: fastly.filter((name) => selected.includes(name)),
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -517,6 +549,68 @@ export const TSinDialog: FC<{
 		} finally {
 			setSmartBusy(false);
 		}
+	};
+
+	// checkFastly sends, through Fastly, the first request an XHTTP client
+	// opens for each country, and shows what came back.
+	const checkFastly = async () => {
+		if (fastlyBusy) return;
+		setFastlyBusy(true);
+		try {
+			const result = await fetch<{ results: TSinFastlyCheck[] }>(
+				"/core/tsin/fastly-check",
+				{ method: "POST" },
+			);
+			setFastlyResults(result.results);
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? String(error),
+			});
+		} finally {
+			setFastlyBusy(false);
+		}
+	};
+
+	const fastlyReason = (item: TSinFastlyCheck): string => {
+		switch (item.reason) {
+			case "dns":
+				return tt(
+					"tsin.fastly.reason.dns",
+					"The Fastly domain does not resolve: check its spelling.",
+				);
+			case "no_service":
+				return tt(
+					"tsin.fastly.reason.noService",
+					"Fastly does not know this domain or has no backend for this path (code {{code}}): check the domain and the condition.",
+					{ code: item.status },
+				);
+			case "wrong_backend":
+				return tt(
+					"tsin.fastly.reason.wrongBackend",
+					"The request reached the server on another port: this country's condition points at the wrong backend.",
+				);
+			case "backend_down":
+				return tt(
+					"tsin.fastly.reason.backendDown",
+					"Fastly cannot reach the server (code {{code}}): check the address, the port, TLS on and certificate check off.",
+					{ code: item.status },
+				);
+			case "unreachable":
+				return tt(
+					"tsin.fastly.reason.unreachable",
+					"No answer from Fastly: {{detail}}",
+					{ detail: item.detail ?? "" },
+				);
+		}
+		return tt(
+			"tsin.fastly.reason.other",
+			"Unexpected answer (code {{code}}).",
+			{
+				code: item.status,
+			},
+		);
 	};
 
 	const remove = async () => {
@@ -1067,6 +1161,166 @@ export const TSinDialog: FC<{
 											? tt("tsin.copied", "Copied")
 											: tt("tsin.front.copy", "Copy front script")}
 									</Button>
+								</Box>
+							)}
+						</TSinSection>
+					)}
+
+					{transport === "path" && selected.length > 0 && (
+						<TSinSection
+							title={tt("tsin.fastly.title", "Fastly, a second CDN 🅵")}
+							status={
+								<Badge
+									colorScheme={
+										view?.fastly_host && (view.fastly_backends?.length ?? 0) > 0
+											? "green"
+											: "gray"
+									}
+								>
+									{view?.fastly_host
+										? (view.fastly_backends?.length ?? 0)
+										: tt("tsin.smart.off", "Off")}
+								</Badge>
+							}
+						>
+							<Text fontSize="sm" mb={2} opacity={0.85}>
+								{tt(
+									"tsin.fastly.help",
+									"The chosen countries also get a config marked 🅵 that goes through Fastly instead of Cloudflare, over XHTTP. If Cloudflare is banned or blocked, users switch to it. Enter your Fastly service's domain, choose a few countries and press Apply; then make one backend per country in Fastly as shown below.",
+								)}
+							</Text>
+							<FormControl mb={2}>
+								<FormLabel fontSize="sm" mb={1}>
+									{tt("tsin.fastly.host", "Fastly domain")}
+								</FormLabel>
+								<Input
+									value={fastlyHost}
+									onChange={(event) => setFastlyHost(event.target.value)}
+									placeholder="name.global.ssl.fastly.net"
+									dir="ltr"
+									autoComplete="off"
+									spellCheck={false}
+								/>
+								<FormHelperText fontSize="xs">
+									{tt(
+										"tsin.fastly.hostHelp",
+										"The domain of your Fastly service, for example the free name.global.ssl.fastly.net. Empty removes the Fastly configs on the next Apply.",
+									)}
+								</FormHelperText>
+							</FormControl>
+							<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+								{selected.map((name) => (
+									<Checkbox
+										key={name}
+										isChecked={fastly.includes(name)}
+										onChange={() =>
+											setFastly((current) =>
+												current.includes(name)
+													? current.filter((item) => item !== name)
+													: [...current, name],
+											)
+										}
+									>
+										{name} 🅵
+									</Checkbox>
+								))}
+							</SimpleGrid>
+							<Text fontSize="xs" mt={1} opacity={0.75}>
+								{tt(
+									"tsin.fastly.fewHelp",
+									"Each country is one backend to create in Fastly, so start with Best ping alone.",
+								)}
+							</Text>
+
+							{(view?.fastly_backends?.length ?? 0) > 0 && (
+								<Box mt={3} borderWidth="1px" borderRadius="6px" p={3}>
+									<Text fontWeight="semibold" fontSize="sm" mb={1}>
+										{tt("tsin.fastly.setupTitle", "Setting Fastly up")}
+									</Text>
+									<Stack spacing={1} fontSize="xs" mb={2}>
+										<Text>
+											{tt(
+												"tsin.fastly.setup1",
+												"1) In Fastly, open your CDN service and press Edit configuration → Clone version.",
+											)}
+										</Text>
+										<Text>
+											{tt(
+												"tsin.fastly.setup2",
+												"2) Domains: the domain above must be listed.",
+											)}
+										</Text>
+										<Text>
+											{tt(
+												"tsin.fastly.setup3",
+												"3) Origins → Hosts: one host per row below, with its address and port, TLS: Yes, Verify certificate: No.",
+											)}
+										</Text>
+										<Text>
+											{tt(
+												"tsin.fastly.setup4",
+												"4) With more than one row, give each host the request condition shown, so each path reaches its own port.",
+											)}
+										</Text>
+										<Text>
+											{tt(
+												"tsin.fastly.setup5",
+												"5) Activate the version, wait a minute and press Check below.",
+											)}
+										</Text>
+									</Stack>
+									<Stack spacing={2}>
+										{view?.fastly_backends?.map((backend) => (
+											<Box
+												key={backend.tag}
+												borderWidth="1px"
+												borderRadius="6px"
+												p={2}
+												fontSize="xs"
+											>
+												<Text fontWeight="semibold" mb={1}>
+													{backend.country}
+												</Text>
+												<Text dir="ltr" fontFamily="mono">
+													{tt("tsin.fastly.address", "Address")}:{" "}
+													{view?.origin_ip ||
+														tt("cdn.thisServerIP", "this server's IP")}
+												</Text>
+												<Text dir="ltr" fontFamily="mono">
+													{tt("tsin.fastly.port", "Port")}: {backend.port}
+												</Text>
+												<Text dir="ltr" fontFamily="mono" wordBreak="break-all">
+													{tt("tsin.fastly.condition", "Condition")}:
+													req.url.path ~ "^{backend.path}"
+												</Text>
+											</Box>
+										))}
+									</Stack>
+									<Button
+										size="sm"
+										mt={3}
+										variant="outline"
+										isLoading={fastlyBusy}
+										onClick={() => void checkFastly()}
+									>
+										{tt("tsin.fastly.check", "Check through Fastly")}
+									</Button>
+									{fastlyResults && (
+										<Stack spacing={1} mt={2}>
+											{fastlyResults.map((item) => (
+												<Text
+													key={item.country}
+													fontSize="xs"
+													color={item.state === "ok" ? "green.400" : "red.400"}
+												>
+													{item.country}:{" "}
+													{item.state === "ok"
+														? tt("tsin.fastly.ok", "works through Fastly")
+														: fastlyReason(item)}
+												</Text>
+											))}
+										</Stack>
+									)}
 								</Box>
 							)}
 						</TSinSection>

@@ -30,6 +30,9 @@ type TSinCountry struct {
 	// Direct adds, in path mode, a second config for the country that reaches
 	// the server's own IP over REALITY, with no Cloudflare in the way.
 	Direct bool
+	// Fastly adds, in path mode, a config for the country through Fastly's
+	// CDN (see tsin_fastly.go).
+	Fastly bool
 }
 
 type TSinInbound struct {
@@ -40,6 +43,8 @@ type TSinInbound struct {
 	Created   bool   `json:"created"`
 	// Direct marks the second, Cloudflare-free config of a country.
 	Direct bool `json:"direct,omitempty"`
+	// Fastly marks a country's config through Fastly.
+	Fastly bool `json:"fastly,omitempty"`
 }
 
 // TSinDirectSuffix ends the tag of a country's direct inbound.
@@ -105,6 +110,9 @@ type TSinGate struct {
 	// server kept only for them, so the server's main IP never appears in a
 	// user's config. Empty uses the server's own address.
 	DirectAddress string
+	// FastlyHost is the Fastly service's domain the Fastly configs point at;
+	// empty adds none.
+	FastlyHost string
 }
 
 // tsinDirectPorts are the ports direct configs take, in order: the ones
@@ -252,6 +260,9 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		if country.Direct && transport == TSinTransportPath {
 			wanted[TSinDirectInboundTag(country.Name)] = true
 		}
+		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
+			wanted[TSinFastlyInboundTag(country.Name)] = true
+		}
 	}
 	// Every T.Sin inbound anywhere that is not wanted on this target goes: a
 	// country dropped from the list, or one left on the machine the service
@@ -345,6 +356,13 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 				return nil, err
 			}
 			result = append(result, direct)
+		}
+		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
+			fastly, err := r.ensureTSinFastlyInbound(ctx, target, country, gate.FastlyHost, used, ranges, portBusy)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, fastly)
 		}
 	}
 
@@ -524,6 +542,9 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 		if country.Direct {
 			inbounds = append(inbounds, TSinDirectInboundTag(country.Name))
 		}
+		if country.Fastly {
+			inbounds = append(inbounds, TSinFastlyInboundTag(country.Name))
+		}
 		rules = append(rules, map[string]any{
 			"type":        "field",
 			"inboundTag":  inbounds,
@@ -571,8 +592,8 @@ func (r Repository) applyTSinGate(ctx context.Context, target, transport string,
 	}
 	fallbacks := make([]any, 0, len(countries))
 	for _, country := range countries {
-		if country.Direct {
-			continue // reached on the server's IP, not through the gate
+		if country.Direct || country.Fastly {
+			continue // reached on its own port, not through the gate
 		}
 		inbound, err := r.GetInbound(ctx, country.Tag)
 		if err != nil {
@@ -623,8 +644,8 @@ func (r Repository) SetTSinGateHost(ctx context.Context, oldHost, newHost string
 		return 0, errors.New("there is no domain in use to replace")
 	}
 	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?, sni = ?, host = ?
-WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND LOWER(address) = ?`,
-		newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, oldHost)
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND LOWER(address) = ?`,
+		newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, oldHost)
 	if err != nil {
 		return 0, err
 	}
