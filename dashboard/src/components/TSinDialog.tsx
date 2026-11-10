@@ -6,6 +6,8 @@ import {
 	Box,
 	Button,
 	Checkbox,
+	Collapse,
+	chakra,
 	FormControl,
 	FormHelperText,
 	FormLabel,
@@ -19,11 +21,18 @@ import {
 	useClipboard,
 	useToast,
 } from "@chakra-ui/react";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import { PanelSelect as Select } from "components/common/PanelSelect";
 import { AppDialog } from "components/dialogs/AppDialog";
 import { ConfirmDialog } from "components/dialogs/ConfirmDialog";
 import { Input } from "components/Input";
-import { type FC, useCallback, useEffect, useState } from "react";
+import {
+	type FC,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
 import { TSinSetupChecklist } from "./TSinSetupChecklist";
@@ -164,6 +173,48 @@ const expiryText = (
 	if (days < 0) return t("tsin.expired", "Expired");
 	if (days === 0) return t("tsin.expiresToday", "Expires today");
 	return t("tsin.daysLeft", "{{count}} day(s) left", { count: days });
+};
+
+const SectionChevron = chakra(ChevronDownIcon, {
+	baseStyle: { w: 4, h: 4, transition: "transform 0.2s" },
+});
+
+// TSinSection is a bordered block whose body folds away, so the dialog shows
+// the countries first and the extra tools only when opened.
+const TSinSection: FC<{
+	title: ReactNode;
+	status?: ReactNode;
+	borderColor?: string;
+	defaultOpen?: boolean;
+	children: ReactNode;
+}> = ({ title, status, borderColor, defaultOpen = false, children }) => {
+	const [open, setOpen] = useState(defaultOpen);
+	return (
+		<Box borderWidth="1px" borderRadius="6px" borderColor={borderColor}>
+			<HStack
+				as="button"
+				type="button"
+				w="full"
+				justify="space-between"
+				spacing={3}
+				p={3}
+				textAlign="start"
+				aria-expanded={open}
+				onClick={() => setOpen((current) => !current)}
+			>
+				<Text fontWeight="semibold">{title}</Text>
+				<HStack spacing={2} flexShrink={0}>
+					{status}
+					<SectionChevron transform={open ? "rotate(180deg)" : undefined} />
+				</HStack>
+			</HStack>
+			<Collapse in={open} animateOpacity>
+				<Box px={3} pb={3}>
+					{children}
+				</Box>
+			</Collapse>
+		</Box>
+	);
 };
 
 export const TSinDialog: FC<{
@@ -915,11 +966,14 @@ export const TSinDialog: FC<{
 					</Box>
 
 					{transport === "path" && selected.length > 0 && (
-						<Box borderWidth="1px" borderRadius="6px" p={3}>
-							<Text fontWeight="semibold" mb={1}>
-								{tt("tsin.direct.title", "Direct, without Cloudflare ⚡")} (
-								{direct.filter((name) => selected.includes(name)).length})
-							</Text>
+						<TSinSection
+							title={tt("tsin.direct.title", "Direct, without Cloudflare ⚡")}
+							status={
+								<Badge>
+									{direct.filter((name) => selected.includes(name)).length}
+								</Badge>
+							}
+						>
 							<Text fontSize="sm" mb={2} opacity={0.85}>
 								{tt(
 									"tsin.direct.help",
@@ -976,7 +1030,7 @@ export const TSinDialog: FC<{
 								>
 									{tt(
 										"tsin.front.iranReach",
-										"From inside Iran: {{open}} of {{total}} test servers reached {{address}} (port {{port}}).",
+										"Port check from Iranian datacenters: {{open}} of {{total}} opened {{address}} port {{port}}. This only shows the port is open; a mobile operator can still block the connection itself, so test the ⚡ configs on a phone.",
 										{
 											open: view.iran_reach.open,
 											total: view.iran_reach.total,
@@ -1015,23 +1069,22 @@ export const TSinDialog: FC<{
 									</Button>
 								</Box>
 							)}
-						</Box>
+						</TSinSection>
 					)}
 
 					{view?.applied &&
 						view.transport === "path" &&
 						(view.direct_countries?.length ?? 0) > 0 && (
-							<Box borderWidth="1px" borderRadius="6px" p={3}>
-								<HStack justify="space-between" mb={1} spacing={3}>
-									<Text fontWeight="semibold">
-										{tt("tsin.smart.title", "⭐ Smart config")}
-									</Text>
+							<TSinSection
+								title={tt("tsin.smart.title", "⭐ Smart config")}
+								status={
 									<Badge colorScheme={view.smart_config ? "green" : "gray"}>
 										{view.smart_config
 											? tt("tsin.smart.on", "On")
 											: tt("tsin.smart.off", "Off")}
 									</Badge>
-								</HStack>
+								}
+							>
 								<Text fontSize="sm" mb={2} opacity={0.85}>
 									{tt(
 										"tsin.smart.help",
@@ -1054,12 +1107,14 @@ export const TSinDialog: FC<{
 												"On for Happ, Streisand and other JSON apps",
 											)}
 										</option>
-										<option value="2">
-											{tt(
-												"tsin.smart.level2",
-												"On, and V2Box also gets the JSON subscription",
-											)}
-										</option>
+										{view.smart_config === 2 && (
+											<option value="2">
+												{tt(
+													"tsin.smart.level2",
+													"On, and V2Box also gets the JSON subscription",
+												)}
+											</option>
+										)}
 									</Select>
 									<FormHelperText fontSize="xs">
 										{tt(
@@ -1076,23 +1131,32 @@ export const TSinDialog: FC<{
 										)}
 									</Text>
 								)}
-							</Box>
+								<Text fontSize="xs" mt={2} opacity={0.75}>
+									{tt(
+										"tsin.smart.v2boxUnsupported",
+										"V2Box does not run the smart config's check, so it is not offered there. The smart config only helps where the ⚡ configs connect on users' networks.",
+									)}
+								</Text>
+							</TSinSection>
 						)}
 
 					{view?.applied && (
-						<Box
-							borderWidth="1px"
-							borderRadius="6px"
-							p={3}
+						<TSinSection
+							title={tt(
+								"tsin.emergency.title",
+								"🆘 Emergency tunnel (when T.Sin is down)",
+							)}
 							borderColor={view.emergency?.enabled ? "red.400" : undefined}
+							defaultOpen={Boolean(view.emergency?.enabled)}
+							status={
+								<Badge colorScheme={view.emergency?.enabled ? "red" : "gray"}>
+									{view.emergency?.enabled
+										? tt("tsin.emergency.on", "On")
+										: tt("tsin.emergency.off", "Off")}
+								</Badge>
+							}
 						>
-							<HStack justify="space-between" mb={1} spacing={3}>
-								<Text fontWeight="semibold">
-									{tt(
-										"tsin.emergency.title",
-										"🆘 Emergency tunnel (when T.Sin is down)",
-									)}
-								</Text>
+							<HStack justify="flex-end" mb={2} spacing={3}>
 								<HStack spacing={2} flexShrink={0}>
 									<Text
 										fontSize="sm"
@@ -1253,7 +1317,7 @@ export const TSinDialog: FC<{
 							>
 								{tt("tsin.emergency.save", "Save")}
 							</Button>
-						</Box>
+						</TSinSection>
 					)}
 
 					{target !== "master" && view && (

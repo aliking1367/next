@@ -428,7 +428,7 @@ const stepText = (
 							: p.iran_total
 								? tt(
 										"tsin.setup.direct.okIran",
-										"{{count}} configs answer · from Iran {{iran_open}}/{{iran_total}}",
+										"{{count}} configs answer · port open from Iran {{iran_open}}/{{iran_total}}",
 										p,
 									)
 								: tt("tsin.setup.direct.ok", "{{count}} configs answer", p),

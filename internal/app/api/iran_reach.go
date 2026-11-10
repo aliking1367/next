@@ -21,8 +21,10 @@ import (
 // still answers from inside Iran, and tells the admin on Telegram when it
 // stops. It asks check-host.net, which has test servers in Iranian
 // datacenters, for a TCP connection to one direct config's port. Those test
-// servers are datacenters, not mobile operators, so this sees a nationwide
-// block but not one on a single operator.
+// servers are datacenters, not mobile operators, and the check only opens a
+// TCP connection: it sees an address blocked nationwide, but not an operator
+// that lets the port open and then cuts the connection itself (seen on
+// Hamrah Aval with REALITY), so its wording claims only that the port opens.
 
 // checkHostPollDelay is the wait between reading a check's results; tests
 // shorten it.
@@ -141,13 +143,14 @@ func (s *Server) checkIranReach(ctx context.Context) {
 	alert := func(title string, lines ...string) {
 		s.telegramReports.TSinTunnel(context.WithoutCancel(ctx), title, lines...)
 	}
-	counts := fmt.Sprintf("از %d سرور تست داخل ایران، %d سرور وصل شد.", result.Total, result.Open)
+	counts := fmt.Sprintf("از %d سرور تست در دیتاسنترهای ایران، %d سرور پورت را باز دیدند.", result.Total, result.Open)
 	if nowBlocked && !wasBlocked {
-		alert("آی‌پی کانفیگ‌های ⚡ از داخل ایران در دسترس نیست",
+		alert("پورت کانفیگ‌های ⚡ از داخل ایران بسته است",
 			address+" پورت "+strconv.Itoa(port), counts,
 			"احتمالاً در ایران فیلتر شده. اگر سرور جلویی است، آی‌پی‌اش را عوض کن یا سرور جدید بگیر و آی‌پی جدید را در پنجرهٔ Countries بگذار؛ کانفیگ‌های Cloudflare در این مدت کار می‌کنند.")
 	} else if !nowBlocked && wasBlocked {
-		alert("آی‌پی کانفیگ‌های ⚡ دوباره از ایران در دسترس است", address+" پورت "+strconv.Itoa(port), counts)
+		alert("پورت کانفیگ‌های ⚡ دوباره از دیتاسنترهای ایران باز است", address+" پورت "+strconv.Itoa(port), counts,
+			"این فقط یعنی پورت باز است؛ اپراتور موبایل ممکن است خود اتصال را ببندد. ⚡ را روی گوشی هم تست کن.")
 	}
 }
 
