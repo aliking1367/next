@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-430d136",
-  "updated_at": "2026-11-10T13:09:09Z",
+  "latest": "dev-8ff58fa",
+  "updated_at": "2026-11-10T13:42:51Z",
   "builds": [
+    {
+      "tag": "dev-8ff58fa",
+      "sha": "8ff58fa6d23e937bd1cc93c0a1cf68416f624f03",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "42826466365",
+      "run_number": "203",
+      "created_at": "2026-11-10T13:42:51Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-8ff58fa.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-8ff58fa.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-8ff58fa.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-8ff58fa.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-430d136",
       "sha": "430d1364ebdbc62a71654a5b463d7548e1120382",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-5c907bc.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5c907bc.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-fcb6c2d",
-      "sha": "fcb6c2d782cd426502656021ec9576513b0e9359",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "37024474150",
-      "run_number": "103",
-      "created_at": "2026-10-02T15:09:29Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-fcb6c2d.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-fcb6c2d.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-fcb6c2d.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-fcb6c2d.zip"
         }
       }
     }
