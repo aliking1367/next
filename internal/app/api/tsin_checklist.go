@@ -359,6 +359,15 @@ func (s *Server) tsinDirectStep(ctx context.Context, settings tsinSettings, appl
 		}
 		_ = conn.Close()
 	}
+	if reach := s.iranReach.load(); reach != nil && reach.Address == address && reach.Error == "" {
+		step.Params["iran_open"], step.Params["iran_total"] = reach.Open, reach.Total
+		step.Params["iran_age_minutes"] = int64(time.Since(reach.CheckedAt).Minutes())
+		if len(closed) == 0 && reach.blocked() {
+			// It answers from outside but not from Iran: filtered there.
+			step.State, step.Reason = "fail", "iran_blocked"
+			return step
+		}
+	}
 	if len(closed) == 0 {
 		step.State = "ok"
 		return step

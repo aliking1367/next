@@ -63,6 +63,18 @@ type TSinView = {
 	direct_countries?: string[] | null;
 	direct_address?: string;
 	emergency?: TSinEmergency;
+	// front_script turns a new server into a front for the countries' server.
+	front_script?: string;
+	// iran_reach is the latest check, from test servers inside Iran, of the
+	// address the direct configs point at.
+	iran_reach?: {
+		address: string;
+		port: number;
+		open: number;
+		total: number;
+		checked_at: string;
+		error?: string;
+	} | null;
 	targets?: TSinTarget[];
 	node_script: string;
 	dc: string;
@@ -190,6 +202,7 @@ export const TSinDialog: FC<{
 		.split("@PANEL_URL@")
 		.join(window.location.origin);
 	const script = useClipboard(nodeScript);
+	const frontScript = useClipboard(view?.front_script ?? "");
 
 	// providerError turns a refused request into where the problem is and
 	// what to do, keeping T.Sin's own words underneath.
@@ -906,6 +919,59 @@ export const TSinDialog: FC<{
 									)}
 								</FormHelperText>
 							</FormControl>
+							{view?.iran_reach && !view.iran_reach.error && (
+								<Text
+									fontSize="xs"
+									mt={2}
+									color={
+										view.iran_reach.open === 0
+											? "red.400"
+											: view.iran_reach.open * 2 >= view.iran_reach.total
+												? "green.400"
+												: "orange.400"
+									}
+								>
+									{tt(
+										"tsin.front.iranReach",
+										"From inside Iran: {{open}} of {{total}} test servers reached {{address}} (port {{port}}).",
+										{
+											open: view.iran_reach.open,
+											total: view.iran_reach.total,
+											address: view.iran_reach.address,
+											port: view.iran_reach.port,
+										},
+									)}
+								</Text>
+							)}
+							{view?.front_script && (
+								<Box mt={3} borderWidth="1px" borderRadius="6px" p={3}>
+									<Text fontWeight="semibold" fontSize="sm" mb={1}>
+										{tt(
+											"tsin.front.title",
+											"Front server (hides this server's IP)",
+										)}
+									</Text>
+									<Text fontSize="xs" mb={2} opacity={0.85}>
+										{tt(
+											"tsin.front.help",
+											"1) Buy a small separate server in Europe with unlimited traffic. 2) Log in to it with SSH as root, paste this script and press Enter; it hands every port except SSH on to this server and installs nothing else. 3) Put the new server's IP in the box above and press Apply. 4) Users update their subscription. If the front's IP is ever filtered, give it a new IP or a new server, run the script there, enter the new IP and Apply; this server is never touched.",
+										)}
+									</Text>
+									<Textarea
+										value={view.front_script}
+										isReadOnly
+										rows={5}
+										fontFamily="mono"
+										fontSize="xs"
+										dir="ltr"
+									/>
+									<Button size="sm" mt={2} onClick={frontScript.onCopy}>
+										{frontScript.hasCopied
+											? tt("tsin.copied", "Copied")
+											: tt("tsin.front.copy", "Copy front script")}
+									</Button>
+								</Box>
+							)}
 						</Box>
 					)}
 

@@ -264,6 +264,8 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"direct_countries": settings.DirectCountries,
 		"direct_address":   settings.DirectAddress,
 		"emergency":        s.tsinEmergencyView(r.Context(), settings),
+		"front_script":     tsin.FrontScript(s.tsinTargetAddress(r.Context(), settings.Target)),
+		"iran_reach":       s.iranReach.load(),
 		"node_script":      tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {

@@ -42,6 +42,7 @@ type Server struct {
 	adminAuth            adminapp.Authenticator
 	nodeController       nodecontroller.Controller
 	tsinNode             tsinNodeState
+	iranReach            iranReachState
 	nodeMutations        nodeapp.Repository
 	systemService        *systemapp.Service
 	maintenance          *systemapp.MaintenanceService
@@ -215,6 +216,7 @@ func (s *Server) StartBackground(ctx context.Context) {
 		go s.runTelegramBot(ctx)
 		go s.runTSinWatchdog(ctx)
 		go s.runNodeLoadWatch(ctx)
+		go s.runIranReachWatch(ctx)
 		go s.runOutboundSubscriptionRefresher(ctx)
 	})
 }

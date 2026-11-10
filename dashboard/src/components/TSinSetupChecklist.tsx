@@ -425,7 +425,13 @@ const stepText = (
 									"{{count}} configs; not tested",
 									p,
 								)
-							: tt("tsin.setup.direct.ok", "{{count}} configs answer", p),
+							: p.iran_total
+								? tt(
+										"tsin.setup.direct.okIran",
+										"{{count}} configs answer · from Iran {{iran_open}}/{{iran_total}}",
+										p,
+									)
+								: tt("tsin.setup.direct.ok", "{{count}} configs answer", p),
 				};
 			if (reason === "not_applied")
 				return {
@@ -434,6 +440,16 @@ const stepText = (
 					action: tt(
 						"tsin.setup.direct.notApplied",
 						"The ⚡ countries are chosen but not made yet. Press Apply below.",
+					),
+				};
+			if (reason === "iran_blocked")
+				return {
+					title,
+					summary: tt("tsin.setup.direct.iranBlockedShort", "Filtered in Iran"),
+					action: tt(
+						"tsin.setup.direct.iranBlocked",
+						"{{address}} answers from outside but none of the {{iran_total}} test servers inside Iran reach it, so it is filtered there. If it is a front server, give it a new IP or a new server, run the front script there, enter the new IP above and press Apply. The Cloudflare configs keep working meanwhile.",
+						p,
 					),
 				};
 			if (reason === "closed")
