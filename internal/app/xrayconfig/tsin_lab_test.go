@@ -4,6 +4,7 @@ package xrayconfig
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -25,10 +26,17 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tests) != 5 {
-		t.Fatalf("got %d lab tests, want 5", len(tests))
+	if len(tests) != 6 {
+		t.Fatalf("got %d lab tests, want 6", len(tests))
 	}
 	for _, test := range tests {
+		if strings.HasPrefix(test.Link, "vmess://") {
+			raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(test.Link, "vmess://"))
+			if err != nil || !strings.Contains(string(raw), `"add":"203.0.113.9"`) {
+				t.Fatalf("lab VMess link %q: %v", raw, err)
+			}
+			continue
+		}
 		if !strings.HasPrefix(test.Link, "vless://") || !strings.Contains(test.Link, "@203.0.113.9:") {
 			t.Fatalf("lab link %q", test.Link)
 		}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -79,6 +81,24 @@ func tsinLabRecipes() []tsinLabRecipe {
 						},
 					}},
 				}), nil
+			}},
+		{"vmess-http", "VMess + HTTP header", "Looks like plain HTTP to play.google.com like test 1, but VMess encrypts what is inside, so the operator sees neither the sites nor the user",
+			func(tag string, port int, client map[string]any) (map[string]any, error) {
+				return map[string]any{
+					"tag": tag, "listen": "::", "port": port, "protocol": "vmess",
+					"settings": map[string]any{"clients": []any{map[string]any{"id": client["id"], "email": client["email"]}}},
+					"streamSettings": map[string]any{
+						"network": "tcp", "security": "none",
+						"tcpSettings": map[string]any{"header": map[string]any{
+							"type": "http",
+							"request": map[string]any{
+								"version": "1.1", "method": "GET", "path": []any{"/"},
+								"headers": map[string]any{"Host": []any{"play.google.com"}},
+							},
+						}},
+					},
+					"sniffing": autoProvisionSniffing(),
+				}, nil
 			}},
 		{"xhttp-plain", "XHTTP, no TLS", "XHTTP over plain HTTP, no encryption layer of its own",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
@@ -171,7 +191,13 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address string, p
 		return nil, errors.New("there is no address to test: set the front server's IP in the ⚡ section, or serve the countries from a node")
 	}
 	if existing, err := r.TSinLabTests(ctx, target, address); err == nil && len(existing) > 0 {
-		return existing, nil
+		if len(existing) == len(tsinLabRecipes()) {
+			return existing, nil
+		}
+		// A lab made by an older version lacks the newer tests: make it again.
+		if err := r.RemoveTSinLab(ctx, target); err != nil {
+			return nil, err
+		}
 	}
 	config, err := r.GetTargetRawConfig(ctx, target)
 	if err != nil {
@@ -230,7 +256,11 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address string, p
 			if settings == nil {
 				settings = map[string]any{}
 			}
-			settings["clients"] = []any{tsinLabClient(id)}
+			client := tsinLabClient(id)
+			if stringValue(inbound["protocol"]) == "vmess" {
+				delete(client, "flow")
+			}
+			settings["clients"] = []any{client}
 			inbound["settings"] = settings
 		}
 	}
@@ -329,6 +359,15 @@ func tsinLabLink(key, id, host string, port int, stream map[string]any, name str
 		query.Set("headerType", "http")
 		query.Set("host", "play.google.com")
 		query.Set("path", "/")
+	case "vmess-http":
+		payload, err := json.Marshal(map[string]any{
+			"v": "2", "ps": "LAB " + name, "add": strings.Trim(host, "[]"), "port": strconv.Itoa(port), "id": id,
+			"aid": "0", "scy": "auto", "net": "tcp", "type": "http", "host": "play.google.com", "path": "/", "tls": "",
+		})
+		if err != nil {
+			return "", err
+		}
+		return "vmess://" + base64.StdEncoding.EncodeToString(payload), nil
 	case "xhttp-plain":
 		query.Set("type", "xhttp")
 		query.Set("security", "none")
