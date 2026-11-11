@@ -35,6 +35,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
+import { TSinLabSection } from "./TSinLabSection";
 import { TSinSetupChecklist } from "./TSinSetupChecklist";
 import { classifyTSinError, explainTSinProblem } from "./tsinProblems";
 
@@ -1176,6 +1177,7 @@ export const TSinDialog: FC<{
 									</Button>
 								</Box>
 							)}
+							{view?.applied && <TSinLabSection />}
 						</TSinSection>
 					)}
 

@@ -260,6 +260,12 @@ func (c Controller) includeDBUsers(ctx context.Context, raw map[string]any, data
 			continue
 		}
 		settings := ensureMap(inbound, "settings")
+		if strings.HasPrefix(stringValue(inbound["tag"]), xrayconfig.TSinLabPrefix) {
+			// The protocol lab's test inbounds keep their own test client and
+			// get no users: they are in no service (xrayconfig/tsin_lab.go).
+			settings["clients"] = listAnyClients(settings["clients"])
+			continue
+		}
 		settings["clients"] = xrayconfig.ReverseClients(settings["clients"])
 		inboundsByProtocol[protocol] = append(inboundsByProtocol[protocol], inbound)
 	}
@@ -736,4 +742,15 @@ func stringValue(value any) string {
 	default:
 		return ""
 	}
+}
+
+// listAnyClients copies a clients list as []any, the shape the rest of the
+// builder expects.
+func listAnyClients(value any) []any {
+	clients := listOfMaps(value)
+	out := make([]any, 0, len(clients))
+	for _, client := range clients {
+		out = append(out, client)
+	}
+	return out
 }

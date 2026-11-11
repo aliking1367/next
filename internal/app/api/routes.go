@@ -145,6 +145,7 @@ func (s *Server) registerCoreRoutes(r chi.Router) {
 	r.HandleFunc("/core/tsin/emergency", s.requireSudo(s.handleCoreTSinEmergency))
 	r.HandleFunc("/core/tsin/smart", s.requireSudo(s.handleCoreTSinSmart))
 	r.HandleFunc("/core/tsin/fastly-check", s.requireSudo(s.handleCoreTSinFastlyCheck))
+	r.HandleFunc("/core/tsin/lab", s.requireSudo(s.handleCoreTSinLab))
 	r.HandleFunc("/core/cdn-domains", s.requireSudo(s.handleCoreCDNDomains))
 	r.HandleFunc("/core/tsin", s.requireSudo(s.handleCoreTSin))
 	r.HandleFunc("/core/verify-protocols", s.requireSudo(s.handleCoreVerifyProtocols))

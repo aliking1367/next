@@ -381,7 +381,7 @@ func (s *Server) tsinDirectStep(ctx context.Context, settings tsinSettings, appl
 func (s *Server) tsinCountryPath(ctx context.Context) string {
 	var tag string
 	err := s.db.QueryRowContext(ctx, `SELECT inbound_tag FROM hosts WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ?
-AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? ORDER BY id LIMIT 1`, xrayconfig.TSinGateTag, "%"+xrayconfig.TSinDirectSuffix, "%"+xrayconfig.TSinFastlySuffix).Scan(&tag)
+AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? ORDER BY id LIMIT 1`, xrayconfig.TSinGateTag, "%"+xrayconfig.TSinDirectSuffix, "%"+xrayconfig.TSinFastlySuffix, xrayconfig.TSinLabPrefix+"%").Scan(&tag)
 	if err != nil {
 		return ""
 	}
