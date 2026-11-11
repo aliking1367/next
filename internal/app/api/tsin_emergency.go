@@ -29,6 +29,9 @@ type tsinEmergencyRequest struct {
 	// Protocols is both, vmess or shadowsocks: which configs are shown, for
 	// an admin with a single tunnel port. Omitted keeps it.
 	Protocols *string `json:"protocols"`
+	// Audience is "all", or "mci" to show the configs only to users who
+	// update their subscription from Hamrah Aval. Omitted keeps it.
+	Audience *string `json:"audience"`
 }
 
 func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +91,9 @@ func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request)
 	}
 	if request.Protocols != nil {
 		settings.EmergencyProtocols = xrayconfig.NormalizeTSinEmergencyProtocols(*request.Protocols)
+	}
+	if request.Audience != nil {
+		settings.EmergencyAudience = normalizeEmergencyAudience(*request.Audience)
 	}
 	if settings.EmergencyEnabled && settings.EmergencyAddress == "" {
 		writeError(w, http.StatusUnprocessableEntity, "enter the Iranian tunnel's address first")
@@ -187,5 +193,11 @@ func (s *Server) tsinEmergencyView(ctx context.Context, settings tsinSettings) m
 		address = "this server's IP"
 	}
 	view["node_address"] = strings.TrimSpace(address)
+	view["audience"] = normalizeEmergencyAudience(settings.EmergencyAudience)
+	view["operator_ranges"] = s.mobileRanges.summary()
+	var mciUsers int
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_subscription_access WHERE mci_seen_at > ?`,
+		time.Now().UTC().Add(-emergencyMCIMemory)).Scan(&mciUsers)
+	view["mci_users"] = mciUsers
 	return view
 }

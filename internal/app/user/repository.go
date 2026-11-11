@@ -72,6 +72,7 @@ type repositoryCache struct {
 	usersSummaryMu           sync.Mutex
 	usersSummaries           map[string]usersSummaryCacheEntry
 	subscriptionAccess       map[int64]subscriptionAccessCacheEntry
+	mciSeen                  map[int64]time.Time
 }
 
 type subscriptionAccessCacheEntry struct {

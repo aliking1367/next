@@ -147,6 +147,16 @@ type TSinEmergency = {
 	ss_port: number;
 	enabled: boolean;
 	protocols?: "both" | "vmess" | "shadowsocks";
+	// audience is "all", or "mci": shown only to users who update their
+	// subscription from Hamrah Aval. mci_users counts those of the last
+	// week; operator_ranges is how many MCI and Iran ranges are known.
+	audience?: "all" | "mci";
+	mci_users?: number;
+	operator_ranges?: {
+		mci_ranges: number;
+		iran_ranges: number;
+		fetched_at?: string;
+	};
 	node_address?: string;
 	node_ports?: { vmess?: number; shadowsocks?: number };
 };
@@ -276,6 +286,7 @@ export const TSinDialog: FC<{
 	const [emBusy, setEmBusy] = useState(false);
 	const [smartBusy, setSmartBusy] = useState(false);
 	const [emProtocols, setEmProtocols] = useState("both");
+	const [emAudience, setEmAudience] = useState("all");
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
@@ -385,6 +396,7 @@ export const TSinDialog: FC<{
 			setFastly(data.fastly_countries ?? ["Best ping"]);
 			setEmAddress(data.emergency?.address ?? "");
 			setEmProtocols(data.emergency?.protocols ?? "both");
+			setEmAudience(data.emergency?.audience ?? "all");
 			setEmVMessPort(
 				data.emergency?.vmess_port ? String(data.emergency.vmess_port) : "",
 			);
@@ -476,6 +488,7 @@ export const TSinDialog: FC<{
 				vmess_port: Number.parseInt(emVMessPort, 10) || 0,
 				ss_port: Number.parseInt(emSSPort, 10) || 0,
 				protocols: emProtocols,
+				audience: emAudience,
 			};
 			if (enabled !== undefined) body.enabled = enabled;
 			const result = await fetch<TSinEmergency>("/core/tsin/emergency", {
@@ -1448,6 +1461,46 @@ export const TSinDialog: FC<{
 									</AlertDescription>
 								</Alert>
 							)}
+							<FormControl mb={2}>
+								<FormLabel fontSize="sm" mb={1}>
+									{tt("tsin.emergency.audience", "Show to")}
+								</FormLabel>
+								<Select
+									size="sm"
+									value={emAudience}
+									onChange={(event) => setEmAudience(event.target.value)}
+								>
+									<option value="all">
+										{tt("tsin.emergency.audienceAll", "Every user")}
+									</option>
+									<option value="mci">
+										{tt(
+											"tsin.emergency.audienceMci",
+											"Only users on Hamrah Aval",
+										)}
+									</option>
+								</Select>
+								<FormHelperText fontSize="xs">
+									{tt(
+										"tsin.emergency.audienceHelp",
+										"With Hamrah Aval only, the configs go into the subscription only when it is updated from Hamrah Aval's network; on Irancell, fixed lines or Wi-Fi they are left out, so the tunnel's paid traffic goes to the users who need it. An update made through a VPN keeps them for a week for someone last seen on Hamrah Aval. Users must update their subscription for a change to reach them; press Save.",
+									)}
+								</FormHelperText>
+								{emAudience === "mci" && (
+									<Text fontSize="xs" mt={1} opacity={0.85}>
+										{view?.emergency?.operator_ranges?.mci_ranges
+											? tt(
+													"tsin.emergency.mciUsers",
+													"{{count}} users updated their subscription from Hamrah Aval in the last week.",
+													{ count: view.emergency.mci_users ?? 0 },
+												)
+											: tt(
+													"tsin.emergency.rangesLoading",
+													"Hamrah Aval's address list is still loading; until then the configs go to everyone.",
+												)}
+									</Text>
+								)}
+							</FormControl>
 							<FormControl mb={2}>
 								<FormLabel fontSize="sm" mb={1}>
 									{tt("tsin.emergency.protocols", "Configs to show")}

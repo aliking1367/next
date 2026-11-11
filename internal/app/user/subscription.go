@@ -31,6 +31,8 @@ type SubscriptionClientConfig struct {
 	AutoCurrent bool
 	// Smart is the ?smart= mode for Xray JSON output (see smart_configs.go).
 	Smart string
+	// HideInboundTags are inbounds left out of this subscription.
+	HideInboundTags []string
 }
 
 const maxMKCPMTU int64 = 1<<32 - 1
@@ -53,6 +55,11 @@ type SubscriptionRenderRequest struct {
 	// (see smart_configs.go).
 	Smart      string
 	SmartLevel int
+	// ClientOperator is the network the request came from ("mci", "ir",
+	// "foreign", or "" when unknown) and EmergencyMCIOnly whether the
+	// emergency configs go to MCI users only (see emergency_audience.go).
+	ClientOperator   string
+	EmergencyMCIOnly bool
 }
 
 type SubscriptionHTTPResponse struct {
@@ -181,6 +188,9 @@ func (s Service) RenderSubscription(ctx context.Context, req SubscriptionRenderR
 	}
 	config.AutoCurrent = req.ClientType == "" && config.Format == "v2ray-json"
 	config.Smart = smartMode(req.Smart, req.SmartLevel)
+	if req.EmergencyMCIOnly && !s.showEmergencyFor(ctx, user.ID, req.ClientOperator) {
+		config.HideInboundTags = emergencyInboundTags
+	}
 	body, err := s.generateSubscriptionConfig(ctx, user, config, placeholderRemark, subscriptionInfoLinks(user, settings, config.Format))
 	if err != nil && plainType != "" {
 		// The smart switch sent this app JSON; when this user's configs
@@ -482,7 +492,7 @@ func (s Service) generateSubscriptionConfig(ctx context.Context, user UserDetail
 	if placeholderRemark != "" {
 		connectable = ConfigLinksResponse{Links: []string{subscriptionPlaceholderLink(placeholderRemark, config.Format)}, Metadata: []ConfigLinkMetadata{{}}}
 	} else {
-		links, err := s.ConfigLinks(ctx, ConfigLinksRequest{UserID: user.ID, Reverse: config.Reverse})
+		links, err := s.ConfigLinks(ctx, ConfigLinksRequest{UserID: user.ID, Reverse: config.Reverse, HideInboundTags: config.HideInboundTags})
 		if err != nil {
 			return "", err
 		}

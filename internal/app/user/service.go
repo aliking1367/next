@@ -99,6 +99,7 @@ func (s Service) ConfigLinks(ctx context.Context, req ConfigLinksRequest) (Confi
 		}
 		item.Hosts = hosts
 	}
+	item.Hosts = hideHosts(item.Hosts, req.HideInboundTags)
 	if item.ServiceID != nil && item.ServiceHostOrders == nil {
 		orders, err := s.repo.serviceHostOrders(ctx, []int64{*item.ServiceID})
 		if err != nil {

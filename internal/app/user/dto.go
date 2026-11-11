@@ -49,6 +49,9 @@ type ConfigLinksRequest struct {
 	UserID  int64           `json:"user_id,omitempty"`
 	User    *ConfigLinkUser `json:"user,omitempty"`
 	Reverse bool            `json:"reverse,omitempty"`
+	// HideInboundTags are inbounds whose configs are left out of this
+	// answer (see emergency_audience.go).
+	HideInboundTags []string `json:"-"`
 }
 
 type ConfigLinksResponse struct {

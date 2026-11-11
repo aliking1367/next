@@ -35,6 +35,9 @@ func (s *Server) handleResolvedSubscription(w http.ResponseWriter, r *http.Reque
 	req.End = r.URL.Query().Get("end")
 	req.Smart = r.URL.Query().Get("smart")
 	req.SmartLevel = s.tsinSmartConfig(r.Context())
+	if req.EmergencyMCIOnly = s.tsinEmergencyMCIOnly(r.Context()); req.EmergencyMCIOnly {
+		req.ClientOperator = s.mobileRanges.classify(requestRemote(r))
+	}
 	req.ReadOnly = s.cfg.SubscriptionReadOnly
 	if runtimeSettings, err := s.settingsRepo.RuntimeSettings(r.Context()); err == nil {
 		req.ReadOnly = runtimeSettings.SubscriptionReadOnly

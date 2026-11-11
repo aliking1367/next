@@ -43,6 +43,7 @@ type Server struct {
 	nodeController       nodecontroller.Controller
 	tsinNode             tsinNodeState
 	iranReach            iranReachState
+	mobileRanges         operatorRangesState
 	nodeMutations        nodeapp.Repository
 	systemService        *systemapp.Service
 	maintenance          *systemapp.MaintenanceService
@@ -218,6 +219,7 @@ func (s *Server) StartBackground(ctx context.Context) {
 		go s.runNodeLoadWatch(ctx)
 		go s.runIranReachWatch(ctx)
 		go s.runCDNDomainWatch(ctx)
+		go s.runOperatorRangesRefresher(ctx)
 		go s.runOutboundSubscriptionRefresher(ctx)
 	})
 }
