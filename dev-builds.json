@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-3dcab59",
-  "updated_at": "2026-11-11T15:10:25Z",
+  "latest": "dev-5aa5cf4",
+  "updated_at": "2026-11-11T15:35:54Z",
   "builds": [
+    {
+      "tag": "dev-5aa5cf4",
+      "sha": "5aa5cf4e416a17d1d214972705432b2fd6a3a511",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43048912063",
+      "run_number": "211",
+      "created_at": "2026-11-11T15:35:54Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-5aa5cf4.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-5aa5cf4.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-5aa5cf4.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5aa5cf4.zip"
+        }
+      }
+    },
     {
       "tag": "dev-3dcab59",
       "sha": "3dcab59693d3a24c29b5a8e4a4194bdea4b9335c",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-6bd434b.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-6bd434b.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-5b2d2b4",
-      "sha": "5b2d2b40b29a218f9283eac2ee2e3cdc8f0f9e37",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "37319266329",
-      "run_number": "111",
-      "created_at": "2026-10-05T13:49:00Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-5b2d2b4.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5b2d2b4.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-5b2d2b4.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-5b2d2b4.tar.gz"
         }
       }
     }
