@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-70110ef",
-  "updated_at": "2026-11-10T14:31:24Z",
+  "latest": "dev-b81f22e",
+  "updated_at": "2026-11-11T13:46:04Z",
   "builds": [
+    {
+      "tag": "dev-b81f22e",
+      "sha": "b81f22e0c02f4b73d86badb758f58b5cc33b4acb",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43031534058",
+      "run_number": "207",
+      "created_at": "2026-11-11T13:46:04Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-b81f22e.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-b81f22e.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-b81f22e.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-b81f22e.zip"
+        }
+      }
+    },
     {
       "tag": "dev-70110ef",
       "sha": "70110ef8e92e87c686fe83735ca4d71c7d992fd6",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-4d3c054.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-4d3c054.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-082f0e7",
-      "sha": "082f0e706426986e43985b083586f7957e99a21a",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "37217365470",
-      "run_number": "107",
-      "created_at": "2026-10-04T16:40:19Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-082f0e7.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-082f0e7.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-082f0e7.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-082f0e7.zip"
         }
       }
     }
