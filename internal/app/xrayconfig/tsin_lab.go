@@ -136,6 +136,25 @@ func tsinLabRecipes() []tsinLabRecipe {
 					"network": "tcp", "security": "reality", "realitySettings": settings,
 				}), nil
 			}},
+		{"cf-xhttp", "XHTTP via Cloudflare", "XHTTP through the Cloudflare domain instead of WebSocket: HTTP/2 like a browser",
+			func(tag string, port int, client map[string]any) (map[string]any, error) {
+				path, err := randomXHTTPPath()
+				if err != nil {
+					return nil, err
+				}
+				certLines, keyLines, err := generateSelfSignedCertLines("cloudflare-origin", "cloudflare-origin")
+				if err != nil {
+					return nil, err
+				}
+				return vless(tag, port, client, map[string]any{
+					"network": "xhttp", "security": "tls",
+					"xhttpSettings": map[string]any{"path": path, "mode": "auto"},
+					"tlsSettings": map[string]any{
+						"alpn": []any{"h2", "http/1.1"}, "minVersion": "1.2",
+						"certificates": []any{map[string]any{"certificate": certLines, "key": keyLines}},
+					},
+				}), nil
+			}},
 		{"tls-xhttp", "TLS XHTTP", "Ordinary TLS with the server's own certificate, which the link pins",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				path, err := randomXHTTPPath()
@@ -185,12 +204,12 @@ func tsinLabExit(config map[string]any) string {
 
 // EnsureTSinLab makes the lab on target, or keeps the one there, and returns
 // its tests with links to address.
-func (r Repository) EnsureTSinLab(ctx context.Context, target, address string, portBusy func(int) bool) ([]TSinLabTest, error) {
+func (r Repository) EnsureTSinLab(ctx context.Context, target, address, gateHost string, portBusy func(int) bool) ([]TSinLabTest, error) {
 	address = strings.TrimSpace(address)
 	if address == "" {
 		return nil, errors.New("there is no address to test: set the front server's IP in the ⚡ section, or serve the countries from a node")
 	}
-	if existing, err := r.TSinLabTests(ctx, target, address); err == nil && len(existing) > 0 {
+	if existing, err := r.TSinLabTests(ctx, target, address, gateHost); err == nil && len(existing) > 0 {
 		if len(existing) == len(tsinLabRecipes()) {
 			return existing, nil
 		}
@@ -267,7 +286,7 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address string, p
 	if _, err := r.SaveTargetRawConfig(ctx, target, config); err != nil {
 		return nil, fmt.Errorf("save lab routing: %w", err)
 	}
-	return r.TSinLabTests(ctx, target, address)
+	return r.TSinLabTests(ctx, target, address, gateHost)
 }
 
 func tsinLabRule(rule map[string]any) bool {
@@ -315,7 +334,7 @@ func (r Repository) RemoveTSinLab(ctx context.Context, target string) error {
 }
 
 // TSinLabTests reads the lab on target back as links to address.
-func (r Repository) TSinLabTests(ctx context.Context, target, address string) ([]TSinLabTest, error) {
+func (r Repository) TSinLabTests(ctx context.Context, target, address, gateHost string) ([]TSinLabTest, error) {
 	config, err := r.GetTargetRawConfig(ctx, target)
 	if err != nil {
 		return nil, err
@@ -341,11 +360,21 @@ func (r Repository) TSinLabTests(ctx context.Context, target, address string) ([
 		if len(clients) == 0 {
 			continue
 		}
-		link, err := tsinLabLink(recipe.key, stringValue(clients[0]["id"]), host, port, mapValue(inbound["streamSettings"]), recipe.name)
+		about := recipe.about
+		linkHost := host
+		if recipe.key == "cf-xhttp" {
+			gate := strings.TrimSpace(gateHost)
+			if gate == "" {
+				continue
+			}
+			linkHost = gate
+			about += fmt.Sprintf(". It needs one more Cloudflare Origin Rule for %s, ordered after the existing one: (http.host eq \"%s\" and starts_with(http.request.uri.path, \"%s\")) with destination port %d", gate, gate, stringValue(mapValue(mapValue(inbound["streamSettings"])["xhttpSettings"])["path"]), port)
+		}
+		link, err := tsinLabLink(recipe.key, stringValue(clients[0]["id"]), linkHost, port, mapValue(inbound["streamSettings"]), recipe.name)
 		if err != nil {
 			return nil, err
 		}
-		tests = append(tests, TSinLabTest{Tag: tag, Name: recipe.name, About: recipe.about, Port: port, Link: link})
+		tests = append(tests, TSinLabTest{Tag: tag, Name: recipe.name, About: about, Port: port, Link: link})
 	}
 	return tests, nil
 }
@@ -391,6 +420,18 @@ func tsinLabLink(key, id, host string, port int, stream map[string]any, name str
 		} else {
 			query.Set("type", "tcp")
 		}
+	case "cf-xhttp":
+		// Users reach Cloudflare on 443 with its own certificate; the port
+		// in the link is 443, and Cloudflare's Origin Rule picks the port.
+		query.Set("type", "xhttp")
+		query.Set("security", "tls")
+		query.Set("sni", host)
+		query.Set("host", host)
+		query.Set("fp", "chrome")
+		query.Set("alpn", "h2,http/1.1")
+		query.Set("path", stringValue(mapValue(stream["xhttpSettings"])["path"]))
+		query.Set("mode", "auto")
+		port = 443
 	case "tls-xhttp":
 		tls := mapValue(stream["tlsSettings"])
 		pin, err := tsinLabCertPin(tls)

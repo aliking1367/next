@@ -45,7 +45,7 @@ func (s *Server) handleCoreTSinLab(w http.ResponseWriter, r *http.Request) {
 		}
 		switch request.Action {
 		case "create":
-			_, err = s.configRepo.EnsureTSinLab(ctx, settings.Target, address, s.tsinPortBusy(settings.Target))
+			_, err = s.configRepo.EnsureTSinLab(ctx, settings.Target, address, settings.GateHost, s.tsinPortBusy(settings.Target))
 		case "remove":
 			err = s.configRepo.RemoveTSinLab(ctx, settings.Target)
 		default:
@@ -60,7 +60,7 @@ func (s *Server) handleCoreTSinLab(w http.ResponseWriter, r *http.Request) {
 		}
 		s.kickNodeOperationsSoon()
 	}
-	tests, err := s.configRepo.TSinLabTests(ctx, settings.Target, address)
+	tests, err := s.configRepo.TSinLabTests(ctx, settings.Target, address, settings.GateHost)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

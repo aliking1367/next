@@ -12,7 +12,7 @@ import (
 func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing.T) {
 	repo, _ := provisionTestRepository(t)
 	ctx := context.Background()
-	if _, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", nil); err == nil {
+	if _, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", "g1.example.com", nil); err == nil {
 		t.Fatal("the lab must refuse to start before the countries are applied")
 	}
 	countries := []TSinCountry{
@@ -22,12 +22,12 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil); err != nil {
 		t.Fatal(err)
 	}
-	tests, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", nil)
+	tests, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", "g1.example.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tests) != 6 {
-		t.Fatalf("got %d lab tests, want 6", len(tests))
+	if len(tests) != 7 {
+		t.Fatalf("got %d lab tests, want 7", len(tests))
 	}
 	for _, test := range tests {
 		if strings.HasPrefix(test.Link, "vmess://") {
@@ -35,6 +35,9 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 			if err != nil || !strings.Contains(string(raw), `"add":"203.0.113.9"`) {
 				t.Fatalf("lab VMess link %q: %v", raw, err)
 			}
+			continue
+		}
+		if strings.Contains(test.Link, "@g1.example.com:443") {
 			continue
 		}
 		if !strings.HasPrefix(test.Link, "vless://") || !strings.Contains(test.Link, "@203.0.113.9:") {
@@ -50,7 +53,7 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 		t.Fatalf("the lab must leave through Best ping's exit first: %#v", rules[0])
 	}
 	// A second create keeps the same lab and links.
-	again, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", nil)
+	again, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", "g1.example.com", nil)
 	if err != nil || again[0].Link != tests[0].Link {
 		t.Fatalf("a second create made a new lab: %v", err)
 	}
@@ -71,7 +74,7 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 	}
 
 	// Applying the countries also removes a lab left behind.
-	if _, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", nil); err != nil {
+	if _, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", "g1.example.com", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil); err != nil {
