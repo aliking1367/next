@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-8d388f1",
-  "updated_at": "2026-11-12T16:34:44Z",
+  "latest": "dev-22180d1",
+  "updated_at": "2026-11-12T16:49:57Z",
   "builds": [
+    {
+      "tag": "dev-22180d1",
+      "sha": "22180d16a5faa9313ad23e277349e476f649e71f",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43261999108",
+      "run_number": "219",
+      "created_at": "2026-11-12T16:49:57Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-22180d1.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-22180d1.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-22180d1.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-22180d1.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-8d388f1",
       "sha": "8d388f1e98bffbbe3d9083fc757a30c0f4048f8f",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-a380e00.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-a380e00.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-ddb3dc9",
-      "sha": "ddb3dc9db85627e7e7dc76b6434b756f87acac18",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "38772123696",
-      "run_number": "117",
-      "created_at": "2026-10-15T16:53:31Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-ddb3dc9.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ddb3dc9.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-ddb3dc9.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-ddb3dc9.tar.gz"
         }
       }
     }
