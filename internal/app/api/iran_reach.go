@@ -198,6 +198,116 @@ func checkHostReached(result []any) bool {
 }
 
 func checkHostFromIran(ctx context.Context, client *http.Client, base, kind, target string) (open, total int, err error) {
+	results, total, err := checkHostResultsFromIran(ctx, client, base, kind, target)
+	for _, result := range results {
+		if checkHostReached(result) {
+			open++
+		}
+	}
+	return open, total, err
+}
+
+// Iran's filtering lets a new Cloudflare domain answer a small request and
+// then stalls the connection after a few tens of kilobytes, so a ping works
+// and nothing loads. A fetch of the home page cannot see that; downloading a
+// file of several hundred kilobytes can. Cloudflare serves cloudflareEdgeProbe
+// itself, from its edge, on every domain it proxies, so the download is the
+// same for every domain and needs nothing from the origin. The control host
+// is a long-known Cloudflare domain: only test servers that download it in
+// full count, so a test server that is slow or down today does not make a
+// domain look filtered.
+const (
+	cloudflareEdgeProbe       = "/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=0123456789abcdef"
+	cloudflareEdgeProbeHost   = "cdnjs.cloudflare.com"
+	cloudflareDownloadMinimum = 3
+)
+
+// iranDownload is how a domain fared on the download from Iran: of Total
+// test servers that downloaded the control in full, Complete downloaded it in
+// full on this domain too and Reached got at least an answer.
+type iranDownload struct {
+	Reached  int
+	Complete int
+	Total    int
+}
+
+// throttled is a domain that at most a quarter of the test servers download
+// through in full: the "ping but no speed" of a filtered new domain. A stalled
+// download times out without a status, so it does not tell "answers but
+// stalls" from "does not answer"; one datacenter network (Qom) is not
+// filtered, which is why the bar is a quarter and not zero.
+func (d iranDownload) throttled() bool { return iranSlow(d.Complete, d.Total) }
+
+// checkHostDownloadComplete reads one test server's HTTP result: the download
+// finished (check-host's ok) with status 200.
+func checkHostDownloadComplete(result []any) bool {
+	if len(result) == 0 {
+		return false
+	}
+	first, ok := result[0].([]any)
+	if !ok || len(first) < 4 {
+		return false
+	}
+	done, _ := first[0].(float64)
+	code, _ := first[3].(string)
+	return done == 1 && strings.TrimSpace(code) == "200"
+}
+
+// checkCloudflareDownloadsFromIran downloads the edge probe through each
+// domain, and through the control, from Iran's test servers.
+func checkCloudflareDownloadsFromIran(ctx context.Context, client *http.Client, base string, domains []string) (map[string]iranDownload, error) {
+	type answer struct {
+		results map[string][]any
+		err     error
+	}
+	hosts := append([]string{cloudflareEdgeProbeHost}, domains...)
+	answers := make([]answer, len(hosts))
+	var wg sync.WaitGroup
+	for index, host := range hosts {
+		wg.Add(1)
+		go func(index int, host string) {
+			defer wg.Done()
+			results, _, err := checkHostResultsFromIran(ctx, client, base, "check-http", "https://"+host+cloudflareEdgeProbe)
+			answers[index] = answer{results: results, err: err}
+		}(index, host)
+	}
+	wg.Wait()
+	if answers[0].err != nil {
+		return nil, answers[0].err
+	}
+	usable := map[string]bool{}
+	for node, result := range answers[0].results {
+		if checkHostDownloadComplete(result) {
+			usable[node] = true
+		}
+	}
+	if len(usable) < cloudflareDownloadMinimum {
+		return nil, fmt.Errorf("only %d of Iran's test servers could download from a known Cloudflare site right now, too few to judge", len(usable))
+	}
+	out := make(map[string]iranDownload, len(domains))
+	for index, domain := range domains {
+		item := answers[index+1]
+		if item.err != nil {
+			continue
+		}
+		result := iranDownload{Total: len(usable)}
+		for node := range usable {
+			if checkHostReached(item.results[node]) {
+				result.Reached++
+			}
+			if checkHostDownloadComplete(item.results[node]) {
+				result.Complete++
+			}
+		}
+		out[domain] = result
+	}
+	return out, nil
+}
+
+// checkHostResultsFromIran runs one check-host check from every Iranian test
+// server and returns each server's raw result (servers that never answered
+// are missing) and how many servers were asked.
+func checkHostResultsFromIran(ctx context.Context, client *http.Client, base, kind, target string) (map[string][]any, int, error) {
 	getJSON := func(path string, out any) error {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
 		if err != nil {
@@ -221,7 +331,7 @@ func checkHostFromIran(ctx context.Context, client *http.Client, base, kind, tar
 		} `json:"nodes"`
 	}
 	if err := getJSON("/nodes/hosts", &nodes); err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
 	query := url.Values{"host": {target}}
 	for name, node := range nodes.Nodes {
@@ -230,44 +340,43 @@ func checkHostFromIran(ctx context.Context, client *http.Client, base, kind, tar
 		}
 	}
 	if len(query["node"]) == 0 {
-		return 0, 0, fmt.Errorf("check-host has no Iranian test servers right now")
+		return nil, 0, fmt.Errorf("check-host has no Iranian test servers right now")
 	}
 	var started struct {
 		RequestID string `json:"request_id"`
 	}
 	if err := getJSON("/"+kind+"?"+query.Encode(), &started); err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
 	if started.RequestID == "" {
-		return 0, 0, fmt.Errorf("check-host did not start the check")
+		return nil, 0, fmt.Errorf("check-host did not start the check")
 	}
-	total = len(query["node"])
-	// Results arrive over a few seconds; a test server still null is waited
-	// for, one that answered with an error counts as not reached.
-	for attempt := 0; attempt < 8; attempt++ {
+	total := len(query["node"])
+	// Results arrive over a few seconds (an HTTP check waits up to its own
+	// timeout on a stalled download); a test server still null is waited for,
+	// one that answered with an error counts as not reached.
+	latest := map[string][]any{}
+	for attempt := 0; attempt < 10; attempt++ {
 		select {
 		case <-ctx.Done():
-			return 0, total, ctx.Err()
+			return latest, total, ctx.Err()
 		case <-time.After(checkHostPollDelay):
 		}
 		var results map[string][]any
 		if err := getJSON("/check-result/"+url.PathEscape(started.RequestID), &results); err != nil {
 			continue
 		}
-		done, reached := 0, 0
-		for _, result := range results {
+		done := map[string][]any{}
+		for node, result := range results {
 			if result == nil {
 				continue
 			}
-			done++
-			if checkHostReached(result) {
-				reached++
-			}
+			done[node] = result
 		}
-		if done >= total {
-			return reached, total, nil
+		latest = done
+		if len(done) >= total {
+			break
 		}
-		open = reached
 	}
-	return open, total, nil
+	return latest, total, nil
 }

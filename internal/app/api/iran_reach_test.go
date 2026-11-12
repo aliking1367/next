@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -72,5 +73,72 @@ func TestCheckHostReachedReadsTCPAndHTTPResults(t *testing.T) {
 		if got := checkHostReached(tc.result); got != tc.want {
 			t.Fatalf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// A fake check-host where four Iranian test servers download the control in
+// full and one (ir5) is down: a new domain that answers but stalls is slow
+// (throttled), an old one is fast, and ir5 is not counted against either.
+func TestCloudflareDownloadsFromIranSeeAStalledNewDomain(t *testing.T) {
+	checkHostPollDelay = 10 * time.Millisecond
+	t.Cleanup(func() { checkHostPollDelay = 5 * time.Second })
+	full := `[[1,0.5,"OK","200","104.17.24.14"]]`
+	stalled := `[[0,25.0,"Connection timed out",null,null]]`
+	down := `[[0,10.0,"No route to host",null,null]]`
+	answers := map[string]string{
+		"https://cdnjs.cloudflare.com" + cloudflareEdgeProbe: fmt.Sprintf(`{"ir1.node":%s,"ir2.node":%s,"ir3.node":%s,"ir4.node":%s,"ir5.node":%s}`, full, full, full, full, down),
+		"https://new.example" + cloudflareEdgeProbe:          fmt.Sprintf(`{"ir1.node":%s,"ir2.node":%s,"ir3.node":%s,"ir4.node":%s,"ir5.node":%s}`, stalled, stalled, stalled, full, down),
+		"https://old.example" + cloudflareEdgeProbe:          fmt.Sprintf(`{"ir1.node":%s,"ir2.node":%s,"ir3.node":%s,"ir4.node":%s,"ir5.node":%s}`, full, full, full, full, down),
+	}
+	var mu sync.Mutex
+	ids := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/nodes/hosts":
+			fmt.Fprint(w, `{"nodes":{"ir1.node":{"location":["ir"]},"ir2.node":{"location":["ir"]},"ir3.node":{"location":["ir"]},"ir4.node":{"location":["ir"]},"ir5.node":{"location":["ir"]}}}`)
+		case r.URL.Path == "/check-http":
+			target := r.URL.Query().Get("host")
+			mu.Lock()
+			id := fmt.Sprintf("id%d", len(ids))
+			ids[id] = target
+			mu.Unlock()
+			fmt.Fprintf(w, `{"request_id":%q}`, id)
+		case strings.HasPrefix(r.URL.Path, "/check-result/"):
+			mu.Lock()
+			target := ids[strings.TrimPrefix(r.URL.Path, "/check-result/")]
+			mu.Unlock()
+			fmt.Fprint(w, answers[target])
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	results, err := checkCloudflareDownloadsFromIran(context.Background(), srv.Client(), srv.URL, []string{"new.example", "old.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := results["new.example"]; got.Total != 4 || got.Complete != 1 || got.Reached != 1 {
+		t.Fatalf("new.example = %+v, want 1 of 4 complete", got)
+	}
+	if got := results["old.example"]; got.Total != 4 || got.Complete != 4 || !iranFast(got.Complete, got.Total) {
+		t.Fatalf("old.example = %+v, want 4 of 4 complete", got)
+	}
+	if !results["new.example"].throttled() || results["old.example"].throttled() {
+		t.Fatal("1 of 4 is throttled, 4 of 4 is not")
+	}
+	if !iranSlow(1, 7) || iranSlow(2, 7) || iranFast(3, 7) || !iranFast(4, 7) {
+		t.Fatal("slow is at most a quarter, fast at least half")
+	}
+}
+
+func TestCheckHostDownloadComplete(t *testing.T) {
+	if !checkHostDownloadComplete([]any{[]any{float64(1), 0.5, "OK", "200", "1.2.3.4"}}) {
+		t.Fatal("ok with 200 is complete")
+	}
+	if checkHostDownloadComplete([]any{[]any{float64(1), 0.5, "Not Found", "404", "1.2.3.4"}}) {
+		t.Fatal("a 404 is not a download")
+	}
+	if checkHostDownloadComplete([]any{[]any{float64(0), 25.0, "Connection timed out", nil, nil}}) {
+		t.Fatal("a timeout is not complete")
 	}
 }

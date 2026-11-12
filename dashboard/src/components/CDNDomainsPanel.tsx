@@ -46,7 +46,7 @@ type CDNDomainsView = {
 	expression: string;
 	domains: CDNDomain[] | null;
 	check?: { state: string; reason: string; status: number };
-	iran?: { open: number; total: number };
+	iran?: { open: number; total: number; reached: number; throttled: boolean };
 	moved?: number;
 };
 
@@ -201,13 +201,21 @@ const CDNDomainsDialog: FC<{
 				});
 			} else if (result.iran) {
 				toast({
-					status: result.iran.open === 0 ? "warning" : "success",
+					status:
+						result.iran.open * 2 >= result.iran.total ? "success" : "warning",
 					isClosable: true,
+					duration: 15_000,
 					title: tt(
-						"cdn.iranResult",
-						"{{open}} of {{total}} test servers in Iran's datacenters got an answer.",
+						"cdn.iranDownload",
+						"{{open}} of {{total}} test servers in Iran's datacenters downloaded a file of a few hundred kilobytes through this domain in full.",
 						result.iran,
 					),
+					description: result.iran.throttled
+						? tt(
+								"cdn.iranThrottled",
+								"It answers from Iran but the download stalls: ping without speed. Iran does this to new domains; keep the domain and check again later.",
+							)
+						: undefined,
 				});
 			}
 			if (body.action === "add") {
@@ -313,17 +321,21 @@ const CDNDomainsDialog: FC<{
 													{item.iran_checked_at && !item.iran_error && (
 														<Badge
 															colorScheme={
-																item.iran_open === 0
+																item.iran_open * 4 <= item.iran_total
 																	? "red"
 																	: item.iran_open * 2 >= item.iran_total
 																		? "green"
 																		: "orange"
 															}
 														>
-															{tt("cdn.iranBadge", "Iran {{open}}/{{total}}", {
-																open: item.iran_open,
-																total: item.iran_total,
-															})}
+															{tt(
+																"cdn.iranSpeedBadge",
+																"Iran speed {{open}}/{{total}}",
+																{
+																	open: item.iran_open,
+																	total: item.iran_total,
+																},
+															)}
 														</Badge>
 													)}
 												</HStack>
@@ -568,7 +580,7 @@ export const CDNDomainsPanel: FC = () => {
 		active?.iran_checked_at &&
 		!active.iran_error &&
 		active.iran_total >= 3 &&
-		active.iran_open === 0;
+		active.iran_open * 4 <= active.iran_total;
 	const color =
 		activeBroken || iranBlocked
 			? "red.400"
@@ -658,8 +670,8 @@ export const CDNDomainsPanel: FC = () => {
 							{activeBroken
 								? reasonText(tt, active.check_reason, active.check_status)
 								: tt(
-										"cdn.tile.iranBlocked",
-										"No answer from Iran: probably filtered. Use a ready domain.",
+										"cdn.tile.iranSlow",
+										"No speed from Iran: downloads stall there. Use a domain that is fast from Iran, or the emergency tunnel.",
 									)}
 						</Text>
 					)}

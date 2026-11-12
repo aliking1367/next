@@ -150,19 +150,47 @@ func (s *Server) checkCDNDomain(ctx context.Context, domain, path string) (state
 	return state, reason, status, detail
 }
 
-// checkCDNDomainFromIran asks Iran's test servers to fetch the domain. They
-// sit in datacenters, so this sees a domain name blocked nationwide, not one
-// a single mobile operator cuts.
-func (s *Server) checkCDNDomainFromIran(ctx context.Context, domain string) (open, total int, err error) {
-	open, total, err = checkHostHTTPFromIran(ctx, http.DefaultClient, checkHostBaseURL, "https://"+domain+"/")
-	message := ""
-	if err != nil {
-		message = err.Error()
+// checkCDNDomainsFromIran has Iran's test servers download a file of several
+// hundred kilobytes through each domain and stores, per domain, how many
+// downloaded it in full (iran_open) out of those that downloaded it from a
+// known Cloudflare site (iran_total). A plain fetch is not enough: Iran lets a
+// new domain answer and then stalls it after a few tens of kilobytes, so the
+// ping works and nothing loads. The test servers sit in datacenters, so this
+// sees filtering nationwide, not a single mobile operator's.
+func (s *Server) checkCDNDomainsFromIran(ctx context.Context, domains []string) (map[string]iranDownload, error) {
+	results, err := checkCloudflareDownloadsFromIran(ctx, http.DefaultClient, checkHostBaseURL, domains)
+	now := time.Now().UTC()
+	for _, domain := range domains {
+		result, ok := results[domain]
+		message := ""
+		switch {
+		case err != nil:
+			message = err.Error()
+		case !ok:
+			message = "the check from Iran did not finish"
+		}
+		_, _ = s.db.ExecContext(ctx, `UPDATE cdn_domains SET iran_checked_at = ?, iran_open = ?, iran_total = ?, iran_error = ? WHERE domain = ?`,
+			now, result.Complete, result.Total, truncateText(message, 500), domain)
 	}
-	_, _ = s.db.ExecContext(ctx, `UPDATE cdn_domains SET iran_checked_at = ?, iran_open = ?, iran_total = ?, iran_error = ? WHERE domain = ?`,
-		time.Now().UTC(), open, total, truncateText(message, 500), domain)
-	return open, total, err
+	return results, err
 }
+
+func (s *Server) checkCDNDomainFromIran(ctx context.Context, domain string) (iranDownload, error) {
+	results, err := s.checkCDNDomainsFromIran(ctx, []string{domain})
+	if err != nil {
+		return iranDownload{}, err
+	}
+	result, ok := results[domain]
+	if !ok {
+		return iranDownload{}, fmt.Errorf("the check from Iran did not finish")
+	}
+	return result, nil
+}
+
+// iranFast is a domain at least half of Iran's test servers downloaded
+// through in full; iranSlow is one at most a quarter did.
+func iranFast(open, total int) bool { return total >= cloudflareDownloadMinimum && open*2 >= total }
+func iranSlow(open, total int) bool { return total >= cloudflareDownloadMinimum && open*4 <= total }
 
 func truncateText(value string, limit int) string {
 	if len(value) <= limit {
@@ -286,12 +314,13 @@ func (s *Server) handleCoreCDNDomains(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		open, total, err := s.checkCDNDomainFromIran(ctx, domain)
+		download, err := s.checkCDNDomainFromIran(ctx, domain)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "the check from Iran could not run: "+err.Error())
 			return
 		}
-		result["iran"] = map[string]any{"open": open, "total": total}
+		result["iran"] = map[string]any{"open": download.Complete, "total": download.Total,
+			"reached": download.Reached, "throttled": download.throttled()}
 	case "activate":
 		if settings.Transport != xrayconfig.TSinTransportPath || !settings.LastAppliedAt.Valid {
 			writeError(w, http.StatusUnprocessableEntity, "the countries are not served through Cloudflare (path mode) yet")
@@ -388,13 +417,11 @@ func (s *Server) checkCDNDomains(ctx context.Context) {
 	alert := func(title string, lines ...string) {
 		s.telegramReports.TSinTunnel(context.WithoutCancel(ctx), title, lines...)
 	}
-	standbyReady := 0
+	ready := map[string]bool{}
 	for _, item := range domains {
 		state, reason, status, _ := s.checkCDNDomain(checkCtx, item.Domain, path)
 		if !item.Active {
-			if state == "ok" {
-				standbyReady++
-			}
+			ready[item.Domain] = state == "ok"
 			continue
 		}
 		st := &cdnDomainWatch
@@ -422,8 +449,10 @@ func (s *Server) checkCDNDomains(ctx context.Context) {
 			}
 		}
 	}
-	// From Iran, every three hours, for the domain in use only: each check
-	// asks every Iranian test server, so the pool is checked there by hand.
+	// From Iran, every three hours, every domain in the pool: a download of
+	// a few hundred kilobytes through each, so a domain that answers a ping
+	// but stalls (a filtered new domain) shows as slow, and a spare that comes
+	// free is reported.
 	st := &cdnDomainWatch
 	st.mu.Lock()
 	due := time.Since(st.lastIranAt) >= cdnDomainIranEvery
@@ -432,31 +461,61 @@ func (s *Server) checkCDNDomains(ctx context.Context) {
 	}
 	st.mu.Unlock()
 	active := strings.ToLower(strings.TrimSpace(settings.GateHost))
-	if !due || active == "" {
+	if !due || len(domains) == 0 {
 		return
 	}
-	open, total, err := s.checkCDNDomainFromIran(checkCtx, active)
+	names := make([]string, 0, len(domains))
+	for _, item := range domains {
+		names = append(names, item.Domain)
+	}
+	results, err := s.checkCDNDomainsFromIran(checkCtx, names)
 	if err != nil {
+		return
+	}
+	countsOf := func(result iranDownload) string {
+		return fmt.Sprintf("از %d سرور تست در دیتاسنترهای ایران، %d سرور یک فایل چندصدکیلوبایتی را از این دامنه کامل دانلود کردند.", result.Total, result.Complete)
+	}
+	fastSpares := []string{}
+	for _, item := range domains {
+		result, ok := results[item.Domain]
+		if !ok || item.Domain == active {
+			continue
+		}
+		if !ready[item.Domain] {
+			continue
+		}
+		if iranFast(result.Complete, result.Total) {
+			fastSpares = append(fastSpares, item.Domain)
+		}
+		// A spare that was slow from Iran at its last check and is fast now.
+		wasSlow := item.IranCheckedAt != nil && item.IranError == "" && iranSlow(item.IranOpen, item.IranTotal)
+		if wasSlow && iranFast(result.Complete, result.Total) {
+			alert("یک دامنهٔ آماده از ایران آزاد شد و سرعت دارد", item.Domain, countsOf(result),
+				"اگر دامنهٔ در حال استفاده کند است، در داشبورد بخش «دامنه‌های Cloudflare» این دامنه را «در حال استفاده» کن تا کاربرها با آپدیت ساب رویش بروند.")
+		}
+	}
+	result, ok := results[active]
+	if active == "" || !ok {
 		return
 	}
 	st.mu.Lock()
 	wasBlocked := st.iranBlocked
 	switch {
-	case total >= 3 && open == 0:
+	case iranSlow(result.Complete, result.Total):
 		st.iranBlocked = true
-	case total > 0 && open*2 >= total:
+	case iranFast(result.Complete, result.Total):
 		st.iranBlocked = false
 	}
 	nowBlocked := st.iranBlocked
 	st.mu.Unlock()
-	counts := fmt.Sprintf("از %d سرور تست در دیتاسنترهای ایران، %d سرور جواب گرفتند.", total, open)
 	if nowBlocked && !wasBlocked {
-		next := "دامنهٔ آماده‌ای در لیست نیست؛ یک دامنهٔ جدید اضافه و آماده کن."
-		if standbyReady > 0 {
-			next = fmt.Sprintf("%d دامنهٔ آماده در لیست هست؛ یکی را «در حال استفاده» کن تا کاربرها با آپدیت ساب وصل شوند.", standbyReady)
+		next := "دامنهٔ آماده‌ای که از ایران سرعت داشته باشد در لیست نیست؛ تا آن موقع تونل اضطراری را روشن نگه دار."
+		if len(fastSpares) > 0 {
+			next = "این دامنهٔ آماده از ایران سرعت دارد؛ آن را «در حال استفاده» کن تا کاربرها با آپدیت ساب رویش بروند: " + strings.Join(fastSpares, "، ")
 		}
-		alert("دامنهٔ Cloudflare در حال استفاده احتمالاً در ایران فیلتر شده", active, counts, next)
+		what := "دانلود از ایران کامل نمی‌شود: ممکن است پینگ داشته باشد ولی سرعت ندارد؛ احتمالاً فیلتر یا خفه شده."
+		alert("دامنهٔ Cloudflare در حال استفاده از ایران سرعت ندارد", active, what, countsOf(result), next)
 	} else if !nowBlocked && wasBlocked {
-		alert("دامنهٔ Cloudflare در حال استفاده دوباره از ایران جواب می‌دهد", active, counts)
+		alert("دامنهٔ Cloudflare در حال استفاده دوباره از ایران سرعت دارد", active, countsOf(result))
 	}
 }
