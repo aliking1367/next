@@ -11,9 +11,14 @@ import (
 	"strings"
 )
 
+// New inbounds take a random port below Linux's default range for outgoing
+// connections (32768-60999). A busy server holds thousands of outgoing
+// connections, and a listening port picked inside that range can be taken by
+// one of them at that moment: Xray then fails to bind it and exits, taking
+// every config on the server down (seen on a node with ~3,400 connections).
 const (
 	autoInboundMinPort = 10000
-	autoInboundMaxPort = 60000
+	autoInboundMaxPort = 32000
 )
 
 var (
