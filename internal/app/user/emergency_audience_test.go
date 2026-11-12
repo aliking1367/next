@@ -27,3 +27,21 @@ func TestHideHostsHidesOnlyTheGivenInbounds(t *testing.T) {
 		t.Fatalf("selected = %#v", selected)
 	}
 }
+
+// The countries' tunnel configs follow the emergency tunnel's audience; the
+// country's own, Cloudflare and direct configs never do.
+func TestHideHostsHidesTheCountriesTunnelConfigs(t *testing.T) {
+	hosts := []Host{
+		{InboundTag: "tsin-germany-tunnel"},
+		{InboundTag: "tsin-best-ping-tunnel"},
+		{InboundTag: "tsin-germany"},
+		{InboundTag: "tsin-germany-direct"},
+		{InboundTag: "other-tunnel"},
+	}
+	got := hideHosts(hosts, emergencyInboundTags)
+	for i, want := range []bool{true, true, false, false, false} {
+		if got[i].IsDisabled != want {
+			t.Fatalf("%s hidden=%v, want %v", got[i].InboundTag, got[i].IsDisabled, want)
+		}
+	}
+}

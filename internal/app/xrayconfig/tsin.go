@@ -33,6 +33,9 @@ type TSinCountry struct {
 	// Fastly adds, in path mode, a config for the country through Fastly's
 	// CDN (see tsin_fastly.go).
 	Fastly bool
+	// TunnelPort adds, in path mode, a config for the country through the
+	// Iranian tunnel on this port (see tsin_tunnel.go); 0 adds none.
+	TunnelPort int
 }
 
 type TSinInbound struct {
@@ -45,6 +48,10 @@ type TSinInbound struct {
 	Direct bool `json:"direct,omitempty"`
 	// Fastly marks a country's config through Fastly.
 	Fastly bool `json:"fastly,omitempty"`
+	// Tunnel marks a country's config through the Iranian tunnel, on
+	// TunnelPort.
+	Tunnel     bool `json:"tunnel,omitempty"`
+	TunnelPort int  `json:"tunnel_port,omitempty"`
 }
 
 // TSinDirectSuffix ends the tag of a country's direct inbound.
@@ -113,6 +120,9 @@ type TSinGate struct {
 	// FastlyHost is the Fastly service's domain the Fastly configs point at;
 	// empty adds none.
 	FastlyHost string
+	// TunnelHost is the Iranian tunnel's address the tunnel configs point at;
+	// empty adds none.
+	TunnelHost string
 }
 
 // tsinDirectPorts are the ports direct configs take, in order: the ones
@@ -177,6 +187,12 @@ func buildTSinGate(gate TSinGate, fallbacks []any) (map[string]any, error) {
 			},
 		},
 	}, nil
+}
+
+// tsinWantsTunnel says whether a country gets a tunnel config: path mode, a
+// tunnel address, and a port for it.
+func tsinWantsTunnel(country TSinCountry, transport string, gate TSinGate) bool {
+	return transport == TSinTransportPath && country.TunnelPort > 0 && strings.TrimSpace(gate.TunnelHost) != ""
 }
 
 // TSinInboundTag is the inbound that serves one country.
@@ -263,6 +279,9 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
 			wanted[TSinFastlyInboundTag(country.Name)] = true
 		}
+		if tsinWantsTunnel(country, transport, gate) {
+			wanted[TSinTunnelInboundTag(country.Name)] = true
+		}
 	}
 	// Every T.Sin inbound anywhere that is not wanted on this target goes: a
 	// country dropped from the list, or one left on the machine the service
@@ -280,8 +299,8 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		if err != nil {
 			return nil, err
 		}
-		if tag == TSinGateTag {
-			// Rebuilt below on every apply, since its fallbacks follow the countries.
+		if tag == TSinGateTag || strings.HasPrefix(tag, TSinTunnelGatePrefix) {
+			// Rebuilt below on every apply, since their fallbacks follow the countries.
 			continue
 		}
 		if wanted[tag] && len(direct) == 1 && direct[0] == target {
@@ -298,6 +317,11 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 	used, ranges := extractUsedPorts(config)
 	if transport == TSinTransportPath {
 		used[gate.Port] = true
+		for _, country := range countries {
+			if tsinWantsTunnel(country, transport, gate) {
+				used[country.TunnelPort] = true
+			}
+		}
 	}
 	catalog := r.loadCatalog(ctx)
 	usedDests := map[string]bool{}
@@ -364,9 +388,19 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 			}
 			result = append(result, fastly)
 		}
+		if tsinWantsTunnel(country, transport, gate) {
+			tunnel, err := r.ensureTSinTunnelInbound(ctx, target, country, gate.TunnelHost, used, ranges, portBusy)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, tunnel)
+		}
 	}
 
 	if err := r.applyTSinGate(ctx, target, transport, gate, result); err != nil {
+		return nil, err
+	}
+	if err := r.applyTSinTunnelGates(ctx, target, result); err != nil {
 		return nil, err
 	}
 	config, err = r.GetTargetRawConfig(ctx, target)
@@ -545,6 +579,9 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 		if country.Fastly {
 			inbounds = append(inbounds, TSinFastlyInboundTag(country.Name))
 		}
+		if country.TunnelPort > 0 {
+			inbounds = append(inbounds, TSinTunnelInboundTag(country.Name))
+		}
 		rules = append(rules, map[string]any{
 			"type":        "field",
 			"inboundTag":  inbounds,
@@ -592,7 +629,7 @@ func (r Repository) applyTSinGate(ctx context.Context, target, transport string,
 	}
 	fallbacks := make([]any, 0, len(countries))
 	for _, country := range countries {
-		if country.Direct || country.Fastly {
+		if country.Direct || country.Fastly || country.Tunnel {
 			continue // reached on its own port, not through the gate
 		}
 		inbound, err := r.GetInbound(ctx, country.Tag)
@@ -644,8 +681,8 @@ func (r Repository) SetTSinGateHost(ctx context.Context, oldHost, newHost string
 		return 0, errors.New("there is no domain in use to replace")
 	}
 	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?, sni = ?, host = ?
-WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND LOWER(address) = ?`,
-		newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, oldHost)
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND LOWER(address) = ?`,
+		newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinTunnelSuffix, oldHost)
 	if err != nil {
 		return 0, err
 	}

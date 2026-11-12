@@ -150,6 +150,9 @@ type tsinRequest struct {
 	// FastlyCountries the countries with a Fastly config. Omitted keeps them.
 	FastlyHost      *string   `json:"fastly_host"`
 	FastlyCountries *[]string `json:"fastly_countries"`
+	// TunnelCountries replaces which countries get a config through the
+	// Iranian tunnel, by name, with the tunnel port of each. Omitted keeps it.
+	TunnelCountries *map[string]int `json:"tunnel_countries"`
 }
 
 func tokenSum(token string) string {
@@ -294,6 +297,9 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"fastly_host":      settings.FastlyHost,
 		"fastly_countries": settings.FastlyCountries,
 		"fastly_backends":  s.configRepo.TSinFastlyBackends(r.Context(), settings.FastlyCountries),
+		"tunnel_countries": s.loadTSinTunnelCountries(r.Context()),
+		"tunnel_host":      settings.EmergencyAddress,
+		"tunnel_per_port":  xrayconfig.TSinTunnelMaxPerPort,
 		"origin_ip":        s.tsinTargetAddress(r.Context(), settings.Target),
 		"node_script":      tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
 	}
@@ -478,6 +484,19 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			fastly[strings.ToLower(name)] = true
 		}
 	}
+	tunnelCountries := s.loadTSinTunnelCountries(ctx)
+	if request.TunnelCountries != nil {
+		gatePort := settings.GatePort
+		if gatePort <= 0 {
+			gatePort = xrayconfig.DefaultTSinGatePort
+		}
+		cleaned, err := cleanTSinTunnelCountries(*request.TunnelCountries, gatePort)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		tunnelCountries = cleaned
+	}
 
 	tunnel := tsin.NewTunnel()
 	address := ""
@@ -536,6 +555,8 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			// Only path mode has a Cloudflare config to add a direct one beside.
 			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
 			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
+			// The tunnel configs go to the emergency tunnel's address.
+			TunnelPort: tunnelCountries[strings.ToLower(proxy.Country)],
 		})
 	}
 	if !onPanelHost {
@@ -544,7 +565,8 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		portBusy = s.tsinPortBusy(target)
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
-		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost}, countries, portBusy)
+		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost,
+			TunnelHost: settings.EmergencyAddress}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return
@@ -581,6 +603,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	if err := s.saveTSinSettings(ctx, settings); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if request.TunnelCountries != nil {
+		if err := s.saveTSinTunnelCountries(ctx, tunnelCountries); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	logging.Infof(logging.ComponentNode, "t.sin: applied %d countries on %s to %s", len(countries), settings.DC, target)
 

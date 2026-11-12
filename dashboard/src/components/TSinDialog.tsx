@@ -93,6 +93,12 @@ type TSinView = {
 	fastly_host?: string;
 	fastly_countries?: string[] | null;
 	fastly_backends?: TSinFastlyBackend[] | null;
+	// tunnel_countries maps a country (lower case) to the Iranian tunnel port
+	// its 🛡 config goes through; tunnel_host is the tunnel's address (the
+	// emergency tunnel's) and tunnel_per_port how many countries a port takes.
+	tunnel_countries?: Record<string, number> | null;
+	tunnel_host?: string;
+	tunnel_per_port?: number;
 	origin_ip?: string;
 	emergency?: TSinEmergency;
 	// smart_config is the smart config switch: 0 off, 1 in the JSON
@@ -277,6 +283,10 @@ export const TSinDialog: FC<{
 	const [directAddress, setDirectAddress] = useState("");
 	const [fastlyHost, setFastlyHost] = useState("");
 	const [fastly, setFastly] = useState<string[]>([]);
+	const [tunnelCountries, setTunnelCountries] = useState<
+		Record<string, number>
+	>({});
+	const [tunnelPorts, setTunnelPorts] = useState("20100, 20101");
 	const [fastlyBusy, setFastlyBusy] = useState(false);
 	const [fastlyResults, setFastlyResults] = useState<TSinFastlyCheck[] | null>(
 		null,
@@ -395,6 +405,17 @@ export const TSinDialog: FC<{
 			setDirectAddress(data.direct_address ?? "");
 			setFastlyHost(data.fastly_host ?? "");
 			setFastly(data.fastly_countries ?? ["Best ping"]);
+			const savedTunnel = data.tunnel_countries ?? {};
+			setTunnelCountries(savedTunnel);
+			const savedPorts = Array.from(new Set(Object.values(savedTunnel)))
+				.filter((port) => port > 0)
+				.sort((a, b) => a - b);
+			for (const port of [20100, 20101]) {
+				if (!savedPorts.includes(port) && savedPorts.length < 2) {
+					savedPorts.push(port);
+				}
+			}
+			setTunnelPorts(savedPorts.sort((a, b) => a - b).join(", "));
 			setEmAddress(data.emergency?.address ?? "");
 			setEmProtocols(data.emergency?.protocols ?? "both");
 			setEmAudience(data.emergency?.audience ?? "all");
@@ -452,6 +473,11 @@ export const TSinDialog: FC<{
 				direct_address: directAddress.trim(),
 				fastly_host: fastlyHost.trim(),
 				fastly_countries: fastly.filter((name) => selected.includes(name)),
+				tunnel_countries: Object.fromEntries(
+					selected
+						.map((name) => [name, tunnelCountries[name.toLowerCase()] ?? 0])
+						.filter(([, port]) => Number(port) > 0),
+				),
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -1338,6 +1364,110 @@ export const TSinDialog: FC<{
 									)}
 								</Box>
 							)}
+						</TSinSection>
+					)}
+
+					{transport === "path" && selected.length > 0 && (
+						<TSinSection
+							title={tt(
+								"tsin.tunnelCountries.title",
+								"🛡 Countries through the Iranian tunnel",
+							)}
+							status={
+								<Badge
+									colorScheme={
+										Object.keys(view?.tunnel_countries ?? {}).length > 0
+											? "green"
+											: "gray"
+									}
+								>
+									{Object.keys(view?.tunnel_countries ?? {}).length ||
+										tt("tsin.smart.off", "Off")}
+								</Badge>
+							}
+						>
+							<Text fontSize="sm" mb={2} opacity={0.85}>
+								{tt(
+									"tsin.tunnelCountries.help",
+									"The chosen countries also get a config marked 🛡 that goes through the Iranian tunnel (the emergency tunnel's address) instead of Cloudflare: VMess over WebSocket, up to {{max}} countries on one tunnel port, told apart by path. The tunnel has to forward each port to the same port on the countries' server. Choose a port for each country and press Apply. With the emergency tunnel shown to Hamrah Aval only, these configs are too.",
+									{ max: view?.tunnel_per_port ?? 5 },
+								)}
+							</Text>
+							{!view?.tunnel_host && (
+								<Text fontSize="sm" mb={2} color="orange.400">
+									{tt(
+										"tsin.tunnelCountries.noHost",
+										"Enter the tunnel's address in the emergency tunnel section first; these configs use the same address.",
+									)}
+								</Text>
+							)}
+							{view?.tunnel_host && (
+								<Text fontSize="xs" mb={2} dir="ltr" opacity={0.8}>
+									{view.tunnel_host}
+								</Text>
+							)}
+							<FormControl mb={2}>
+								<FormLabel fontSize="sm" mb={1}>
+									{tt("tsin.tunnelCountries.ports", "Tunnel ports")}
+								</FormLabel>
+								<Input
+									value={tunnelPorts}
+									onChange={(event) => setTunnelPorts(event.target.value)}
+									placeholder="20100, 20101"
+									dir="ltr"
+									autoComplete="off"
+									spellCheck={false}
+								/>
+							</FormControl>
+							<Stack spacing={1}>
+								{selected.map((name) => {
+									const key = name.toLowerCase();
+									const ports = tunnelPorts
+										.split(/[\s,]+/)
+										.map((value) => Number.parseInt(value, 10))
+										.filter((port) => port > 0 && port <= 65535);
+									const max = view?.tunnel_per_port ?? 5;
+									const used = (port: number) =>
+										selected.filter(
+											(other) => tunnelCountries[other.toLowerCase()] === port,
+										).length;
+									return (
+										<HStack key={name} justify="space-between" spacing={2}>
+											<Text fontSize="sm">{name} 🛡</Text>
+											<Box w="150px" flexShrink={0}>
+												<Select
+													size="sm"
+													value={String(tunnelCountries[key] ?? 0)}
+													onChange={(event) => {
+														const port =
+															Number.parseInt(event.target.value, 10) || 0;
+														setTunnelCountries((current) => {
+															const next = { ...current };
+															if (port > 0) next[key] = port;
+															else delete next[key];
+															return next;
+														});
+													}}
+												>
+													<option value="0">—</option>
+													{ports.map((port) => (
+														<option
+															key={port}
+															value={String(port)}
+															disabled={
+																tunnelCountries[key] !== port &&
+																used(port) >= max
+															}
+														>
+															{port} ({used(port)}/{max})
+														</option>
+													))}
+												</Select>
+											</Box>
+										</HStack>
+									);
+								})}
+							</Stack>
 						</TSinSection>
 					)}
 

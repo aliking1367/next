@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -13,8 +14,11 @@ import (
 // per user, whether the emergency configs go into the subscription.
 
 // emergencyInboundTags are the emergency tunnel's inbounds
-// (xrayconfig.TSinEmergencyVMessTag and TSinEmergencySSTag).
-var emergencyInboundTags = []string{"emergency-vmess", "emergency-ss"}
+// (xrayconfig.TSinEmergencyVMessTag and TSinEmergencySSTag) and the
+// countries' tunnel inbounds (xrayconfig.TSinTunnelInboundTag, matched by the
+// pattern): every config that goes through the Iranian tunnel, which the
+// "Hamrah Aval only" choice is about.
+var emergencyInboundTags = []string{"emergency-vmess", "emergency-ss", "tsin-*-tunnel"}
 
 const (
 	clientOperatorMCI     = "mci"
@@ -93,13 +97,30 @@ func hideHosts(hosts []Host, tags []string) []Host {
 		return hosts
 	}
 	hidden := make(map[string]bool, len(tags))
+	var patterns [][2]string
 	for _, tag := range tags {
+		// One "*" in a tag matches anything between its two ends.
+		if prefix, suffix, ok := strings.Cut(tag, "*"); ok {
+			patterns = append(patterns, [2]string{prefix, suffix})
+			continue
+		}
 		hidden[tag] = true
+	}
+	matches := func(tag string) bool {
+		if hidden[tag] {
+			return true
+		}
+		for _, pattern := range patterns {
+			if len(tag) >= len(pattern[0])+len(pattern[1]) && strings.HasPrefix(tag, pattern[0]) && strings.HasSuffix(tag, pattern[1]) {
+				return true
+			}
+		}
+		return false
 	}
 	result := make([]Host, len(hosts))
 	copy(result, hosts)
 	for i := range result {
-		if hidden[result[i].InboundTag] {
+		if matches(result[i].InboundTag) {
 			result[i].IsDisabled = true
 			result[i].EnabledAdmins = nil
 		}
