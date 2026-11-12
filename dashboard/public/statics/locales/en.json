@@ -3308,7 +3308,7 @@
 	"tsin.lab.port": "Port",
 	"tsin.lab.created": "Test configs made. Wait a minute for the server to load them, then test each on the phone.",
 	"tsin.lab.title": "🧪 Protocol test",
-	"tsin.lab.help": "Makes 5 test configs, each hiding the connection a different way, through the same address as the ⚡ configs (the front server) and out through Best ping. No user gets them. Scan each on the phone, on the network that has trouble, and see which connects; then remove them. Making or removing them reconnects the server's users for a second.",
+	"tsin.lab.help": "Makes test configs, each hiding the connection a different way, through the same address as the ⚡ configs (the front server) and out through Best ping, plus a VMess WebSocket test on port 20100 for the Iranian tunnel. No user gets them. Scan each on the phone, on the network that has trouble, and see which connects; then remove them. Making or removing them reconnects the server's users for a second.",
 	"tsin.lab.show": "Show",
 	"tsin.lab.create": "Make test configs",
 	"tsin.lab.remove": "Remove test configs",

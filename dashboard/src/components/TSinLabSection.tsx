@@ -123,7 +123,7 @@ export const TSinLabSection: FC = () => {
 			<Text fontSize="xs" mb={2} opacity={0.85}>
 				{tt(
 					"tsin.lab.help",
-					"Makes 5 test configs, each hiding the connection a different way, through the same address as the ⚡ configs (the front server) and out through Best ping. No user gets them. Scan each on the phone, on the network that has trouble, and see which connects; then remove them. Making or removing them reconnects the server's users for a second.",
+					"Makes test configs, each hiding the connection a different way, through the same address as the ⚡ configs (the front server) and out through Best ping, plus a VMess WebSocket test on port 20100 for the Iranian tunnel. No user gets them. Scan each on the phone, on the network that has trouble, and see which connects; then remove them. Making or removing them reconnects the server's users for a second.",
 				)}
 			</Text>
 			<HStack spacing={2} flexWrap="wrap">

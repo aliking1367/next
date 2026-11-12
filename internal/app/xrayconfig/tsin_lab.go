@@ -39,7 +39,14 @@ type TSinLabTest struct {
 type tsinLabRecipe struct {
 	key, name, about string
 	build            func(tag string, port int, client map[string]any) (map[string]any, error)
+	// port is a fixed port the test needs, for one an Iranian tunnel
+	// forwards to; 0 picks a free one.
+	port int
 }
+
+// TSinLabTunnelPort is the port the tunnel test listens on: the one bought on
+// the Iranian tunnel for the countries.
+const TSinLabTunnelPort = 20100
 
 func tsinLabClient(id string) map[string]any {
 	return map[string]any{"id": id, "email": "lab@tsin", "flow": ""}
@@ -81,7 +88,7 @@ func tsinLabRecipes() []tsinLabRecipe {
 						},
 					}},
 				}), nil
-			}},
+			}, 0},
 		{"vmess-http", "VMess + HTTP header", "Looks like plain HTTP to play.google.com like test 1, but VMess encrypts what is inside, so the operator sees neither the sites nor the user",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				return map[string]any{
@@ -99,7 +106,7 @@ func tsinLabRecipes() []tsinLabRecipe {
 					},
 					"sniffing": autoProvisionSniffing(),
 				}, nil
-			}},
+			}, 0},
 		{"xhttp-plain", "XHTTP, no TLS", "XHTTP over plain HTTP, no encryption layer of its own",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				path, err := randomXHTTPPath()
@@ -110,7 +117,7 @@ func tsinLabRecipes() []tsinLabRecipe {
 					"network": "xhttp", "security": "none",
 					"xhttpSettings": map[string]any{"path": path, "mode": "auto"},
 				}), nil
-			}},
+			}, 0},
 		{"reality-gitlab", "REALITY XHTTP gitlab.io", "REALITY with the SNI and Firefox fingerprint a seller uses on Hamrah Aval",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				settings, err := reality("gitlab.io:443", "gitlab.io")
@@ -125,7 +132,7 @@ func tsinLabRecipes() []tsinLabRecipe {
 					"network": "xhttp", "security": "reality", "realitySettings": settings,
 					"xhttpSettings": map[string]any{"path": path, "mode": "auto"},
 				}), nil
-			}},
+			}, 0},
 		{"reality-tcp", "REALITY TCP play.google.com", "REALITY on plain TCP with the SNI play.google.com",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				settings, err := reality("play.google.com:443", "play.google.com")
@@ -135,7 +142,7 @@ func tsinLabRecipes() []tsinLabRecipe {
 				return vless(tag, port, client, map[string]any{
 					"network": "tcp", "security": "reality", "realitySettings": settings,
 				}), nil
-			}},
+			}, 0},
 		{"cf-xhttp", "XHTTP via Cloudflare", "XHTTP through the Cloudflare domain instead of WebSocket: HTTP/2 like a browser",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				path, err := randomXHTTPPath()
@@ -154,7 +161,7 @@ func tsinLabRecipes() []tsinLabRecipe {
 						"certificates": []any{map[string]any{"certificate": certLines, "key": keyLines}},
 					},
 				}), nil
-			}},
+			}, 0},
 		{"tls-xhttp", "TLS XHTTP", "Ordinary TLS with the server's own certificate, which the link pins",
 			func(tag string, port int, client map[string]any) (map[string]any, error) {
 				path, err := randomXHTTPPath()
@@ -173,7 +180,23 @@ func tsinLabRecipes() []tsinLabRecipe {
 						"certificates": []any{map[string]any{"certificate": certLines, "key": keyLines}},
 					},
 				}), nil
-			}},
+			}, 0},
+		{"tunnel-vmess", "Tunnel VMess WebSocket", fmt.Sprintf("VMess over WebSocket on port %d of the countries' server, for the Iranian tunnel to forward to: send this link to the tunnel service to approve", TSinLabTunnelPort),
+			func(tag string, port int, client map[string]any) (map[string]any, error) {
+				path, err := randomXHTTPPath()
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{
+					"tag": tag, "listen": "::", "port": port, "protocol": "vmess",
+					"settings": map[string]any{"clients": []any{map[string]any{"id": client["id"], "email": client["email"]}}},
+					"streamSettings": map[string]any{
+						"network": "ws", "security": "none",
+						"wsSettings": map[string]any{"path": path},
+					},
+					"sniffing": autoProvisionSniffing(),
+				}, nil
+			}, TSinLabTunnelPort},
 	}
 }
 
@@ -210,7 +233,13 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address, gateHost
 		return nil, errors.New("there is no address to test: set the front server's IP in the ⚡ section, or serve the countries from a node")
 	}
 	if existing, err := r.TSinLabTests(ctx, target, address, gateHost); err == nil && len(existing) > 0 {
-		if len(existing) == len(tsinLabRecipes()) {
+		made := 0
+		for _, test := range existing {
+			if strings.HasPrefix(test.Tag, TSinLabPrefix) && !strings.HasSuffix(test.Tag, "-via-tunnel") {
+				made++
+			}
+		}
+		if made == len(tsinLabRecipes()) {
 			return existing, nil
 		}
 		// A lab made by an older version lacks the newer tests: make it again.
@@ -236,8 +265,12 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address, gateHost
 	used, ranges := extractUsedPorts(config)
 	var tags []any
 	for _, recipe := range tsinLabRecipes() {
-		port, err := pickProvisionPort(nil, used, ranges, portBusy)
-		if err != nil {
+		port := recipe.port
+		if port > 0 {
+			if used[port] || (portBusy != nil && portBusy(port)) {
+				return nil, fmt.Errorf("port %d, which the %s test needs, is already in use on the server", port, recipe.name)
+			}
+		} else if port, err = pickProvisionPort(nil, used, ranges, portBusy); err != nil {
 			return nil, err
 		}
 		used[port] = true
@@ -333,8 +366,17 @@ func (r Repository) RemoveTSinLab(ctx context.Context, target string) error {
 	return nil
 }
 
-// TSinLabTests reads the lab on target back as links to address.
-func (r Repository) TSinLabTests(ctx context.Context, target, address, gateHost string) ([]TSinLabTest, error) {
+// TSinLabTests reads the lab on target back as links to address. The tunnel
+// test links to tunnel[0], the countries' server's own address the Iranian
+// tunnel forwards to, and once more through the tunnel host tunnel[1].
+func (r Repository) TSinLabTests(ctx context.Context, target, address, gateHost string, tunnel ...string) ([]TSinLabTest, error) {
+	nodeAddress, tunnelHost := address, ""
+	if len(tunnel) > 0 && strings.TrimSpace(tunnel[0]) != "" {
+		nodeAddress = strings.TrimSpace(tunnel[0])
+	}
+	if len(tunnel) > 1 {
+		tunnelHost = strings.TrimSpace(tunnel[1])
+	}
 	config, err := r.GetTargetRawConfig(ctx, target)
 	if err != nil {
 		return nil, err
@@ -370,11 +412,24 @@ func (r Repository) TSinLabTests(ctx context.Context, target, address, gateHost 
 			linkHost = gate
 			about += fmt.Sprintf(". It needs one more Cloudflare Origin Rule for %s, ordered after the existing one: (http.host eq \"%s\" and starts_with(http.request.uri.path, \"%s\")) with destination port %d", gate, gate, stringValue(mapValue(mapValue(inbound["streamSettings"])["xhttpSettings"])["path"]), port)
 		}
+		if recipe.key == "tunnel-vmess" {
+			linkHost = nodeAddress
+		}
 		link, err := tsinLabLink(recipe.key, stringValue(clients[0]["id"]), linkHost, port, mapValue(inbound["streamSettings"]), recipe.name)
 		if err != nil {
 			return nil, err
 		}
 		tests = append(tests, TSinLabTest{Tag: tag, Name: recipe.name, About: about, Port: port, Link: link})
+		if recipe.key == "tunnel-vmess" && tunnelHost != "" {
+			// The same test through the tunnel, for the phone once it forwards.
+			link, err := tsinLabLink(recipe.key, stringValue(clients[0]["id"]), tunnelHost, port, mapValue(inbound["streamSettings"]), recipe.name+" via tunnel")
+			if err != nil {
+				return nil, err
+			}
+			tests = append(tests, TSinLabTest{Tag: tag + "-via-tunnel", Name: recipe.name + " (via the tunnel)",
+				About: fmt.Sprintf("The same test through the Iranian tunnel %s, port %d: test it on the phone once the tunnel forwards", tunnelHost, port),
+				Port: port, Link: link})
+		}
 	}
 	return tests, nil
 }
@@ -392,6 +447,16 @@ func tsinLabLink(key, id, host string, port int, stream map[string]any, name str
 		payload, err := json.Marshal(map[string]any{
 			"v": "2", "ps": "LAB " + name, "add": strings.Trim(host, "[]"), "port": strconv.Itoa(port), "id": id,
 			"aid": "0", "scy": "auto", "net": "tcp", "type": "http", "host": "play.google.com", "path": "/", "tls": "",
+		})
+		if err != nil {
+			return "", err
+		}
+		return "vmess://" + base64.StdEncoding.EncodeToString(payload), nil
+	case "tunnel-vmess":
+		payload, err := json.Marshal(map[string]any{
+			"v": "2", "ps": "LAB " + name, "add": strings.Trim(host, "[]"), "port": strconv.Itoa(port), "id": id,
+			"aid": "0", "scy": "auto", "net": "ws", "type": "none", "host": "",
+			"path": stringValue(mapValue(stream["wsSettings"])["path"]), "tls": "",
 		})
 		if err != nil {
 			return "", err

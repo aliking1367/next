@@ -26,8 +26,28 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tests) != 7 {
-		t.Fatalf("got %d lab tests, want 7", len(tests))
+	if len(tests) != 8 {
+		t.Fatalf("got %d lab tests, want 8", len(tests))
+	}
+	// The tunnel test sits on its fixed port, VMess over WebSocket, and links
+	// to the server itself, then once more through the tunnel host.
+	withTunnel, err := repo.TSinLabTests(ctx, "master", "203.0.113.9", "g1.example.com", "198.51.100.7", "tun.example.ir")
+	if err != nil || len(withTunnel) != 9 {
+		t.Fatalf("with the tunnel: %d tests, %v", len(withTunnel), err)
+	}
+	var tunnelLinks []string
+	for _, test := range withTunnel {
+		if strings.HasPrefix(test.Tag, TSinLabPrefix+"tunnel-vmess") {
+			if test.Port != TSinLabTunnelPort {
+				t.Fatalf("tunnel test on port %d", test.Port)
+			}
+			raw, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(test.Link, "vmess://"))
+			tunnelLinks = append(tunnelLinks, string(raw))
+		}
+	}
+	if len(tunnelLinks) != 2 || !strings.Contains(tunnelLinks[0], `"add":"198.51.100.7"`) || !strings.Contains(tunnelLinks[1], `"add":"tun.example.ir"`) ||
+		!strings.Contains(tunnelLinks[0], `"net":"ws"`) || !strings.Contains(tunnelLinks[0], `"port":"20100"`) {
+		t.Fatalf("tunnel links %v", tunnelLinks)
 	}
 	for _, test := range tests {
 		if strings.HasPrefix(test.Link, "vmess://") {

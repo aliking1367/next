@@ -60,7 +60,10 @@ func (s *Server) handleCoreTSinLab(w http.ResponseWriter, r *http.Request) {
 		}
 		s.kickNodeOperationsSoon()
 	}
-	tests, err := s.configRepo.TSinLabTests(ctx, settings.Target, address, settings.GateHost)
+	// The tunnel test links to the countries' server itself, where the Iranian
+	// tunnel forwards to, and through the emergency tunnel's host.
+	tests, err := s.configRepo.TSinLabTests(ctx, settings.Target, address, settings.GateHost,
+		s.tsinTargetAddress(ctx, settings.Target), settings.EmergencyAddress)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
