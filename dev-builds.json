@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-5aa5cf4",
-  "updated_at": "2026-11-11T15:35:54Z",
+  "latest": "dev-5c970bf",
+  "updated_at": "2026-11-12T09:56:32Z",
   "builds": [
+    {
+      "tag": "dev-5c970bf",
+      "sha": "5c970bf14312642715a72cadd07faa91c3a5e05c",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43195182415",
+      "run_number": "213",
+      "created_at": "2026-11-12T09:56:32Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-5c970bf.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5c970bf.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-5c970bf.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-5c970bf.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-5aa5cf4",
       "sha": "5aa5cf4e416a17d1d214972705432b2fd6a3a511",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-b05a259.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-b05a259.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-6bd434b",
-      "sha": "6bd434b0060747cf060b26f962f9c9eb3e9c5c1a",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "38765990059",
-      "run_number": "113",
-      "created_at": "2026-10-15T16:12:01Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-6bd434b.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-6bd434b.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-6bd434b.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-6bd434b.zip"
         }
       }
     }
