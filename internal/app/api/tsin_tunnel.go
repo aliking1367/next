@@ -82,3 +82,67 @@ func (s *Server) saveTSinConnectAddress(ctx context.Context, address string) err
 	_, err := s.db.ExecContext(ctx, `UPDATE tsin_settings SET cdn_connect_address = ?`, strings.TrimSpace(address))
 	return err
 }
+
+// tsinTunnelPort is one tunnel port: NodePort on the countries' server, which
+// the countries' configs are grouped by, and where users reach it, Address
+// (what the tunnel seller gave; empty is the emergency tunnel's address) and
+// Port on the tunnel's side (0 is the same number as NodePort).
+type tsinTunnelPort struct {
+	NodePort int    `json:"node_port"`
+	Address  string `json:"address"`
+	Port     int    `json:"port"`
+}
+
+// loadTSinTunnelPorts reads the tunnel ports; any failure reads as none.
+func (s *Server) loadTSinTunnelPorts(ctx context.Context) []tsinTunnelPort {
+	var raw string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(tunnel_ports, '') FROM tsin_settings ORDER BY id LIMIT 1`).Scan(&raw); err != nil {
+		return []tsinTunnelPort{}
+	}
+	out := []tsinTunnelPort{}
+	if strings.TrimSpace(raw) != "" {
+		_ = json.Unmarshal([]byte(raw), &out)
+	}
+	return out
+}
+
+func (s *Server) saveTSinTunnelPorts(ctx context.Context, ports []tsinTunnelPort) error {
+	encoded, err := json.Marshal(ports)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE tsin_settings SET tunnel_ports = ?`, string(encoded))
+	return err
+}
+
+// cleanTSinTunnelPorts checks the tunnel ports: real ports, an address that is
+// a host name or IP, and each port on the server listed once.
+func cleanTSinTunnelPorts(values []tsinTunnelPort, gatePort int) ([]tsinTunnelPort, error) {
+	out := make([]tsinTunnelPort, 0, len(values))
+	seen := map[int]bool{}
+	for _, item := range values {
+		if item.NodePort == 0 && strings.TrimSpace(item.Address) == "" && item.Port == 0 {
+			continue
+		}
+		if item.NodePort < 1 || item.NodePort > 65535 {
+			return nil, fmt.Errorf("enter the port on the server for every tunnel row (%d is not a port)", item.NodePort)
+		}
+		if item.NodePort == gatePort {
+			return nil, fmt.Errorf("port %d is the Cloudflare gate's port; choose another", item.NodePort)
+		}
+		if seen[item.NodePort] {
+			return nil, fmt.Errorf("port %d on the server is listed twice", item.NodePort)
+		}
+		seen[item.NodePort] = true
+		if item.Port < 0 || item.Port > 65535 {
+			return nil, fmt.Errorf("tunnel port %d is not a port", item.Port)
+		}
+		address, err := normalizeTSinDirectAddress(item.Address)
+		if err != nil {
+			return nil, fmt.Errorf("the tunnel address %q must be a host name or an IP address, without a port", item.Address)
+		}
+		out = append(out, tsinTunnelPort{NodePort: item.NodePort, Address: address, Port: item.Port})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].NodePort < out[j].NodePort })
+	return out, nil
+}

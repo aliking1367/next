@@ -153,6 +153,9 @@ type tsinRequest struct {
 	// TunnelCountries replaces which countries get a config through the
 	// Iranian tunnel, by name, with the tunnel port of each. Omitted keeps it.
 	TunnelCountries *map[string]int `json:"tunnel_countries"`
+	// TunnelPorts replaces, per port on the server, the address and
+	// tunnel-side port users reach it on. Omitted keeps them.
+	TunnelPorts *[]tsinTunnelPort `json:"tunnel_ports"`
 }
 
 func tokenSum(token string) string {
@@ -298,6 +301,7 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"fastly_countries": settings.FastlyCountries,
 		"fastly_backends":  s.configRepo.TSinFastlyBackends(r.Context(), settings.FastlyCountries),
 		"tunnel_countries": s.loadTSinTunnelCountries(r.Context()),
+		"tunnel_ports":     s.loadTSinTunnelPorts(r.Context()),
 		"tunnel_host":      settings.EmergencyAddress,
 		"tunnel_per_port":  xrayconfig.TSinTunnelMaxPerPort,
 		"origin_ip":        s.tsinTargetAddress(r.Context(), settings.Target),
@@ -497,6 +501,23 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		}
 		tunnelCountries = cleaned
 	}
+	tunnelPorts := s.loadTSinTunnelPorts(ctx)
+	if request.TunnelPorts != nil {
+		gatePort := settings.GatePort
+		if gatePort <= 0 {
+			gatePort = xrayconfig.DefaultTSinGatePort
+		}
+		cleaned, err := cleanTSinTunnelPorts(*request.TunnelPorts, gatePort)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		tunnelPorts = cleaned
+	}
+	tunnelPortBy := map[int]tsinTunnelPort{}
+	for _, item := range tunnelPorts {
+		tunnelPortBy[item.NodePort] = item
+	}
 
 	tunnel := tsin.NewTunnel()
 	address := ""
@@ -556,7 +577,9 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
 			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
 			// The tunnel configs go to the emergency tunnel's address.
-			TunnelPort: tunnelCountries[strings.ToLower(proxy.Country)],
+			TunnelPort:       tunnelCountries[strings.ToLower(proxy.Country)],
+			TunnelAddress:    tunnelPortBy[tunnelCountries[strings.ToLower(proxy.Country)]].Address,
+			TunnelRemotePort: tunnelPortBy[tunnelCountries[strings.ToLower(proxy.Country)]].Port,
 		})
 	}
 	if !onPanelHost {
@@ -606,6 +629,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.TunnelCountries != nil {
 		if err := s.saveTSinTunnelCountries(ctx, tunnelCountries); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if request.TunnelPorts != nil {
+		if err := s.saveTSinTunnelPorts(ctx, tunnelPorts); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

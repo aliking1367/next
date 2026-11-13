@@ -99,6 +99,9 @@ type TSinView = {
 	tunnel_countries?: Record<string, number> | null;
 	tunnel_host?: string;
 	tunnel_per_port?: number;
+	// tunnel_ports says, per port on the server, where users reach it: the
+	// address the tunnel seller gave and the port on the tunnel's side.
+	tunnel_ports?: { node_port: number; address: string; port: number }[] | null;
 	origin_ip?: string;
 	emergency?: TSinEmergency;
 	// smart_config is the smart config switch: 0 off, 1 in the JSON
@@ -286,7 +289,12 @@ export const TSinDialog: FC<{
 	const [tunnelCountries, setTunnelCountries] = useState<
 		Record<string, number>
 	>({});
-	const [tunnelPorts, setTunnelPorts] = useState("20100, 20101");
+	// One row per tunnel port: the port on the server, and the address and
+	// port the seller gave for it (empty: the emergency tunnel's address and
+	// the same number).
+	const [tunnelRows, setTunnelRows] = useState<
+		{ id: string; nodePort: string; address: string; port: string }[]
+	>([]);
 	const [fastlyBusy, setFastlyBusy] = useState(false);
 	const [fastlyResults, setFastlyResults] = useState<TSinFastlyCheck[] | null>(
 		null,
@@ -407,15 +415,39 @@ export const TSinDialog: FC<{
 			setFastly(data.fastly_countries ?? ["Best ping"]);
 			const savedTunnel = data.tunnel_countries ?? {};
 			setTunnelCountries(savedTunnel);
-			const savedPorts = Array.from(new Set(Object.values(savedTunnel)))
-				.filter((port) => port > 0)
-				.sort((a, b) => a - b);
-			for (const port of [20100, 20101]) {
-				if (!savedPorts.includes(port) && savedPorts.length < 2) {
-					savedPorts.push(port);
+			const savedRows = (data.tunnel_ports ?? []).map((row) => ({
+				id: `row-${row.node_port}`,
+				nodePort: String(row.node_port),
+				address: row.address ?? "",
+				port: row.port ? String(row.port) : "",
+			}));
+			for (const port of Object.values(savedTunnel)) {
+				if (
+					port > 0 &&
+					!savedRows.some((row) => row.nodePort === String(port))
+				) {
+					savedRows.push({
+						id: `row-${port}`,
+						nodePort: String(port),
+						address: "",
+						port: "",
+					});
 				}
 			}
-			setTunnelPorts(savedPorts.sort((a, b) => a - b).join(", "));
+			if (savedRows.length === 0) {
+				savedRows.push({
+					id: "row-20100",
+					nodePort: "20100",
+					address: "",
+					port: "",
+				});
+			}
+			setTunnelRows(
+				savedRows.sort(
+					(a, b) =>
+						Number.parseInt(a.nodePort, 10) - Number.parseInt(b.nodePort, 10),
+				),
+			);
 			setEmAddress(data.emergency?.address ?? "");
 			setEmProtocols(data.emergency?.protocols ?? "both");
 			setEmAudience(data.emergency?.audience ?? "all");
@@ -478,6 +510,13 @@ export const TSinDialog: FC<{
 						.map((name) => [name, tunnelCountries[name.toLowerCase()] ?? 0])
 						.filter(([, port]) => Number(port) > 0),
 				),
+				tunnel_ports: tunnelRows
+					.map((row) => ({
+						node_port: Number.parseInt(row.nodePort, 10) || 0,
+						address: row.address.trim(),
+						port: Number.parseInt(row.port, 10) || 0,
+					}))
+					.filter((row) => row.node_port > 0 || row.address || row.port > 0),
 				countries: selected,
 			};
 			if (token.trim()) body.token = token.trim();
@@ -1389,42 +1428,151 @@ export const TSinDialog: FC<{
 							<Text fontSize="sm" mb={2} opacity={0.85}>
 								{tt(
 									"tsin.tunnelCountries.help",
-									"The chosen countries also get a config marked 🛡 that goes through the Iranian tunnel (the emergency tunnel's address) instead of Cloudflare: VMess over WebSocket, up to {{max}} countries on one tunnel port, told apart by path. The tunnel has to forward each port to the same port on the countries' server. Choose a port for each country and press Apply. With the emergency tunnel shown to Hamrah Aval only, these configs are too.",
+									"The chosen countries also get a config marked 🛡 that goes through an Iranian tunnel instead of Cloudflare: VMess over WebSocket, up to {{max}} countries on one tunnel port, told apart by path. Add a row for each tunnel port with the address and port the seller gave, choose a port for each country and press Apply. With the emergency tunnel shown to Hamrah Aval only, these configs are too.",
 									{ max: view?.tunnel_per_port ?? 5 },
 								)}
 							</Text>
-							{!view?.tunnel_host && (
-								<Text fontSize="sm" mb={2} color="orange.400">
-									{tt(
-										"tsin.tunnelCountries.noHost",
-										"Enter the tunnel's address in the emergency tunnel section first; these configs use the same address.",
-									)}
-								</Text>
-							)}
+							{!view?.tunnel_host &&
+								tunnelRows.every((row) => !row.address.trim()) && (
+									<Text fontSize="sm" mb={2} color="orange.400">
+										{tt(
+											"tsin.tunnelCountries.noHost",
+											"Enter the tunnel address in each row below, or the emergency tunnel's address, which rows without one use.",
+										)}
+									</Text>
+								)}
 							{view?.tunnel_host && (
 								<Text fontSize="xs" mb={2} dir="ltr" opacity={0.8}>
 									{view.tunnel_host}
 								</Text>
 							)}
-							<FormControl mb={2}>
-								<FormLabel fontSize="sm" mb={1}>
-									{tt("tsin.tunnelCountries.ports", "Tunnel ports")}
-								</FormLabel>
-								<Input
-									value={tunnelPorts}
-									onChange={(event) => setTunnelPorts(event.target.value)}
-									placeholder="20100, 20101"
-									dir="ltr"
-									autoComplete="off"
-									spellCheck={false}
-								/>
-							</FormControl>
+							<Text fontSize="sm" fontWeight="semibold" mb={1}>
+								{tt("tsin.tunnelCountries.ports", "Tunnel ports")}
+							</Text>
+							<Text fontSize="xs" mb={2} opacity={0.8}>
+								{tt(
+									"tsin.tunnelCountries.portsHelp",
+									"One row per port bought on the tunnel. Port on the server: where the tunnel forwards to on the countries' server. Tunnel address and tunnel port: what the seller gave (empty address uses the emergency tunnel's address, empty port the same number).",
+								)}
+							</Text>
+							<Stack spacing={2} mb={3}>
+								{tunnelRows.map((row, index) => {
+									const update = (patch: Partial<typeof row>) =>
+										setTunnelRows((current) =>
+											current.map((item, i) =>
+												i === index ? { ...item, ...patch } : item,
+											),
+										);
+									return (
+										<SimpleGrid
+											key={row.id}
+											columns={{ base: 1, sm: 4 }}
+											spacing={2}
+											alignItems="end"
+										>
+											<FormControl>
+												<FormLabel fontSize="xs" mb={0.5}>
+													{tt(
+														"tsin.tunnelCountries.nodePort",
+														"Port on the server",
+													)}
+												</FormLabel>
+												<Input
+													size="sm"
+													value={row.nodePort}
+													onChange={(event) =>
+														update({ nodePort: event.target.value })
+													}
+													placeholder="20100"
+													dir="ltr"
+													inputMode="numeric"
+												/>
+											</FormControl>
+											<FormControl>
+												<FormLabel fontSize="xs" mb={0.5}>
+													{tt("tsin.tunnelCountries.address", "Tunnel address")}
+												</FormLabel>
+												<Input
+													size="sm"
+													value={row.address}
+													onChange={(event) =>
+														update({ address: event.target.value })
+													}
+													placeholder={view?.tunnel_host || "tun.example.ir"}
+													dir="ltr"
+													autoComplete="off"
+													spellCheck={false}
+												/>
+											</FormControl>
+											<FormControl>
+												<FormLabel fontSize="xs" mb={0.5}>
+													{tt("tsin.tunnelCountries.remotePort", "Tunnel port")}
+												</FormLabel>
+												<Input
+													size="sm"
+													value={row.port}
+													onChange={(event) =>
+														update({ port: event.target.value })
+													}
+													placeholder={row.nodePort || "20100"}
+													dir="ltr"
+													inputMode="numeric"
+												/>
+											</FormControl>
+											<Button
+												size="sm"
+												variant="ghost"
+												colorScheme="red"
+												onClick={() => {
+													const port = Number.parseInt(row.nodePort, 10);
+													setTunnelRows((current) =>
+														current.filter((_, i) => i !== index),
+													);
+													setTunnelCountries((current) =>
+														Object.fromEntries(
+															Object.entries(current).filter(
+																([, value]) => value !== port,
+															),
+														),
+													);
+												}}
+											>
+												{tt("tsin.tunnelCountries.removeRow", "Remove")}
+											</Button>
+										</SimpleGrid>
+									);
+								})}
+								<Button
+									size="sm"
+									variant="outline"
+									alignSelf="start"
+									onClick={() =>
+										setTunnelRows((current) => {
+											const highest = current.reduce(
+												(max, row) =>
+													Math.max(max, Number.parseInt(row.nodePort, 10) || 0),
+												20099,
+											);
+											return [
+												...current,
+												{
+													id: `row-${Date.now()}`,
+													nodePort: String(highest + 1),
+													address: "",
+													port: "",
+												},
+											];
+										})
+									}
+								>
+									{tt("tsin.tunnelCountries.addRow", "+ Add a tunnel port")}
+								</Button>
+							</Stack>
 							<Stack spacing={1}>
 								{selected.map((name) => {
 									const key = name.toLowerCase();
-									const ports = tunnelPorts
-										.split(/[\s,]+/)
-										.map((value) => Number.parseInt(value, 10))
+									const ports = tunnelRows
+										.map((row) => Number.parseInt(row.nodePort, 10))
 										.filter((port) => port > 0 && port <= 65535);
 									const max = view?.tunnel_per_port ?? 5;
 									const used = (port: number) =>

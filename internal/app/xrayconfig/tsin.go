@@ -36,6 +36,11 @@ type TSinCountry struct {
 	// TunnelPort adds, in path mode, a config for the country through the
 	// Iranian tunnel on this port (see tsin_tunnel.go); 0 adds none.
 	TunnelPort int
+	// TunnelAddress and TunnelRemotePort are where users reach that port:
+	// the address the tunnel seller gave and the port on the tunnel's side.
+	// Empty uses TSinGate.TunnelHost, 0 the same number as TunnelPort.
+	TunnelAddress    string
+	TunnelRemotePort int
 }
 
 type TSinInbound struct {
@@ -195,7 +200,8 @@ func buildTSinGate(gate TSinGate, fallbacks []any) (map[string]any, error) {
 // tsinWantsTunnel says whether a country gets a tunnel config: path mode, a
 // tunnel address, and a port for it.
 func tsinWantsTunnel(country TSinCountry, transport string, gate TSinGate) bool {
-	return transport == TSinTransportPath && country.TunnelPort > 0 && strings.TrimSpace(gate.TunnelHost) != ""
+	return transport == TSinTransportPath && country.TunnelPort > 0 &&
+		(strings.TrimSpace(country.TunnelAddress) != "" || strings.TrimSpace(gate.TunnelHost) != "")
 }
 
 // TSinInboundTag is the inbound that serves one country.

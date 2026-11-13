@@ -105,10 +105,18 @@ func (r Repository) ensureTSinTunnelInbound(ctx context.Context, target string, 
 		entry.Port, entry.Created = port, true
 	}
 	// No TLS: the tunnel only carries the connection, and VMess encrypts what
-	// is inside. The path comes from the inbound.
+	// is inside. The path comes from the inbound. The port's own address and
+	// tunnel-side port, when given, win over the shared ones.
+	if address := strings.TrimSpace(country.TunnelAddress); address != "" {
+		host = address
+	}
+	remotePort := country.TunnelRemotePort
+	if remotePort <= 0 {
+		remotePort = country.TunnelPort
+	}
 	_, err = r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = ?, path = NULL, sni = NULL, host = NULL,
 security = 'inbound_default', alpn = 'none', fingerprint = 'none' WHERE inbound_tag = ?`,
-		tsinHostRemark(country)+tsinTunnelRemark, strings.TrimSpace(host), country.TunnelPort, tag)
+		tsinHostRemark(country)+tsinTunnelRemark, strings.TrimSpace(host), remotePort, tag)
 	return entry, err
 }
 

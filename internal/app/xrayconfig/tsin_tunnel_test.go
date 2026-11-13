@@ -15,7 +15,7 @@ func TestTSinTunnelCountriesShareTunnelPortsByPath(t *testing.T) {
 	countries := []TSinCountry{
 		{Port: 1082, Name: "Germany", Code: "DE", TunnelPort: 20100},
 		{Port: 1083, Name: "Netherlands", Code: "NL", TunnelPort: 20100},
-		{Port: 1084, Name: "Sweden", Code: "SE", TunnelPort: 20101},
+		{Port: 1084, Name: "Sweden", Code: "SE", TunnelPort: 20101, TunnelAddress: "seller2.example.ir", TunnelRemotePort: 41000},
 		{Port: 1090, Name: "Best ping"},
 	}
 	result, err := repo.ApplyTSin(ctx, "master", "path", gate, countries, nil)
@@ -77,8 +77,14 @@ func TestTSinTunnelCountriesShareTunnelPortsByPath(t *testing.T) {
 		Scan(&remark, &address, &port, &security); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(remark, tsinTunnelRemark) || address != "tun.example.ir" || port != 20101 || security != "inbound_default" {
+	// Sweden's port has its own seller address and tunnel-side port.
+	if !strings.HasSuffix(remark, tsinTunnelRemark) || address != "seller2.example.ir" || port != 41000 || security != "inbound_default" {
 		t.Fatalf("Sweden tunnel host: %q %q %d %q", remark, address, port, security)
+	}
+	// Germany's port has none, so it uses the shared address and its own number.
+	if err := repo.db.QueryRowContext(ctx, `SELECT address, port FROM hosts WHERE inbound_tag = ?`, TSinTunnelInboundTag("Germany")).
+		Scan(&address, &port); err != nil || address != "tun.example.ir" || port != 20100 {
+		t.Fatalf("Germany tunnel host: %q %d %v", address, port, err)
 	}
 
 	// The Cloudflare gate does not take the tunnel inbounds, and the tunnel
