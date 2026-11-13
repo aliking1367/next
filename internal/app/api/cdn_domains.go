@@ -225,6 +225,9 @@ func (s *Server) cdnDomainsView(ctx context.Context) (map[string]any, error) {
 		"origin_port": settings.GatePort,
 		"expression":  expression,
 		"domains":     domains,
+		// connect_address is where the configs connect to, keeping the domain
+		// as SNI and Host; "" is the domain itself.
+		"connect_address": s.loadTSinConnectAddress(ctx),
 	}, nil
 }
 
@@ -256,6 +259,9 @@ func (s *Server) handleCoreCDNDomains(w http.ResponseWriter, r *http.Request) {
 		Note   string `json:"note"`
 		// Force switches to a domain whose check from outside fails.
 		Force bool `json:"force"`
+		// Address is the connect address for action "connect"; "" goes back
+		// to connecting to the domain itself.
+		Address string `json:"address"`
 	}
 	if err := decodeOptionalJSON(r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -321,6 +327,36 @@ func (s *Server) handleCoreCDNDomains(w http.ResponseWriter, r *http.Request) {
 		}
 		result["iran"] = map[string]any{"open": download.Complete, "total": download.Total,
 			"reached": download.Reached, "throttled": download.throttled()}
+	case "connect":
+		// Where the configs connect to, keeping the domain as SNI and Host:
+		// a name or IP that reaches Cloudflare by a way the domain's own
+		// addresses do not. Only host rows change; nothing restarts.
+		if settings.Transport != xrayconfig.TSinTransportPath || !settings.LastAppliedAt.Valid || active == "" {
+			writeError(w, http.StatusUnprocessableEntity, "the countries are not served through Cloudflare (path mode) yet")
+			return
+		}
+		address, err := normalizeTSinDirectAddress(request.Address)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "the connect address must be a host name such as render.com or an IP address, without https:// or a port")
+			return
+		}
+		if address == active {
+			address = ""
+		}
+		if !tsinApplyMu.TryLock() {
+			writeError(w, http.StatusConflict, "another T.Sin change is still running")
+			return
+		}
+		moved, err := s.configRepo.SetTSinConnectAddress(ctx, active, address)
+		if err == nil {
+			err = s.saveTSinConnectAddress(ctx, address)
+		}
+		tsinApplyMu.Unlock()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		result["connect"] = map[string]any{"address": address, "configs": moved}
 	case "activate":
 		if settings.Transport != xrayconfig.TSinTransportPath || !settings.LastAppliedAt.Valid {
 			writeError(w, http.StatusUnprocessableEntity, "the countries are not served through Cloudflare (path mode) yet")
@@ -365,7 +401,7 @@ func (s *Server) handleCoreCDNDomains(w http.ResponseWriter, r *http.Request) {
 		logging.Infof(logging.ComponentNode, "Cloudflare domain switched from %s to %s (%d configs)", active, domain, moved)
 		result["moved"] = moved
 	default:
-		writeError(w, http.StatusBadRequest, "send action: add, remove, check, iran or activate")
+		writeError(w, http.StatusBadRequest, "send action: add, remove, check, iran, connect or activate")
 		return
 	}
 

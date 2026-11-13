@@ -18,7 +18,7 @@ import { CloudIcon } from "@heroicons/react/24/outline";
 import { AppDialog } from "components/dialogs/AppDialog";
 import { ConfirmDialog } from "components/dialogs/ConfirmDialog";
 import { Input } from "components/Input";
-import { type FC, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "react-query";
 import { fetch } from "service/http";
@@ -45,6 +45,10 @@ type CDNDomainsView = {
 	origin_port: number;
 	expression: string;
 	domains: CDNDomain[] | null;
+	// connect_address is where the configs connect to, keeping the domain in
+	// use as SNI and Host; "" connects to the domain itself.
+	connect_address?: string;
+	connect?: { address: string; configs: number };
 	check?: { state: string; reason: string; status: number };
 	iran?: { open: number; total: number; reached: number; throttled: boolean };
 	moved?: number;
@@ -168,6 +172,10 @@ const CDNDomainsDialog: FC<{
 	const [note, setNote] = useState("");
 	const [busy, setBusy] = useState<string>("");
 	const [confirm, setConfirm] = useState<CDNDomain | null>(null);
+	const [connect, setConnect] = useState("");
+	useEffect(() => {
+		if (isOpen) setConnect(view?.connect_address ?? "");
+	}, [isOpen, view?.connect_address]);
 
 	const act = async (key: string, body: Record<string, unknown>) => {
 		if (busy) return;
@@ -178,7 +186,27 @@ const CDNDomainsDialog: FC<{
 				body,
 			});
 			queryClient.setQueryData([cdnDomainsQueryKey], result);
-			if (body.action === "activate") {
+			if (body.action === "connect" && result.connect) {
+				toast({
+					status: "success",
+					isClosable: true,
+					duration: 12_000,
+					title: result.connect.address
+						? tt(
+								"cdn.connectSet",
+								"Done. {{count}} configs now connect to {{address}}; users get it when they update their subscription. Nothing restarted.",
+								{
+									count: result.connect.configs,
+									address: result.connect.address,
+								},
+							)
+						: tt(
+								"cdn.connectReset",
+								"Done. {{count}} configs connect to the domain itself again; users get it when they update their subscription.",
+								{ count: result.connect.configs },
+							),
+				});
+			} else if (body.action === "activate") {
 				toast({
 					status: "success",
 					isClosable: true,
@@ -421,6 +449,69 @@ const CDNDomainsDialog: FC<{
 							})}
 						</Stack>
 					</Box>
+
+					{view?.path_mode && (
+						<Box borderWidth="1px" borderRadius="6px" p={3}>
+							<HStack justify="space-between" mb={1}>
+								<Text fontWeight="semibold">
+									{tt("cdn.connectTitle", "Connect address")}
+								</Text>
+								<Badge colorScheme={view.connect_address ? "purple" : "gray"}>
+									{view.connect_address ||
+										tt("cdn.connectNone", "The domain itself")}
+								</Badge>
+							</HStack>
+							<Text fontSize="xs" mb={2} opacity={0.85}>
+								{tt(
+									"cdn.connectHelp",
+									"Where the configs connect to, while the domain in use stays their SNI and Host. A name such as render.com reaches Cloudflare through addresses Iran does not slow down the way it slows new domains on Cloudflare's own addresses. Nothing restarts; users get it when they update their subscription. If it stops working, change it or press “Back to the domain”.",
+								)}
+							</Text>
+							<HStack spacing={2} align="end" flexWrap="wrap">
+								<FormControl flex="1" minW="180px">
+									<Input
+										value={connect}
+										onChange={(event) => setConnect(event.target.value)}
+										placeholder="render.com"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+								</FormControl>
+								<Button
+									size="sm"
+									colorScheme="primary"
+									isLoading={busy === "connect"}
+									isDisabled={
+										!connect.trim() ||
+										connect.trim() === (view.connect_address ?? "")
+									}
+									onClick={() =>
+										void act("connect", {
+											action: "connect",
+											address: connect.trim(),
+										})
+									}
+								>
+									{tt("cdn.connectSave", "Save")}
+								</Button>
+								<Button
+									size="sm"
+									variant="outline"
+									isLoading={busy === "connect-reset"}
+									isDisabled={!view.connect_address}
+									onClick={() =>
+										void act("connect-reset", {
+											action: "connect",
+											address: "",
+										})
+									}
+								>
+									{tt("cdn.connectBack", "Back to the domain")}
+								</Button>
+							</HStack>
+						</Box>
+					)}
 
 					<Box borderWidth="1px" borderRadius="6px" p={3}>
 						<Text fontWeight="semibold" mb={2}>

@@ -123,6 +123,9 @@ type TSinGate struct {
 	// TunnelHost is the Iranian tunnel's address the tunnel configs point at;
 	// empty adds none.
 	TunnelHost string
+	// ConnectAddress is where the Cloudflare configs connect to, keeping Host
+	// as their SNI and Host header; empty connects to Host itself.
+	ConnectAddress string
 }
 
 // tsinDirectPorts are the ports direct configs take, in order: the ones
@@ -608,9 +611,13 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 // address with the inbound's own settings, which also undoes path mode.
 func (r Repository) setTSinHost(ctx context.Context, tag, remark, transport string, gate TSinGate) error {
 	if transport == TSinTransportPath {
+		address := strings.TrimSpace(gate.ConnectAddress)
+		if address == "" {
+			address = gate.Host
+		}
 		_, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = 443, sni = ?, host = ?,
 security = 'tls', alpn = 'http/1.1', fingerprint = 'chrome' WHERE inbound_tag = ?`,
-			remark, gate.Host, gate.Host, gate.Host, tag)
+			remark, address, gate.Host, gate.Host, tag)
 		return err
 	}
 	_, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = '{SERVER_IP}', port = NULL, sni = NULL, host = NULL,
@@ -665,6 +672,30 @@ func (r Repository) applyTSinGate(ctx context.Context, target, transport string,
 	return err
 }
 
+// SetTSinConnectAddress makes every Cloudflare country config on host (the
+// domain in use) connect to address while keeping host as its SNI and Host,
+// or, with address empty, connect to host itself again. Only host rows change,
+// so nothing restarts; users get it when they update their subscription. It
+// returns how many configs changed.
+func (r Repository) SetTSinConnectAddress(ctx context.Context, host, address string) (int64, error) {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return 0, errors.New("there is no domain in use")
+	}
+	address = strings.TrimSpace(address)
+	if address == "" {
+		address = host
+	}
+	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ?
+AND LOWER(COALESCE(sni, '')) = ?`,
+		address, TSinGateTag, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinTunnelSuffix, TSinLabPrefix+"%", host)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // SetTSinGateHost points every country config that goes through the gate at
 // another Cloudflare domain. Only the host rows change: the gate answers any
 // name, because Cloudflare's Full mode does not check the origin's
@@ -680,9 +711,12 @@ func (r Repository) SetTSinGateHost(ctx context.Context, oldHost, newHost string
 	if oldHost == "" {
 		return 0, errors.New("there is no domain in use to replace")
 	}
-	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?, sni = ?, host = ?
-WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND LOWER(address) = ?`,
-		newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinTunnelSuffix, oldHost)
+	// A config whose address is a separate connect address (SetTSinConnectAddress)
+	// keeps it; only its SNI and Host move.
+	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = CASE WHEN LOWER(address) = ? THEN ? ELSE address END, sni = ?, host = ?
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ?
+AND (LOWER(address) = ? OR LOWER(COALESCE(sni, '')) = ?)`,
+		oldHost, newHost, newHost, newHost, TSinGateTag, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinTunnelSuffix, TSinLabPrefix+"%", oldHost, oldHost)
 	if err != nil {
 		return 0, err
 	}

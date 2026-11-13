@@ -66,3 +66,19 @@ func cleanTSinTunnelCountries(values map[string]int, gatePort int) (map[string]i
 	}
 	return out, nil
 }
+
+// loadTSinConnectAddress reads where the Cloudflare configs connect to while
+// keeping the domain in use as SNI and Host; "" (also on any failure) is the
+// domain itself.
+func (s *Server) loadTSinConnectAddress(ctx context.Context) string {
+	var address string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(cdn_connect_address, '') FROM tsin_settings ORDER BY id LIMIT 1`).Scan(&address); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(address)
+}
+
+func (s *Server) saveTSinConnectAddress(ctx context.Context, address string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE tsin_settings SET cdn_connect_address = ?`, strings.TrimSpace(address))
+	return err
+}
