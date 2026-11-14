@@ -255,10 +255,12 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address, gateHost
 		if made == len(tsinLabRecipes()) {
 			return existing, nil
 		}
-		// A lab made by an older version lacks the newer tests: make it again.
-		if err := r.RemoveTSinLab(ctx, target); err != nil {
-			return nil, err
-		}
+	}
+	// A lab made by an older version lacks the newer tests, and one whose
+	// making stopped half way left inbounds without their test client:
+	// either way it is made again from nothing.
+	if err := r.RemoveTSinLab(ctx, target); err != nil {
+		return nil, err
 	}
 	config, err := r.GetTargetRawConfig(ctx, target)
 	if err != nil {
@@ -281,9 +283,13 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address, gateHost
 		port := recipe.port
 		if port > 0 {
 			if used[port] || (portBusy != nil && portBusy(port)) {
-				return nil, fmt.Errorf("port %d, which the %s test needs, is already in use on the server", port, recipe.name)
+				// A test on a fixed port whose port is taken (the tunnel test
+				// once the tunnel countries use its port) is left out, not
+				// the whole lab.
+				continue
 			}
 		} else if port, err = pickProvisionPort(nil, used, ranges, portBusy); err != nil {
+			r.removeTSinLabInbounds(ctx)
 			return nil, err
 		}
 		used[port] = true
@@ -294,6 +300,7 @@ func (r Repository) EnsureTSinLab(ctx context.Context, target, address, gateHost
 		}
 		payload["targets"] = []any{target}
 		if _, err := r.CreateInbound(ctx, payload); err != nil {
+			r.removeTSinLabInbounds(ctx)
 			return nil, fmt.Errorf("lab %s: %w", recipe.name, err)
 		}
 		tags = append(tags, tag)
@@ -368,8 +375,18 @@ func (r Repository) RemoveTSinLab(ctx context.Context, target string) error {
 			return err
 		}
 	}
-	for _, inbound := range listOfMaps(config["inbounds"]) {
-		tag := stringValue(inbound["tag"])
+	return r.removeTSinLabInbounds(ctx)
+}
+
+// removeTSinLabInbounds deletes every lab inbound wherever it is, including
+// ones a stopped making left without a test client, which the target's raw
+// config does not list as tests.
+func (r Repository) removeTSinLabInbounds(ctx context.Context) error {
+	all, err := r.CollectInboundTags(ctx)
+	if err != nil {
+		return err
+	}
+	for tag := range all {
 		if strings.HasPrefix(tag, TSinLabPrefix) {
 			if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
 				return err

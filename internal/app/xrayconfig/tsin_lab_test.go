@@ -110,3 +110,37 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 		t.Fatal("applying the countries kept the lab")
 	}
 }
+
+// A making that stopped half way leaves lab inbounds without their test
+// client; the next making starts over instead of failing on a duplicate tag,
+// and a fixed-port test whose port is taken is left out, not the whole lab.
+func TestTSinLabRecoversFromAHalfMadeLabAndSkipsABusyPort(t *testing.T) {
+	repo, _ := provisionTestRepository(t)
+	ctx := context.Background()
+	countries := []TSinCountry{{Port: 1090, Name: "Best ping"}}
+	if _, err := repo.ApplyTSin(ctx, "master", "path", TSinGate{Host: "g1.example.com"}, countries, nil); err != nil {
+		t.Fatal(err)
+	}
+	leftover := map[string]any{
+		"tag": TSinLabPrefix + "http", "listen": "::", "port": 30123, "protocol": "vless",
+		"settings":       map[string]any{"clients": []any{}, "decryption": "none"},
+		"streamSettings": map[string]any{"network": "tcp", "security": "none"},
+		"targets":        []any{"master"},
+	}
+	if _, err := repo.CreateInbound(ctx, leftover); err != nil {
+		t.Fatal(err)
+	}
+	busy := func(port int) bool { return port == TSinLabTunnelPort }
+	tests, err := repo.EnsureTSinLab(ctx, "master", "203.0.113.9", "g1.example.com", busy)
+	if err != nil {
+		t.Fatalf("a half-made lab blocked a new one: %v", err)
+	}
+	for _, test := range tests {
+		if strings.HasPrefix(test.Tag, TSinLabPrefix+"tunnel-vmess") {
+			t.Fatal("the tunnel test was made on a busy port")
+		}
+	}
+	if len(tests) != len(tsinLabRecipes())-1 {
+		t.Fatalf("got %d tests, want all but the tunnel one", len(tests))
+	}
+}
