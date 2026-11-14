@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-0ecf17e",
-  "updated_at": "2026-11-13T13:23:18Z",
+  "latest": "dev-d13058b",
+  "updated_at": "2026-11-14T10:56:34Z",
   "builds": [
+    {
+      "tag": "dev-d13058b",
+      "sha": "d13058be2016d79df4e3187ec532f1900a3e3e8d",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43587324076",
+      "run_number": "225",
+      "created_at": "2026-11-14T10:56:34Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-d13058b.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-d13058b.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-d13058b.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-d13058b.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-0ecf17e",
       "sha": "0ecf17eb88a4c634ec26a3b71e7278c795f5a2cb",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-a5ebd8a.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-a5ebd8a.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-c9e3455",
-      "sha": "c9e3455af8ededd3e8fb41d6a3740f083ce16071",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "40519630787",
-      "run_number": "124",
-      "created_at": "2026-10-27T14:23:00Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-c9e3455.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-c9e3455.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-c9e3455.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-c9e3455.tar.gz"
         }
       }
     }
