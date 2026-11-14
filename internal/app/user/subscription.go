@@ -8,7 +8,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"regexp"
 	"sort"
@@ -3756,7 +3758,11 @@ func renderSubscriptionPageTemplate(content string, user UserDetail, links []str
 	if strings.TrimSpace(content) == "" {
 		content = fallbackSubscriptionPageTemplate
 	}
-	tpl, err := pongo2.FromString(normalizeLegacySubscriptionTemplate(content))
+	set, err := subscriptionTemplateSet()
+	if err != nil {
+		return "", err
+	}
+	tpl, err := set.FromString(normalizeLegacySubscriptionTemplate(content))
 	if err != nil {
 		return "", err
 	}
@@ -3765,6 +3771,37 @@ func renderSubscriptionPageTemplate(content string, user UserDetail, links []str
 		return "", err
 	}
 	return rendered, nil
+}
+
+// Subscription page templates are written by admins and rendered for every
+// visitor, so they get a sandboxed template set: no tag that reads another
+// file ({% include %}, {% ssi %}, {% import %}, {% extends %}), and a loader
+// that has no files, so a template cannot read the server's disk.
+var (
+	subscriptionTemplateSetOnce sync.Once
+	subscriptionTemplateSetVal  *pongo2.TemplateSet
+	subscriptionTemplateSetErr  error
+)
+
+type noTemplateFiles struct{}
+
+func (noTemplateFiles) Abs(base, name string) string { return name }
+func (noTemplateFiles) Get(path string) (io.Reader, error) {
+	return nil, errors.New("subscription page templates cannot load other files")
+}
+
+func subscriptionTemplateSet() (*pongo2.TemplateSet, error) {
+	subscriptionTemplateSetOnce.Do(func() {
+		set := pongo2.NewSet("subscription-page", noTemplateFiles{})
+		for _, tag := range []string{"include", "ssi", "import", "extends"} {
+			if err := set.BanTag(tag); err != nil {
+				subscriptionTemplateSetErr = err
+				return
+			}
+		}
+		subscriptionTemplateSetVal = set
+	})
+	return subscriptionTemplateSetVal, subscriptionTemplateSetErr
 }
 
 func registerSubscriptionTemplateFilters() error {

@@ -98,7 +98,24 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	r.NotFound(s.handleHomeOrSubscriptionPath)
-	return &externalAppAwareHandler{apps: s.externalApps, next: withAPIRejectionLog(withAPIRequestBodyLimit(r))}
+	return &externalAppAwareHandler{apps: s.externalApps, next: withAPIRejectionLog(withAPIRequestBodyLimit(withSecurityHeaders(r)))}
+}
+
+// withSecurityHeaders adds the headers that stop another site from framing
+// the panel (clickjacking a logged-in admin) or a browser from guessing a
+// response's type. The Telegram Mini App is left out: Telegram's web and
+// desktop clients show it inside a frame. A handler may still set its own.
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path != "/miniapp" && !strings.HasPrefix(path, "/api/miniapp/") {
+			header := w.Header()
+			header.Set("X-Frame-Options", "SAMEORIGIN")
+			header.Set("X-Content-Type-Options", "nosniff")
+			header.Set("Referrer-Policy", "same-origin")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) registerAdminRoutes(r chi.Router) {

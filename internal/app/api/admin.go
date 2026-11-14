@@ -72,6 +72,29 @@ type deletedUsersUsageResetPayload struct {
 	ServiceID *int64 `json:"service_id"`
 }
 
+// adminSelfProtectedFields are what an admin below full access may not change
+// on their own account: who they are allowed to be and how much they may
+// sell. Password, Telegram id and subscription domain and settings stay
+// theirs.
+var adminSelfProtectedFields = []string{
+	"role", "permissions", "data_limit", "traffic_limit_mode", "show_user_traffic",
+	"use_service_traffic_limits", "delete_user_usage_limit_enabled", "delete_user_usage_limit",
+	"expire", "users_limit", "services", "service_limits", "require_2fa",
+}
+
+// dropSelfProtectedFields forgets every protected field the request sent, so
+// the update keeps their current values.
+func (p *adminWritePayload) dropSelfProtectedFields() {
+	for _, field := range adminSelfProtectedFields {
+		delete(p.fields, field)
+	}
+	p.Role = ""
+	p.Permissions = nil
+	p.DataLimit, p.TrafficLimitMode, p.ShowUserTraffic, p.UseServiceTrafficLimits = nil, nil, nil, nil
+	p.DeleteUserUsageLimitEnabled, p.DeleteUserUsageLimit, p.Expire, p.UsersLimit = nil, nil, nil, nil
+	p.Services, p.ServiceLimits, p.Require2FA = nil, nil, nil
+}
+
 func decodeAdminWritePayload(w http.ResponseWriter, r *http.Request) (adminWritePayload, error) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
@@ -129,6 +152,10 @@ func (s *Server) handleCreateAdmin(w http.ResponseWriter, r *http.Request) {
 	role, err := parseOptionalRole(payload.Role, adminapp.RoleStandard)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if role == adminapp.RoleSudo && !canGrantSudo(principal.Context.Admin) {
+		writeError(w, http.StatusForbidden, "You're not allowed to create sudo admins")
 		return
 	}
 	if role == adminapp.RoleFullAccess && !principal.Context.Admin.HasFullAccess() {
@@ -333,6 +360,15 @@ func (s *Server) handleUpdateAdmin(w http.ResponseWriter, r *http.Request, usern
 				return err
 			}
 		}
+		if isSelf && !principal.Context.Admin.HasFullAccess() {
+			// An admin editing their own account keeps the role, permissions,
+			// limits and services someone above them set: otherwise a
+			// reseller (or their bot's API key) could make itself sudo or
+			// lift its own traffic and user limits. Only the fields below
+			// stay theirs to change. Ignored rather than refused, so a form
+			// that sends the whole account back still saves.
+			payload.dropSelfProtectedFields()
+		}
 		role := target.Role
 		if strings.TrimSpace(payload.Role) != "" {
 			parsed, err := adminapp.ParseRole(payload.Role)
@@ -341,6 +377,9 @@ func (s *Server) handleUpdateAdmin(w http.ResponseWriter, r *http.Request, usern
 			}
 			if parsed == adminapp.RoleFullAccess && !principal.Context.Admin.HasFullAccess() {
 				return statusError{status: http.StatusForbidden, detail: "Only full access admins can grant full access"}
+			}
+			if parsed == adminapp.RoleSudo && target.Role != adminapp.RoleSudo && !canGrantSudo(principal.Context.Admin) {
+				return statusError{status: http.StatusForbidden, detail: "You're not allowed to make an admin sudo"}
 			}
 			role = parsed
 		}
@@ -853,10 +892,8 @@ func (s *Server) handleAdminUsageResetPath(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return err
 		}
-		if !strings.EqualFold(principal.Context.Admin.Username, target.Username) {
-			if err := ensureCanManageAdmin(principal.Context.Admin, target); err != nil {
-				return err
-			}
+		if err := ensureCanResetAdminUsage(principal.Context.Admin, target); err != nil {
+			return err
 		}
 		if target.UsersUsage != 0 || target.CreatedTraffic != 0 || serviceUsageNonZero(target.ServiceLimits) {
 			if _, err := tx.ExecContext(r.Context(), `INSERT INTO admin_usage_logs (admin_id, used_traffic_at_reset, created_traffic_at_reset, reset_at) VALUES (?, ?, ?, ?)`, target.ID, target.UsersUsage, target.CreatedTraffic, dbTimestamp(time.Now().UTC())); err != nil {
@@ -905,10 +942,8 @@ func (s *Server) handleDeletedUsersUsageReset(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			return err
 		}
-		if !strings.EqualFold(principal.Context.Admin.Username, target.Username) {
-			if err := ensureCanManageAdmin(principal.Context.Admin, target); err != nil {
-				return err
-			}
+		if err := ensureCanResetAdminUsage(principal.Context.Admin, target); err != nil {
+			return err
 		}
 		if payload.ServiceID != nil {
 			_, err = tx.ExecContext(r.Context(), `UPDATE admins_services SET deleted_users_usage = 0 WHERE admin_id = ? AND service_id = ?`, target.ID, *payload.ServiceID)
@@ -1048,8 +1083,28 @@ func ensureCanMoveUsersBetween(actor adminapp.Admin, source adminapp.Admin, dest
 	return nil
 }
 
+// canGrantSudo is whether actor may make an account sudo: a full access
+// admin, or one allowed to manage sudo admins.
+func canGrantSudo(actor adminapp.Admin) bool {
+	return actor.HasFullAccess() || actor.Permissions.AdminManagement.CanManageSudo
+}
+
 func canEditAdmins(actor adminapp.Admin) bool {
 	return actor.Role == adminapp.RoleFullAccess || actor.Permissions.AdminManagement.CanEdit
+}
+
+// ensureCanResetAdminUsage guards the usage counters admin limits are
+// measured against: resetting one's own would hand an admin unlimited
+// traffic, so only a full access admin may reset their own, and anyone else's
+// needs the right to manage that admin.
+func ensureCanResetAdminUsage(actor adminapp.Admin, target adminapp.Admin) error {
+	if strings.EqualFold(actor.Username, target.Username) {
+		if actor.HasFullAccess() {
+			return nil
+		}
+		return statusError{status: http.StatusForbidden, detail: "You cannot reset your own usage"}
+	}
+	return ensureCanManageAdmin(actor, target)
 }
 
 func ensureCanManageAdmin(actor adminapp.Admin, target adminapp.Admin) error {

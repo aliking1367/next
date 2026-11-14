@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	adminapp "github.com/aliking1367/next/internal/app/admin"
 	"github.com/aliking1367/next/internal/app/xrayconfig"
 )
 
@@ -29,6 +30,9 @@ func (s *Server) handleInboundsRoot(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeInboundError(w, err)
 			return
+		}
+		if principal, _ := r.Context().Value(adminContextKey).(adminPrincipal); principal.Role != string(adminapp.RoleSudo) && principal.Role != string(adminapp.RoleFullAccess) {
+			redactInboundSecrets(grouped)
 		}
 		writeJSON(w, http.StatusOK, grouped)
 	case http.MethodPost:
@@ -171,5 +175,48 @@ func writeInboundError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "Node not found")
 	default:
 		writeError(w, http.StatusInternalServerError, detail)
+	}
+}
+
+// inboundSecretKeys are settings that let whoever holds them run the server
+// side of a protocol or decrypt its traffic: WireGuard and OpenVPN server
+// keys, pre-shared keys, Shadowsocks server passwords. Admins below sudo read
+// the inbound list to pick inbounds for users and never need them.
+var inboundSecretKeys = map[string]bool{
+	"private_key": true, "privatekey": true, "server_key": true, "serverkey": true,
+	"password": true, "psk": true, "pre_shared_key": true, "presharedkey": true,
+	"secret": true, "tls_crypt": true, "tls_auth": true, "key": true,
+}
+
+// redactInboundSecrets blanks every secret setting in the grouped inbound
+// list, at any depth (Shadowsocks clients, WireGuard peers).
+func redactInboundSecrets(grouped map[string][]map[string]any) {
+	var walk func(value any)
+	walk = func(value any) {
+		switch typed := value.(type) {
+		case map[string]any:
+			for key, item := range typed {
+				if inboundSecretKeys[strings.ToLower(key)] {
+					if _, isString := item.(string); isString {
+						typed[key] = ""
+						continue
+					}
+				}
+				walk(item)
+			}
+		case []any:
+			for _, item := range typed {
+				walk(item)
+			}
+		case []map[string]any:
+			for _, item := range typed {
+				walk(item)
+			}
+		}
+	}
+	for _, inbounds := range grouped {
+		for _, inbound := range inbounds {
+			walk(inbound)
+		}
 	}
 }
