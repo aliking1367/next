@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-d13058b",
-  "updated_at": "2026-11-14T10:56:34Z",
+  "latest": "dev-615da59",
+  "updated_at": "2026-11-14T11:06:22Z",
   "builds": [
+    {
+      "tag": "dev-615da59",
+      "sha": "615da59fe57c14f96745da2a8c6b77a4cd4c4c77",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43588042908",
+      "run_number": "227",
+      "created_at": "2026-11-14T11:06:22Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-615da59.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-615da59.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-615da59.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-615da59.zip"
+        }
+      }
+    },
     {
       "tag": "dev-d13058b",
       "sha": "d13058be2016d79df4e3187ec532f1900a3e3e8d",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-66ca9b5.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-66ca9b5.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-a5ebd8a",
-      "sha": "a5ebd8af12103df2ee972a1341ae6a8a44b0d48e",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "40523878694",
-      "run_number": "125",
-      "created_at": "2026-10-27T14:48:12Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-a5ebd8a.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-a5ebd8a.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-a5ebd8a.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-a5ebd8a.tar.gz"
         }
       }
     }
