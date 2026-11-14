@@ -22,7 +22,19 @@ func TestCleanTSinTunnelPorts(t *testing.T) {
 			t.Fatalf("%+v was accepted", bad)
 		}
 	}
-	if _, err := cleanTSinTunnelCountries(map[string]int{"a": 20100, "b": 20100, "c": 20100, "d": 20100, "e": 20100, "f": 20100}, 2087); err == nil {
-		t.Fatal("six countries on one port were accepted")
+	// One tunnel port carries every country (the gate tells them apart by
+	// path); only an absurd number is refused.
+	many := map[string]int{}
+	for i := 0; i < 19; i++ {
+		many["country"+string(rune('a'+i))] = 20100
+	}
+	if _, err := cleanTSinTunnelCountries(many, 2087); err != nil {
+		t.Fatalf("19 countries on one port were refused: %v", err)
+	}
+	for i := 0; i < 120; i++ {
+		many["c"+string(rune(0x100+i))] = 20100
+	}
+	if _, err := cleanTSinTunnelCountries(many, 2087); err == nil {
+		t.Fatal("an absurd number of countries on one port was accepted")
 	}
 }

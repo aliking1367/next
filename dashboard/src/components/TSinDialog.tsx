@@ -217,6 +217,38 @@ const expiryText = (
 	return t("tsin.daysLeft", "{{count}} day(s) left", { count: days });
 };
 
+// TunnelSellerLine is what to send the tunnel seller for one tunnel port: the
+// countries' server and the port it listens on there, which the tunnel has
+// to forward to.
+const TunnelSellerLine: FC<{
+	origin: string;
+	nodePort: string;
+	tt: (
+		key: string,
+		fallback: string,
+		options?: Record<string, unknown>,
+	) => string;
+}> = ({ origin, nodePort, tt }) => {
+	const target = `${origin || "SERVER_IP"}:${nodePort || "?"}`;
+	const clip = useClipboard(target);
+	return (
+		<HStack mt={2} spacing={2} flexWrap="wrap">
+			<Text fontSize="xs" opacity={0.85}>
+				{tt(
+					"tsin.tunnelCountries.sellerTarget",
+					"Give the seller this as the tunnel's destination:",
+				)}
+			</Text>
+			<Text fontSize="xs" fontFamily="mono" fontWeight="semibold" dir="ltr">
+				{target}
+			</Text>
+			<Button size="xs" variant="outline" onClick={clip.onCopy}>
+				{clip.hasCopied ? tt("tsin.copied", "Copied") : tt("cdn.copy", "Copy")}
+			</Button>
+		</HStack>
+	);
+};
+
 const SectionChevron = chakra(ChevronDownIcon, {
 	baseStyle: { w: 4, h: 4, transition: "transform 0.2s" },
 });
@@ -1464,82 +1496,99 @@ export const TSinDialog: FC<{
 											),
 										);
 									return (
-										<SimpleGrid
+										<Box
 											key={row.id}
-											columns={{ base: 1, sm: 4 }}
-											spacing={2}
-											alignItems="end"
+											borderWidth="1px"
+											borderRadius="6px"
+											p={2}
 										>
-											<FormControl>
-												<FormLabel fontSize="xs" mb={0.5}>
-													{tt(
-														"tsin.tunnelCountries.nodePort",
-														"Port on the server",
-													)}
-												</FormLabel>
-												<Input
-													size="sm"
-													value={row.nodePort}
-													onChange={(event) =>
-														update({ nodePort: event.target.value })
-													}
-													placeholder="20100"
-													dir="ltr"
-													inputMode="numeric"
-												/>
-											</FormControl>
-											<FormControl>
-												<FormLabel fontSize="xs" mb={0.5}>
-													{tt("tsin.tunnelCountries.address", "Tunnel address")}
-												</FormLabel>
-												<Input
-													size="sm"
-													value={row.address}
-													onChange={(event) =>
-														update({ address: event.target.value })
-													}
-													placeholder={view?.tunnel_host || "tun.example.ir"}
-													dir="ltr"
-													autoComplete="off"
-													spellCheck={false}
-												/>
-											</FormControl>
-											<FormControl>
-												<FormLabel fontSize="xs" mb={0.5}>
-													{tt("tsin.tunnelCountries.remotePort", "Tunnel port")}
-												</FormLabel>
-												<Input
-													size="sm"
-													value={row.port}
-													onChange={(event) =>
-														update({ port: event.target.value })
-													}
-													placeholder={row.nodePort || "20100"}
-													dir="ltr"
-													inputMode="numeric"
-												/>
-											</FormControl>
-											<Button
-												size="sm"
-												variant="ghost"
-												colorScheme="red"
-												onClick={() => {
-													const port = Number.parseInt(row.nodePort, 10);
-													setTunnelRows((current) =>
-														current.filter((_, i) => i !== index),
-													);
-													setTunnelCountries((current) =>
-														Object.fromEntries(
-															Object.entries(current).filter(
-																([, value]) => value !== port,
-															),
-														),
-													);
-												}}
+											<SimpleGrid
+												columns={{ base: 1, sm: 4 }}
+												spacing={2}
+												alignItems="end"
 											>
-												{tt("tsin.tunnelCountries.removeRow", "Remove")}
-											</Button>
-										</SimpleGrid>
+												<FormControl>
+													<FormLabel fontSize="xs" mb={0.5}>
+														{tt(
+															"tsin.tunnelCountries.address",
+															"Tunnel address",
+														)}
+													</FormLabel>
+													<Input
+														size="sm"
+														value={row.address}
+														onChange={(event) =>
+															update({ address: event.target.value })
+														}
+														placeholder={view?.tunnel_host || "tun.example.ir"}
+														dir="ltr"
+														autoComplete="off"
+														spellCheck={false}
+													/>
+												</FormControl>
+												<FormControl>
+													<FormLabel fontSize="xs" mb={0.5}>
+														{tt(
+															"tsin.tunnelCountries.remotePort",
+															"Tunnel port",
+														)}
+													</FormLabel>
+													<Input
+														size="sm"
+														value={row.port}
+														onChange={(event) =>
+															update({ port: event.target.value })
+														}
+														placeholder={row.nodePort || "20100"}
+														dir="ltr"
+														inputMode="numeric"
+													/>
+												</FormControl>
+												<FormControl>
+													<FormLabel fontSize="xs" mb={0.5}>
+														{tt(
+															"tsin.tunnelCountries.nodePortAuto",
+															"Port on the server (any free port)",
+														)}
+													</FormLabel>
+													<Input
+														size="sm"
+														value={row.nodePort}
+														onChange={(event) =>
+															update({ nodePort: event.target.value })
+														}
+														placeholder="20100"
+														dir="ltr"
+														inputMode="numeric"
+													/>
+												</FormControl>
+												<Button
+													size="sm"
+													variant="ghost"
+													colorScheme="red"
+													onClick={() => {
+														const port = Number.parseInt(row.nodePort, 10);
+														setTunnelRows((current) =>
+															current.filter((_, i) => i !== index),
+														);
+														setTunnelCountries((current) =>
+															Object.fromEntries(
+																Object.entries(current).filter(
+																	([, value]) => value !== port,
+																),
+															),
+														);
+													}}
+												>
+													{tt("tsin.tunnelCountries.removeRow", "Remove")}
+												</Button>
+											</SimpleGrid>
+											<TunnelSellerLine
+												origin={view?.origin_ip ?? ""}
+												nodePort={row.nodePort}
+												tt={tt}
+											/>
+										</Box>
 									);
 								})}
 								<Button
@@ -1575,6 +1624,15 @@ export const TSinDialog: FC<{
 										.map((row) => Number.parseInt(row.nodePort, 10))
 										.filter((port) => port > 0 && port <= 65535);
 									const max = view?.tunnel_per_port ?? 5;
+									const tunnelRowLabel = (port: number) => {
+										const row = tunnelRows.find(
+											(item) => Number.parseInt(item.nodePort, 10) === port,
+										);
+										const address =
+											row?.address.trim() || view?.tunnel_host || "";
+										const remote = row?.port.trim() || String(port);
+										return address ? `${address}:${remote}` : String(port);
+									};
 									const used = (port: number) =>
 										selected.filter(
 											(other) => tunnelCountries[other.toLowerCase()] === port,
@@ -1607,7 +1665,7 @@ export const TSinDialog: FC<{
 																used(port) >= max
 															}
 														>
-															{port} ({used(port)}/{max})
+															{tunnelRowLabel(port)} ({used(port)}/{max})
 														</option>
 													))}
 												</Select>

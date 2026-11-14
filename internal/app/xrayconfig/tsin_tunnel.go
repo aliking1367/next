@@ -29,8 +29,9 @@ const TSinTunnelSuffix = "-tunnel"
 // TSinTunnelGatePrefix starts the tag of a tunnel port's gate.
 const TSinTunnelGatePrefix = TSinInboundPrefix + "tgate-"
 
-// TSinTunnelMaxPerPort is how many countries one tunnel port carries.
-const TSinTunnelMaxPerPort = 5
+// TSinTunnelMaxPerPort is how many countries one tunnel port carries: the
+// gate tells them apart by path, so it is only a sanity bound.
+const TSinTunnelMaxPerPort = 100
 
 // tsinTunnelRemark marks a tunnel config in the subscription.
 const tsinTunnelRemark = " 🛡"
