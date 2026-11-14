@@ -48,6 +48,10 @@ type tsinLabRecipe struct {
 // the Iranian tunnel for the countries.
 const TSinLabTunnelPort = 20100
 
+// TSinLabRawVMessPort is where the raw VMess test listens: a port that
+// front servers which only let common ports out (Doprax) can still reach.
+const TSinLabRawVMessPort = 2095
+
 func tsinLabClient(id string) map[string]any {
 	return map[string]any{"id": id, "email": "lab@tsin", "flow": ""}
 }
@@ -197,6 +201,15 @@ func tsinLabRecipes() []tsinLabRecipe {
 					"sniffing": autoProvisionSniffing(),
 				}, nil
 			}, TSinLabTunnelPort},
+		{"raw-vmess", "Raw VMess TCP", fmt.Sprintf("VMess on plain TCP with no header at all, on port %d: the shape a seller's configs that work on Hamrah Aval have. Point a front server's port at it and put the front server's address in the link to test", TSinLabRawVMessPort),
+			func(tag string, port int, client map[string]any) (map[string]any, error) {
+				return map[string]any{
+					"tag": tag, "listen": "::", "port": port, "protocol": "vmess",
+					"settings":       map[string]any{"clients": []any{map[string]any{"id": client["id"], "email": client["email"]}}},
+					"streamSettings": map[string]any{"network": "tcp", "security": "none"},
+					"sniffing":       autoProvisionSniffing(),
+				}, nil
+			}, TSinLabRawVMessPort},
 	}
 }
 
@@ -412,7 +425,7 @@ func (r Repository) TSinLabTests(ctx context.Context, target, address, gateHost 
 			linkHost = gate
 			about += fmt.Sprintf(". It needs one more Cloudflare Origin Rule for %s, ordered after the existing one: (http.host eq \"%s\" and starts_with(http.request.uri.path, \"%s\")) with destination port %d", gate, gate, stringValue(mapValue(mapValue(inbound["streamSettings"])["xhttpSettings"])["path"]), port)
 		}
-		if recipe.key == "tunnel-vmess" {
+		if recipe.key == "tunnel-vmess" || recipe.key == "raw-vmess" {
 			linkHost = nodeAddress
 		}
 		link, err := tsinLabLink(recipe.key, stringValue(clients[0]["id"]), linkHost, port, mapValue(inbound["streamSettings"]), recipe.name)
@@ -447,6 +460,15 @@ func tsinLabLink(key, id, host string, port int, stream map[string]any, name str
 		payload, err := json.Marshal(map[string]any{
 			"v": "2", "ps": "LAB " + name, "add": strings.Trim(host, "[]"), "port": strconv.Itoa(port), "id": id,
 			"aid": "0", "scy": "auto", "net": "tcp", "type": "http", "host": "play.google.com", "path": "/", "tls": "",
+		})
+		if err != nil {
+			return "", err
+		}
+		return "vmess://" + base64.StdEncoding.EncodeToString(payload), nil
+	case "raw-vmess":
+		payload, err := json.Marshal(map[string]any{
+			"v": "2", "ps": "LAB " + name, "add": strings.Trim(host, "[]"), "port": strconv.Itoa(port), "id": id,
+			"aid": "0", "scy": "auto", "net": "tcp", "type": "none", "host": "", "path": "", "tls": "",
 		})
 		if err != nil {
 			return "", err

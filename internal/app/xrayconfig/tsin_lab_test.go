@@ -26,17 +26,23 @@ func TestTSinLabMakesTestInboundsThroughTheBestPingExitAndRemovesThem(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tests) != 8 {
-		t.Fatalf("got %d lab tests, want 8", len(tests))
+	if len(tests) != 9 {
+		t.Fatalf("got %d lab tests, want 9", len(tests))
 	}
 	// The tunnel test sits on its fixed port, VMess over WebSocket, and links
 	// to the server itself, then once more through the tunnel host.
 	withTunnel, err := repo.TSinLabTests(ctx, "master", "203.0.113.9", "g1.example.com", "198.51.100.7", "tun.example.ir")
-	if err != nil || len(withTunnel) != 9 {
+	if err != nil || len(withTunnel) != 10 {
 		t.Fatalf("with the tunnel: %d tests, %v", len(withTunnel), err)
 	}
 	var tunnelLinks []string
 	for _, test := range withTunnel {
+		if strings.HasPrefix(test.Tag, TSinLabPrefix+"raw-vmess") {
+			raw, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(test.Link, "vmess://"))
+			if test.Port != TSinLabRawVMessPort || !strings.Contains(string(raw), `"net":"tcp"`) || !strings.Contains(string(raw), `"add":"198.51.100.7"`) {
+				t.Fatalf("raw VMess test %d %s", test.Port, raw)
+			}
+		}
 		if strings.HasPrefix(test.Tag, TSinLabPrefix+"tunnel-vmess") {
 			if test.Port != TSinLabTunnelPort {
 				t.Fatalf("tunnel test on port %d", test.Port)
