@@ -88,6 +88,12 @@ type TSinView = {
 	// null until an admin chooses.
 	direct_countries?: string[] | null;
 	direct_address?: string;
+	// vision_countries also get a TCP Vision REALITY config on the direct
+	// address, borrowing vision_sni (www.hetzner.com by default).
+	vision_countries?: string[] | null;
+	vision_sni?: string;
+	// cdn_hidden keeps the countries' Cloudflare configs out of subscriptions.
+	cdn_hidden?: boolean;
 	// fastly_host is the Fastly service's domain; fastly_countries also get a
 	// config through Fastly, and fastly_backends are the backends to create.
 	fastly_host?: string;
@@ -316,6 +322,9 @@ export const TSinDialog: FC<{
 	const [selected, setSelected] = useState<string[]>([]);
 	const [direct, setDirect] = useState<string[]>([]);
 	const [directAddress, setDirectAddress] = useState("");
+	const [vision, setVision] = useState<string[]>([]);
+	const [visionSni, setVisionSni] = useState("www.hetzner.com");
+	const [cdnHidden, setCdnHidden] = useState(false);
 	const [fastlyHost, setFastlyHost] = useState("");
 	const [fastly, setFastly] = useState<string[]>([]);
 	const [tunnelCountries, setTunnelCountries] = useState<
@@ -443,6 +452,9 @@ export const TSinDialog: FC<{
 			// subscription gains only a few direct configs.
 			setDirect(data.direct_countries ?? DIRECT_SUGGESTED);
 			setDirectAddress(data.direct_address ?? "");
+			setVision(data.vision_countries ?? []);
+			setVisionSni(data.vision_sni || "www.hetzner.com");
+			setCdnHidden(Boolean(data.cdn_hidden));
 			setFastlyHost(data.fastly_host ?? "");
 			setFastly(data.fastly_countries ?? ["Best ping"]);
 			const savedTunnel = data.tunnel_countries ?? {};
@@ -535,6 +547,9 @@ export const TSinDialog: FC<{
 				gate_port: Number.parseInt(gatePort, 10) || 2087,
 				direct_countries: direct.filter((name) => selected.includes(name)),
 				direct_address: directAddress.trim(),
+				vision_countries: vision.filter((name) => selected.includes(name)),
+				vision_sni: visionSni.trim(),
+				cdn_hidden: cdnHidden,
 				fastly_host: fastlyHost.trim(),
 				fastly_countries: fastly.filter((name) => selected.includes(name)),
 				tunnel_countries: Object.fromEntries(
@@ -1202,6 +1217,66 @@ export const TSinDialog: FC<{
 									</Checkbox>
 								))}
 							</SimpleGrid>
+							<Box mt={4} borderTopWidth="1px" pt={3}>
+								<Text fontWeight="semibold" fontSize="sm" mb={1}>
+									{tt("tsin.vision.title", "TCP Vision configs 💎")}
+								</Text>
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.vision.help",
+										"A second kind of direct config, marked 💎: VLESS REALITY over plain TCP with Vision, borrowing the site below (www.hetzner.com for a Hetzner front). It uses the same address as the ⚡ configs. Tick the countries that should get one; either kind or both can be on.",
+									)}
+								</Text>
+								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+									{selected.map((name) => (
+										<Checkbox
+											key={name}
+											isChecked={vision.includes(name)}
+											onChange={() =>
+												setVision((current) =>
+													current.includes(name)
+														? current.filter((item) => item !== name)
+														: [...current, name],
+												)
+											}
+										>
+											{name} 💎
+										</Checkbox>
+									))}
+								</SimpleGrid>
+								<FormControl mt={3}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.vision.sni", "SNI for the 💎 configs")}
+									</FormLabel>
+									<Input
+										value={visionSni}
+										onChange={(event) => setVisionSni(event.target.value)}
+										placeholder="www.hetzner.com"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.vision.sniHelp",
+											"The site whose TLS these configs imitate. Match it to the front's provider: www.hetzner.com for a Hetzner IP. Changing it rebuilds the 💎 configs, so users update their subscription afterwards.",
+										)}
+									</FormHelperText>
+								</FormControl>
+							</Box>
+							<Checkbox
+								mt={4}
+								isChecked={cdnHidden}
+								onChange={(event) => setCdnHidden(event.target.checked)}
+							>
+								{tt("tsin.cdnHidden", "Hide the Cloudflare configs from users")}
+							</Checkbox>
+							<Text fontSize="xs" opacity={0.75} mt={1}>
+								{tt(
+									"tsin.cdnHiddenHelp",
+									"Users then only get the configs ticked above and the tunnel ones. Nothing is deleted: untick this and press Apply to show them again.",
+								)}
+							</Text>
 							<FormControl mt={3}>
 								<FormLabel fontSize="sm" mb={1}>
 									{tt("tsin.direct.address", "Separate IP for the ⚡ configs")}

@@ -156,6 +156,14 @@ type tsinRequest struct {
 	// TunnelPorts replaces, per port on the server, the address and
 	// tunnel-side port users reach it on. Omitted keeps them.
 	TunnelPorts *[]tsinTunnelPort `json:"tunnel_ports"`
+	// VisionCountries replaces the countries with a TCP Vision config and
+	// VisionSNI the site those configs borrow ("" is the default). Omitted
+	// keeps them.
+	VisionCountries *[]string `json:"vision_countries"`
+	VisionSNI       *string   `json:"vision_sni"`
+	// CDNHidden keeps the countries' Cloudflare configs out of subscriptions
+	// (true) or shows them again (false). Omitted keeps it.
+	CDNHidden *bool `json:"cdn_hidden"`
 }
 
 func tokenSum(token string) string {
@@ -278,7 +286,11 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	visionCountries, visionSNI := s.loadTSinVision(r.Context())
 	view := map[string]any{
+		"vision_countries": visionCountries,
+		"vision_sni":       visionSNI,
+		"cdn_hidden":       s.loadTSinCDNHidden(r.Context()),
 		"dc":               settings.DC,
 		"datacenters":      tsin.Datacenters(),
 		"preferred":        tsin.Preferred,
@@ -514,6 +526,22 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 		}
 		tunnelPorts = cleaned
 	}
+	visionCountries, visionSNI := s.loadTSinVision(ctx)
+	if request.VisionCountries != nil {
+		visionCountries = cleanTSinCountries(*request.VisionCountries)
+	}
+	if request.VisionSNI != nil {
+		cleaned, err := xrayconfig.NormalizeTSinVisionSNI(*request.VisionSNI)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		visionSNI = cleaned
+	}
+	vision := map[string]bool{}
+	for _, name := range visionCountries {
+		vision[strings.ToLower(name)] = true
+	}
 	tunnelPortBy := map[int]tsinTunnelPort{}
 	for _, item := range tunnelPorts {
 		tunnelPortBy[item.NodePort] = item
@@ -576,6 +604,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			// Only path mode has a Cloudflare config to add a direct one beside.
 			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
 			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
+			Vision: settings.Transport == xrayconfig.TSinTransportPath && vision[strings.ToLower(proxy.Country)],
 			// The tunnel configs go to the emergency tunnel's address.
 			TunnelPort:       tunnelCountries[strings.ToLower(proxy.Country)],
 			TunnelAddress:    tunnelPortBy[tunnelCountries[strings.ToLower(proxy.Country)]].Address,
@@ -589,12 +618,20 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
 		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost,
-			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx)}, countries, portBusy)
+			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return
 	}
 
+	cdnHidden := s.loadTSinCDNHidden(ctx)
+	if request.CDNHidden != nil {
+		cdnHidden = *request.CDNHidden
+	}
+	if err := s.applyTSinCDNHidden(ctx, inbounds, cdnHidden); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to show or hide the Cloudflare configs: "+err.Error())
+		return
+	}
 	serviceID, err := s.attachTSinService(ctx, inbounds)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to attach the countries to a service: "+err.Error())
@@ -635,6 +672,18 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.TunnelPorts != nil {
 		if err := s.saveTSinTunnelPorts(ctx, tunnelPorts); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if request.CDNHidden != nil {
+		if err := s.saveTSinCDNHidden(ctx, cdnHidden); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if request.VisionCountries != nil || request.VisionSNI != nil {
+		if err := s.saveTSinVision(ctx, visionCountries, visionSNI); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

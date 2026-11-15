@@ -934,5 +934,11 @@
 	"services.tools.cdnHostsHint": "Gives each node its own CDN address",
 	"services.tools.cdnAutoHint": "Keeps the Cloudflare records up to date",
 	"admins.sudo.changeConfig": "Change Xray, node, host and service setup",
-	"admins.sudo.changeConfigHint": "Off: a support account. It can see everything, restart the core and nodes and run tests, but cannot change settings."
+	"admins.sudo.changeConfigHint": "Off: a support account. It can see everything, restart the core and nodes and run tests, but cannot change settings.",
+	"tsin.vision.title": "TCP Vision configs 💎",
+	"tsin.vision.help": "A second kind of direct config, marked 💎: VLESS REALITY over plain TCP with Vision, borrowing the site below (www.hetzner.com for a Hetzner front). It uses the same address as the ⚡ configs. Tick the countries that should get one; either kind or both can be on.",
+	"tsin.vision.sni": "SNI for the 💎 configs",
+	"tsin.vision.sniHelp": "The site whose TLS these configs imitate. Match it to the front's provider: www.hetzner.com for a Hetzner IP. Changing it rebuilds the 💎 configs, so users update their subscription afterwards.",
+	"tsin.cdnHidden": "Hide the Cloudflare configs from users",
+	"tsin.cdnHiddenHelp": "Users then only get the configs ticked above and the tunnel ones. Nothing is deleted: untick this and press Apply to show them again."
 }
