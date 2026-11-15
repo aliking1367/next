@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-610265a",
-  "updated_at": "2026-11-14T17:02:54Z",
+  "latest": "dev-9510a5e",
+  "updated_at": "2026-11-15T14:23:15Z",
   "builds": [
+    {
+      "tag": "dev-9510a5e",
+      "sha": "9510a5e1ec19553c57aff2562a800fa57725528a",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "43723711912",
+      "run_number": "233",
+      "created_at": "2026-11-15T14:23:15Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-9510a5e.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-9510a5e.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-9510a5e.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-9510a5e.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-610265a",
       "sha": "610265a5e62e9cce1af62bb6fda42676ab774ccb",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-35a4956.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-35a4956.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-81df816",
-      "sha": "81df816b9ae203d6249bad98dedd1a3bca2b0345",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "40897452781",
-      "run_number": "132",
-      "created_at": "2026-10-29T15:07:55Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-81df816.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-81df816.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-81df816.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-81df816.zip"
         }
       }
     }
