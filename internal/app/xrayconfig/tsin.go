@@ -586,7 +586,25 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 	if routing == nil {
 		routing = map[string]any{}
 	}
+	// Rules that drop traffic (to a blackhole outbound: torrents, mail ports,
+	// private addresses, chosen sites) stay ahead of the countries' rules.
+	// Xray takes the first rule that matches, and every country rule matches
+	// all of its inbound's traffic, so a block left behind them would never
+	// apply to anything the countries carry.
+	blackholes := map[string]bool{}
+	for _, outbound := range outbounds {
+		item := mapValue(outbound)
+		if strings.EqualFold(stringValue(item["protocol"]), "blackhole") {
+			blackholes[stringValue(item["tag"])] = true
+		}
+	}
 	rules := []any{}
+	for _, rule := range interfaceSlice(routing["rules"]) {
+		tag := stringValue(mapValue(rule)["outboundTag"])
+		if blackholes[tag] && !strings.HasPrefix(tag, TSinOutboundPrefix) {
+			rules = append(rules, rule)
+		}
+	}
 	for _, country := range countries {
 		address := country.Address
 		if address == "" {
@@ -619,7 +637,8 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 		})
 	}
 	for _, rule := range interfaceSlice(routing["rules"]) {
-		if !strings.HasPrefix(stringValue(mapValue(rule)["outboundTag"]), TSinOutboundPrefix) {
+		tag := stringValue(mapValue(rule)["outboundTag"])
+		if !strings.HasPrefix(tag, TSinOutboundPrefix) && !blackholes[tag] {
 			rules = append(rules, rule)
 		}
 	}

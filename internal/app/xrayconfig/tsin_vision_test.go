@@ -123,3 +123,39 @@ func TestNormalizeTSinVisionSNI(t *testing.T) {
 		t.Fatal("a URL must be refused")
 	}
 }
+
+func TestSetTSinRoutingKeepsBlockRulesAheadOfTheCountries(t *testing.T) {
+	config := map[string]any{
+		"outbounds": []any{
+			map[string]any{"tag": "DIRECT", "protocol": "freedom"},
+			map[string]any{"tag": "BLOCK", "protocol": "blackhole"},
+			map[string]any{"tag": "tsin-out-1082", "protocol": "socks"},
+		},
+		"routing": map[string]any{"rules": []any{
+			map[string]any{"type": "field", "inboundTag": []any{"emergency-vmess"}, "outboundTag": "DIRECT"},
+			map[string]any{"type": "field", "inboundTag": []any{"tsin-germany"}, "outboundTag": "tsin-out-1082"},
+			map[string]any{"type": "field", "protocol": []any{"bittorrent"}, "outboundTag": "BLOCK"},
+			map[string]any{"type": "field", "ip": []any{"geoip:private"}, "outboundTag": "BLOCK"},
+		}},
+	}
+	setTSinRouting(config, []TSinCountry{{Port: 1082, Name: "Germany", Address: "10.0.0.1"}})
+	rules := listOfMaps(mapValue(config["routing"])["rules"])
+	got := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		got = append(got, stringValue(rule["outboundTag"]))
+	}
+	want := []string{"BLOCK", "BLOCK", "tsin-out-1082", "DIRECT"}
+	if len(got) != len(want) {
+		t.Fatalf("rules = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("rules = %v, want %v", got, want)
+		}
+	}
+	// Applying again keeps the same order and does not duplicate anything.
+	setTSinRouting(config, []TSinCountry{{Port: 1082, Name: "Germany", Address: "10.0.0.1"}})
+	if again := listOfMaps(mapValue(config["routing"])["rules"]); len(again) != len(want) {
+		t.Fatalf("re-apply changed the rules: %#v", again)
+	}
+}
