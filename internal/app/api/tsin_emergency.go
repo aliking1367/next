@@ -32,6 +32,10 @@ type tsinEmergencyRequest struct {
 	// Audience is "all", or "mci" to show the configs only to users who
 	// update their subscription from Hamrah Aval. Omitted keeps it.
 	Audience *string `json:"audience"`
+	// BackupHosts replaces the other configs of the countries' service, by
+	// host id, that are shown only while the emergency tunnel is on.
+	// Omitted keeps them.
+	BackupHosts *[]int64 `json:"backup_hosts"`
 }
 
 func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +104,12 @@ func (s *Server) handleCoreTSinEmergency(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if request.BackupHosts != nil {
+		if err := s.saveTSinBackupHosts(ctx, cleanTSinBackupHosts(*request.BackupHosts, s.tsinBackupCandidates(ctx))); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	ports, err := s.applyTSinEmergency(ctx, settings)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -130,6 +140,12 @@ func (s *Server) applyTSinEmergency(ctx context.Context, settings tsinSettings) 
 	if err := s.configRepo.SetTSinEmergencyHosts(ctx, settings.EmergencyAddress, settings.EmergencyVMessPort, settings.EmergencySSPort,
 		settings.EmergencyEnabled, settings.EmergencyProtocols, settings.EmergencyAdmins); err != nil {
 		return ports, err
+	}
+	// The chosen backups come and go with the emergency configs; a backup no
+	// longer in the service is left alone.
+	backups := cleanTSinBackupHosts(s.loadTSinBackupHosts(ctx), s.tsinBackupCandidates(ctx))
+	if err := s.setTSinBackupHosts(ctx, backups, settings.EmergencyEnabled, settings.EmergencyAdmins); err != nil {
+		return ports, fmt.Errorf("Failed to show or hide the backup configs: %w", err)
 	}
 	serviceID, err := s.attachTSinService(ctx, []xrayconfig.TSinInbound{{Tag: xrayconfig.TSinEmergencyVMessTag}, {Tag: xrayconfig.TSinEmergencySSTag}})
 	if err != nil {
@@ -199,5 +215,7 @@ func (s *Server) tsinEmergencyView(ctx context.Context, settings tsinSettings) m
 	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_subscription_access WHERE mci_seen_at > ?`,
 		time.Now().UTC().Add(-emergencyMCIMemory)).Scan(&mciUsers)
 	view["mci_users"] = mciUsers
+	view["backup_hosts"] = s.loadTSinBackupHosts(ctx)
+	view["backup_candidates"] = s.tsinBackupCandidates(ctx)
 	return view
 }

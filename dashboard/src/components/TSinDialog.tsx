@@ -168,6 +168,10 @@ type TSinEmergency = {
 	// week; operator_ranges is how many MCI and Iran ranges are known.
 	audience?: "all" | "mci";
 	mci_users?: number;
+	// backup_hosts are other configs of the countries' service shown only
+	// while the emergency tunnel is on; backup_candidates the ones that can be.
+	backup_hosts?: number[];
+	backup_candidates?: { id: number; remark: string; tag: string }[];
 	operator_ranges?: {
 		mci_ranges: number;
 		iran_ranges: number;
@@ -347,6 +351,7 @@ export const TSinDialog: FC<{
 	const [smartBusy, setSmartBusy] = useState(false);
 	const [emProtocols, setEmProtocols] = useState("both");
 	const [emAudience, setEmAudience] = useState("all");
+	const [emBackups, setEmBackups] = useState<number[]>([]);
 	const [result, setResult] = useState<TSinApplyResponse | null>(null);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [ranking, setRanking] = useState(false);
@@ -495,6 +500,7 @@ export const TSinDialog: FC<{
 			setEmAddress(data.emergency?.address ?? "");
 			setEmProtocols(data.emergency?.protocols ?? "both");
 			setEmAudience(data.emergency?.audience ?? "all");
+			setEmBackups(data.emergency?.backup_hosts ?? []);
 			setEmVMessPort(
 				data.emergency?.vmess_port ? String(data.emergency.vmess_port) : "",
 			);
@@ -602,6 +608,7 @@ export const TSinDialog: FC<{
 				ss_port: Number.parseInt(emSSPort, 10) || 0,
 				protocols: emProtocols,
 				audience: emAudience,
+				backup_hosts: emBackups,
 			};
 			if (enabled !== undefined) body.enabled = enabled;
 			const result = await fetch<TSinEmergency>("/core/tsin/emergency", {
@@ -1914,6 +1921,39 @@ export const TSinDialog: FC<{
 									</Text>
 								)}
 							</FormControl>
+							{(view.emergency?.backup_candidates?.length ?? 0) > 0 && (
+								<Box mb={3}>
+									<Text fontSize="sm" fontWeight="semibold" mb={1}>
+										{tt(
+											"tsin.emergency.backups",
+											"Backup configs that follow this switch",
+										)}
+									</Text>
+									<Text fontSize="xs" opacity={0.75} mb={1}>
+										{tt(
+											"tsin.emergency.backupsHelp",
+											"Ticked configs are shown only while the emergency tunnel is on and hidden when it is off, for every user. The countries' tunnel configs (🛡) are not affected. Press Save after ticking.",
+										)}
+									</Text>
+									<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+										{view.emergency?.backup_candidates?.map((item) => (
+											<Checkbox
+												key={item.id}
+												isChecked={emBackups.includes(item.id)}
+												onChange={() =>
+													setEmBackups((current) =>
+														current.includes(item.id)
+															? current.filter((id) => id !== item.id)
+															: [...current, item.id],
+													)
+												}
+											>
+												{item.remark || item.tag}
+											</Checkbox>
+										))}
+									</SimpleGrid>
+								</Box>
+							)}
 							<FormControl mb={2}>
 								<FormLabel fontSize="sm" mb={1}>
 									{tt("tsin.emergency.protocols", "Configs to show")}
