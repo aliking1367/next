@@ -38,6 +38,7 @@ import useGetUser from "hooks/useGetUser";
 import { TSinDashboardPanel } from "components/TSinDashboardPanel";
 import { CDNDomainsPanel } from "components/CDNDomainsPanel";
 import { EmergencyTunnelTile } from "components/EmergencyTunnelTile";
+import { TunnelUsageCard } from "components/TunnelUsageCard";
 import type { TFunction } from "i18next";
 import {
 	type FC,
@@ -2086,6 +2087,8 @@ export const Statistics: FC<BoxProps> = (props) => {
 				{canSeeGlobal && <CDNDomainsPanel />}
 				<EmergencyTunnelTile />
 			</SimpleGrid>
+
+			{canSeeGlobal && <TunnelUsageCard />}
 
 			<SimpleGrid
 				columns={{ base: 1, md: 2 }}

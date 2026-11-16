@@ -373,7 +373,7 @@ func (r Repository) StoreCollectedUsageWithInbounds(ctx context.Context, node No
 			if err := r.persistOutboundUsage(ctx, tx, node, outboundMapToDeltas(normalizedOutbound), now.Truncate(time.Hour), now, options); err != nil {
 				return fmt.Errorf("persist unbatched outbound usage: %w", err)
 			}
-			if err := r.persistInboundUsage(ctx, tx, inboundMapToDeltas(normalizedInbound)); err != nil {
+			if err := r.persistInboundUsage(ctx, tx, inboundMapToDeltas(normalizedInbound), now); err != nil {
 				return fmt.Errorf("persist unbatched inbound usage: %w", err)
 			}
 		}
@@ -448,7 +448,7 @@ func (r Repository) FlushStagedUsage(ctx context.Context, limit int, optionValue
 		if err := r.persistOutboundUsage(ctx, tx, NodeRow{ID: nodeID, UsageCoefficient: 1}, deltas, bucket, now, accountingOptions); err != nil {
 			return UsageFlushResult{}, fmt.Errorf("flush staged outbound usage node=%d: %w", nodeID, err)
 		}
-		if err := r.persistInboundUsage(ctx, tx, inboundDeltas); err != nil {
+		if err := r.persistInboundUsage(ctx, tx, inboundDeltas, now); err != nil {
 			return UsageFlushResult{}, fmt.Errorf("flush staged inbound usage node=%d: %w", nodeID, err)
 		}
 	}
@@ -1254,7 +1254,7 @@ WHERE id = ?
 	return nil
 }
 
-func (r Repository) persistInboundUsage(ctx context.Context, tx *sql.Tx, deltas []InboundUsageDelta) error {
+func (r Repository) persistInboundUsage(ctx context.Context, tx *sql.Tx, deltas []InboundUsageDelta, now time.Time) error {
 	byTag := aggregateInboundUsageForStage(deltas)
 	tags := make([]string, 0, len(byTag))
 	for tag := range byTag {
@@ -1281,8 +1281,46 @@ WHERE tag = ?`,
 		); err != nil {
 			return fmt.Errorf("increment inbound %q: %w", tag, err)
 		}
+		if IsTunnelUsageTag(tag) {
+			r.recordTunnelUsage(ctx, tx, tag, delta.Up, delta.Down, now)
+		}
 	}
 	return nil
+}
+
+// TunnelUsageBucket is how long one row of tunnel_usages covers. Half an hour
+// lines up with the hours of Iran's time (UTC+3:30) as well as UTC's.
+const TunnelUsageBucket = 30 * time.Minute
+
+// IsTunnelUsageTag says whether an inbound is an Iranian tunnel's, whose
+// traffic is kept by the half hour for the dashboard: a tunnel port's gate,
+// or the emergency tunnel's inbounds.
+func IsTunnelUsageTag(tag string) bool {
+	return strings.HasPrefix(tag, "tsin-tgate-") || tag == "emergency-vmess" || tag == "emergency-ss"
+}
+
+// recordTunnelUsage adds a tunnel inbound's traffic to its half hour. It is
+// history for the dashboard only, so a failure never fails the usage
+// accounting it rides along with.
+func (r Repository) recordTunnelUsage(ctx context.Context, tx *sql.Tx, tag string, up, down int64, now time.Time) {
+	if up < 0 {
+		up = 0
+	}
+	if down < 0 {
+		down = 0
+	}
+	if up == 0 && down == 0 {
+		return
+	}
+	bucket := now.UTC().Truncate(TunnelUsageBucket).Unix()
+	query := `INSERT INTO tunnel_usages (bucket, tag, uplink, downlink) VALUES (?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE uplink = uplink + VALUES(uplink), downlink = downlink + VALUES(downlink)`
+	if r.dialect == "sqlite" {
+		query = `INSERT INTO tunnel_usages (bucket, tag, uplink, downlink) VALUES (?, ?, ?, ?)
+ON CONFLICT(bucket, tag) DO UPDATE SET uplink = tunnel_usages.uplink + excluded.uplink, downlink = tunnel_usages.downlink + excluded.downlink`
+	}
+	// A missing table or a failed write only loses this half hour's history.
+	_, _ = tx.ExecContext(ctx, query, bucket, tag, up, down)
 }
 
 func (r Repository) upsertNodeUsage(ctx context.Context, tx *sql.Tx, bucket time.Time, nodeID int64, up int64, down int64) error {

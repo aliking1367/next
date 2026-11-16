@@ -813,3 +813,36 @@ INSERT INTO system (id, uplink, downlink) VALUES (1, 0, 0);`)
 	assertInt64(t, db, `SELECT COUNT(*) FROM node_usage_user_queue WHERE history_processed_at IS NULL`, 0)
 	assertInt64(t, db, `SELECT COUNT(*) FROM node_usage_outbound_queue WHERE history_processed_at IS NULL`, 0)
 }
+
+func TestRepositoryKeepsTunnelUsageByHalfHour(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "tunnel-usage.db")+"?_pragma=busy_timeout(30000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	createUsageTables(t, ctx, db)
+	if _, err := db.ExecContext(ctx, `INSERT INTO inbounds (tag, uplink, downlink) VALUES ('tsin-tgate-20200', 0, 0), ('tsin-germany', 0, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewRepository(db, "sqlite")
+	deltas := []InboundUsageDelta{{Tag: "tsin-tgate-20200", Up: 10, Down: 20}, {Tag: "tsin-germany", Up: 1, Down: 1}}
+	// Without the history table the accounting still goes through.
+	if err := repo.StoreCollectedUsageWithInbounds(ctx, NodeRow{ID: 7}, "", nil, "", nil, deltas); err != nil {
+		t.Fatalf("without history table: %v", err)
+	}
+	assertInt64(t, db, `SELECT uplink FROM inbounds WHERE tag = 'tsin-tgate-20200'`, 10)
+
+	if _, err := db.ExecContext(ctx, `CREATE TABLE tunnel_usages (bucket BIGINT NOT NULL, tag VARCHAR(128) NOT NULL, uplink BIGINT NOT NULL DEFAULT 0, downlink BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (bucket, tag))`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := repo.StoreCollectedUsageWithInbounds(ctx, NodeRow{ID: 7}, "", nil, "", nil, deltas); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertInt64(t, db, `SELECT COALESCE(SUM(uplink), 0) FROM tunnel_usages WHERE tag = 'tsin-tgate-20200'`, 20)
+	assertInt64(t, db, `SELECT COALESCE(SUM(downlink), 0) FROM tunnel_usages WHERE tag = 'tsin-tgate-20200'`, 40)
+	assertInt64(t, db, `SELECT COUNT(*) FROM tunnel_usages WHERE tag = 'tsin-germany'`, 0)
+	assertInt64(t, db, `SELECT uplink FROM inbounds WHERE tag = 'tsin-tgate-20200'`, 30)
+}

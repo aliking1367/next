@@ -160,6 +160,7 @@ func (s *Server) registerCoreRoutes(r chi.Router) {
 	r.HandleFunc("/core/tsin/datacenters", s.requireSudo(s.handleCoreTSinDatacenters))
 	r.HandleFunc("/core/tsin/checklist", s.requireSudo(s.handleCoreTSinChecklist))
 	r.HandleFunc("/core/tsin/emergency", s.requireSudo(s.handleCoreTSinEmergency))
+	r.HandleFunc("/core/tsin/tunnel-usage", s.requireSudo(s.handleCoreTSinTunnelUsage))
 	r.HandleFunc("/core/tsin/smart", s.requireSudo(s.handleCoreTSinSmart))
 	r.HandleFunc("/core/tsin/fastly-check", s.requireSudo(s.handleCoreTSinFastlyCheck))
 	r.HandleFunc("/core/tsin/lab", s.requireSudo(s.handleCoreTSinLab))
