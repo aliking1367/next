@@ -89,7 +89,7 @@ export const UserExpiryCountdown: FC<UserExpiryCountdownProps> = ({
 			<Text
 				fontSize="xl"
 				fontWeight="semibold"
-				lineHeight="1"
+				lineHeight="short"
 				color="panel.textMuted"
 				aria-label={t("unlimited")}
 			>

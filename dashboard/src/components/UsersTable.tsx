@@ -1071,7 +1071,7 @@ export const UsersTable: FC<UsersTableProps> = ({
 					<Text
 						fontSize={!user.data_limit ? "xl" : "sm"}
 						fontWeight={!user.data_limit ? "semibold" : undefined}
-						lineHeight="1"
+						lineHeight="short"
 						color={!user.data_limit ? "panel.textMuted" : "panel.text"}
 						dir="ltr"
 						aria-label={!user.data_limit ? t("unlimited") : undefined}

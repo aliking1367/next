@@ -2373,3 +2373,14 @@ img.apple-emoji {
 [dir="ltr"] .rb-users-section .rb-data-table-row > td:not(.rb-select-cell):not(.rb-actions-cell) + td:not(.rb-actions-cell) {
   box-shadow: inset 1px 0 0 0 var(--rb-panel-border);
 }
+
+/* Table cells hide overflow, and their 16px line box is shorter than the
+   Arad font's glyphs (about 19px), which cut the tops of the values. Give
+   the content room so nothing is clipped whatever the font's metrics. */
+.rb-data-table td .rb-cell-content:not([data-multiline="true"]) {
+  padding-block: 3px;
+}
+
+.rb-data-table td .rb-cell-content:not([data-multiline="true"]) .rb-cell-value {
+  line-height: 1.375;
+}
