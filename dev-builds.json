@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-63ae9bf",
-  "updated_at": "2026-11-16T14:18:12Z",
+  "latest": "dev-0d8ab87",
+  "updated_at": "2026-11-17T09:55:37Z",
   "builds": [
+    {
+      "tag": "dev-0d8ab87",
+      "sha": "0d8ab87323a6d7c811c201710819b68b16f28519",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "44059391939",
+      "run_number": "241",
+      "created_at": "2026-11-17T09:55:37Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-0d8ab87.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-0d8ab87.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-0d8ab87.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-0d8ab87.zip"
+        }
+      }
+    },
     {
       "tag": "dev-63ae9bf",
       "sha": "63ae9bf8a4be191bde45a9a951f089672eff4c8e",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-3cbfd82.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-3cbfd82.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-851a6d1",
-      "sha": "851a6d10ba125920f761a9f57445e6d4c689e7e7",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41076373108",
-      "run_number": "141",
-      "created_at": "2026-10-30T15:02:24Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-851a6d1.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-851a6d1.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-851a6d1.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-851a6d1.zip"
         }
       }
     }
