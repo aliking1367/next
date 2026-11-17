@@ -2355,3 +2355,21 @@ img.apple-emoji {
 .rb-style-aurora .rb-logo {
   filter: hue-rotate(-78deg) saturate(1.1);
 }
+
+/* Column headers: the 24px row with no top padding and a 16px line box
+   clipped the tops of Persian headers such as "حجم باقی‌مانده". */
+.rb-data-table th {
+  height: 30px;
+  line-height: 20px;
+  padding-top: 4px !important;
+}
+
+/* Users table: a faint divider between data columns so each value reads
+   as sitting in its own box under its header. */
+[dir="rtl"] .rb-users-section .rb-data-table-row > td:not(.rb-select-cell):not(.rb-actions-cell) + td:not(.rb-actions-cell) {
+  box-shadow: inset -1px 0 0 0 var(--rb-panel-border);
+}
+
+[dir="ltr"] .rb-users-section .rb-data-table-row > td:not(.rb-select-cell):not(.rb-actions-cell) + td:not(.rb-actions-cell) {
+  box-shadow: inset 1px 0 0 0 var(--rb-panel-border);
+}

@@ -232,7 +232,7 @@ type DashboardStateType = {
 		initialTab?: number,
 	) => void;
 	onResetAllUsage: (isResetingAllUsage: boolean) => void;
-	refetchUsers: (force?: boolean) => void;
+	refetchUsers: (force?: boolean, silent?: boolean) => void;
 	resetAllUsage: () => Promise<void>;
 	onFilterChange: (filters: Partial<FilterType>) => void;
 	deleteUser: (user: UserListItem) => Promise<void>;
@@ -259,7 +259,9 @@ let editingUserFetchSequence = 0;
 
 const fetchUsers = (
 	query: FilterType,
-	options: { force?: boolean } = {},
+	// silent: a background refresh. It keeps the table on screen (no loading
+	// state) and keeps the last list if the request fails.
+	options: { force?: boolean; silent?: boolean } = {},
 ): Promise<UsersListResponse> => {
 	const sanitizedQuery = sanitizeFilterQuery(query);
 	const cacheKey = buildUsersCacheKey(sanitizedQuery);
@@ -282,7 +284,9 @@ const fetchUsers = (
 	usersAbortController?.abort();
 	const abortController = new AbortController();
 	usersAbortController = abortController;
-	useDashboard.setState({ loading: true });
+	if (!options.silent) {
+		useDashboard.setState({ loading: true });
+	}
 	const requestQuery: Record<string, unknown> = {
 		...sanitizedQuery,
 	};
@@ -357,6 +361,9 @@ const fetchUsers = (
 				return useDashboard.getState().users;
 			}
 			console.error("Failed to fetch users:", error);
+			if (options.silent) {
+				return useDashboard.getState().users;
+			}
 			const emptyResponse = createEmptyUsersResponse();
 			useDashboard.setState({
 				users: emptyResponse,
@@ -469,8 +476,8 @@ export const useDashboard = create(
 		filters: createDefaultFilters(),
 		inbounds: new Map(),
 		isEditingCore: false,
-		refetchUsers: (force = false) => {
-			fetchUsers(get().filters, { force });
+		refetchUsers: (force = false, silent = false) => {
+			fetchUsers(get().filters, { force, silent });
 		},
 		resetAllUsage: () => {
 			return fetch(`/users/reset`, { method: "POST" }).then(() => {

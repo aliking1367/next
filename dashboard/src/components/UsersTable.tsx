@@ -3,6 +3,7 @@ import {
 	type BoxProps,
 	Button,
 	chakra,
+	Divider,
 	Flex,
 	HStack,
 	IconButton,
@@ -74,10 +75,10 @@ import {
 	type DataTableColumn,
 	type DataTableRowAction,
 	ResourceListCard,
-	type ResourceSummaryItem,
 	type RowActionItem,
 	RowActionsMenu,
 } from "./ui";
+import { UsersOverviewBand } from "./users/UsersOverviewBand";
 import {
 	formatUsagePair,
 	UserAdminChip,
@@ -385,9 +386,6 @@ const TrafficSubmenu: FC<{
 		</Menu>
 	);
 };
-
-const formatCount = (value: number | null | undefined, locale: string) =>
-	new Intl.NumberFormat(locale || "en").format(value ?? 0);
 
 const formatUsernamePreview = (username: string, maxLength = 20) =>
 	username.length > maxLength
@@ -1050,8 +1048,8 @@ export const UsersTable: FC<UsersTableProps> = ({
 				width: "120px",
 				minWidth: "112px",
 				maxWidth: "136px",
-				headerAlign: "start",
-				cellAlign: "start",
+				headerAlign: "center",
+				cellAlign: "center",
 				mobileVisible: true,
 				mobilePriority: 5,
 				mobileMetaLabel: t("usersTable.speed"),
@@ -1064,8 +1062,8 @@ export const UsersTable: FC<UsersTableProps> = ({
 				width: "132px",
 				minWidth: "114px",
 				maxWidth: "148px",
-				headerAlign: "start",
-				cellAlign: "start",
+				headerAlign: "center",
+				cellAlign: "center",
 				mobileVisible: true,
 				mobilePriority: 6,
 				mobileMetaLabel: t("usersTable.remainingTraffic"),
@@ -1091,8 +1089,8 @@ export const UsersTable: FC<UsersTableProps> = ({
 				width: "132px",
 				minWidth: "114px",
 				maxWidth: "148px",
-				headerAlign: "start",
-				cellAlign: "start",
+				headerAlign: "center",
+				cellAlign: "center",
 				mobileVisible: true,
 				mobilePriority: 7,
 				mobileMetaLabel: t("usersTable.lifetimeUsage"),
@@ -1110,8 +1108,8 @@ export const UsersTable: FC<UsersTableProps> = ({
 			width: "132px",
 			minWidth: "114px",
 			maxWidth: "148px",
-			headerAlign: "start",
-			cellAlign: "start",
+			headerAlign: "center",
+			cellAlign: "center",
 			mobileVisible: true,
 			mobilePriority: 8,
 			mobileMetaLabel: t("usersTable.expire"),
@@ -1394,53 +1392,7 @@ export const UsersTable: FC<UsersTableProps> = ({
 	const filteredUsageTotal = usersResponse.usage_total ?? null;
 	const activeUsersCount =
 		statusBreakdown.active ?? usersResponse.active_total ?? 0;
-	const summaryItems: ResourceSummaryItem[] = [
-		{
-			label: t("usersTable.total"),
-			value: formatCount(usersResponse.total, locale),
-			colorScheme: isUserLimitReached ? "red" : "gray",
-		},
-		{
-			label: t("status.active"),
-			value: formatCount(activeUsersCount, locale),
-			colorScheme: "green",
-		},
-		{
-			label: t("status.on_hold"),
-			value: formatCount(statusBreakdown.on_hold ?? 0, locale),
-			colorScheme: "orange",
-		},
-		{
-			label: t("status.limited"),
-			value: formatCount(statusBreakdown.limited ?? 0, locale),
-			colorScheme: "yellow",
-		},
-		{
-			label: t("status.expired"),
-			value: formatCount(statusBreakdown.expired ?? 0, locale),
-			colorScheme: "red",
-		},
-		{
-			label: t("onlineStatus.online"),
-			value: formatCount(usersResponse.online_total ?? 0, locale),
-			colorScheme: "teal",
-		},
-	];
-
 	const usageForSummary = canViewTraffic ? filteredUsageTotal : null;
-
-	if (usageForSummary !== null) {
-		summaryItems.push({
-			label: hasUsageScopeFilter
-				? t("usersTable.filteredUsage")
-				: t("usersTable.listUsage"),
-			value: formatBytes(usageForSummary),
-			colorScheme: "blue",
-			helper: hasUsageScopeFilter
-				? t("usersTable.filteredUsageHelper")
-				: t("usersTable.listUsageHelper"),
-		});
-	}
 
 	const renderExpandedUser = (user: UserListItem) => {
 		const detailColumns = userColumns.filter(
@@ -1528,9 +1480,31 @@ export const UsersTable: FC<UsersTableProps> = ({
 			{/* One unified header card: stats on top, search + quick filters below. */}
 			<ResourceListCard
 				title={t("usersTable.listHeader")}
-				summaryItems={summaryItems}
 				actions={headerActions}
 			>
+				<UsersOverviewBand
+					total={usersResponse.total}
+					usersLimit={usersResponse.users_limit ?? null}
+					active={activeUsersCount}
+					online={usersResponse.online_total ?? 0}
+					usage={usageForSummary}
+					usageLabel={
+						hasUsageScopeFilter
+							? t("usersTable.filteredUsage")
+							: t("usersTable.listUsage")
+					}
+					usageHelper={
+						hasUsageScopeFilter
+							? t("usersTable.filteredUsageHelper")
+							: t("usersTable.listUsageHelper")
+					}
+					breakdown={statusBreakdown}
+					locale={locale}
+					limitReached={isUserLimitReached}
+					selectedStatus={filters.status}
+					onSelectStatus={(status) => onFilterChange({ status, offset: 0 })}
+				/>
+				<Divider borderColor="panel.border" />
 				{toolbar}
 			</ResourceListCard>
 

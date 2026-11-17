@@ -41,6 +41,27 @@ import { fetch } from "service/http";
 import { AdminStatus } from "types/Admin";
 
 const AUTO_REFRESH_INTERVALS = [3_000, 5_000, 10_000, 30_000] as const;
+// The list itself (usage, remaining, status) is refetched with the chosen
+// interval but never more often than this, to spare the panel's database.
+const LIST_REFRESH_MIN_MS = 10_000;
+const AUTO_REFRESH_STORAGE_KEY = "rb-users-auto-refresh";
+
+const readAutoRefreshInterval = () => {
+	try {
+		const saved = window.localStorage.getItem(AUTO_REFRESH_STORAGE_KEY);
+		const interval = Number(saved);
+		if (
+			saved !== null &&
+			(interval === 0 ||
+				(AUTO_REFRESH_INTERVALS as readonly number[]).includes(interval))
+		) {
+			return interval;
+		}
+	} catch {
+		// Storage can be blocked; fall back to the default.
+	}
+	return 5_000;
+};
 
 const UserDialog = lazy(async () => ({
 	default: (await import("components/UserDialog")).UserDialog,
@@ -192,7 +213,17 @@ export const UsersPage: FC = () => {
 	const isQuickEditOpen = useDashboard((state) => state.quickEditUser !== null);
 	const { userData, getUserIsPending } = useGetUser();
 	const isAdminDisabled = userData.status === AdminStatus.Disabled;
-	const [autoRefreshInterval, setAutoRefreshInterval] = useState(5_000);
+	const [autoRefreshInterval, setAutoRefreshIntervalState] = useState(
+		readAutoRefreshInterval,
+	);
+	const setAutoRefreshInterval = useCallback((interval: number) => {
+		setAutoRefreshIntervalState(interval);
+		try {
+			window.localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(interval));
+		} catch {
+			// Not saved; the choice still applies to this visit.
+		}
+	}, []);
 	const topSpeedUsernameRef = useRef<string | undefined>(undefined);
 	const onlineRefreshInFlightRef = useRef(false);
 
@@ -285,6 +316,23 @@ export const UsersPage: FC = () => {
 		isAdminDisabled,
 		refreshOnlineUsers,
 	]);
+
+	// Refetch the list quietly so usage, remaining traffic, expiry and status
+	// keep up without pressing refresh. The online/speed poll above runs at the
+	// chosen interval; this one at least LIST_REFRESH_MIN_MS apart.
+	useEffect(() => {
+		if (getUserIsPending || isAdminDisabled || !autoRefreshInterval) return;
+		const timer = window.setInterval(
+			() => {
+				if (document.visibilityState === "hidden" || !navigator.onLine) return;
+				const state = useDashboard.getState();
+				if (state.loading) return;
+				state.refetchUsers(true, true);
+			},
+			Math.max(autoRefreshInterval, LIST_REFRESH_MIN_MS),
+		);
+		return () => window.clearInterval(timer);
+	}, [autoRefreshInterval, getUserIsPending, isAdminDisabled]);
 
 	useEffect(() => {
 		if (getUserIsPending || isAdminDisabled || !autoRefreshInterval) return;
