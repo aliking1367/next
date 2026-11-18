@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-674a5f1",
-  "updated_at": "2026-11-17T10:15:11Z",
+  "latest": "dev-67e71cc",
+  "updated_at": "2026-11-18T10:42:27Z",
   "builds": [
+    {
+      "tag": "dev-67e71cc",
+      "sha": "67e71cc0ca4d9b280605bcd794a9c187b9379ca9",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "44287375919",
+      "run_number": "245",
+      "created_at": "2026-11-18T10:42:27Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-67e71cc.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-67e71cc.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-67e71cc.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-67e71cc.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-674a5f1",
       "sha": "674a5f1bfe4bf623c4f9ba7f1c9e496e18498086",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-50147fd.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-50147fd.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-715311b",
-      "sha": "715311b367f224c08fd152e190885ce0f00a107c",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41086184704",
-      "run_number": "144",
-      "created_at": "2026-10-30T16:06:26Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-715311b.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-715311b.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-715311b.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-715311b.zip"
         }
       }
     }
