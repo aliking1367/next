@@ -95,6 +95,15 @@ func (s *Server) saveNordAutoSettings(ctx context.Context, settings nordAutoSett
 		if affected, err := result.RowsAffected(); err == nil && affected > 0 {
 			return nil
 		}
+		// MySQL counts an UPDATE that changes nothing as zero rows, so a row
+		// that is already there and unchanged must not be inserted again.
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM nord_auto_settings WHERE id = 1`).Scan(&exists); err != nil {
+			return err
+		}
+		if exists > 0 {
+			return nil
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO nord_auto_settings (id, enabled, target, address, sni, service_id, ai_outbound, managed) VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
 			settings.Enabled, settings.Target, settings.Address, settings.SNI, serviceID, settings.AIOutbound, string(managed))
 		return err

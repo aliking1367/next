@@ -108,7 +108,17 @@ var nordCountryNames = map[string]string{
 	"SI": "Slovenia", "SK": "Slovakia", "TH": "Thailand", "TR": "Turkey", "TW": "Taiwan",
 	"UA": "Ukraine", "UK": "UK", "US": "USA", "VN": "Vietnam", "ZA": "South Africa",
 	"QA": "Qatar", "BH": "Bahrain", "KW": "Kuwait", "OM": "Oman", "AZ": "Azerbaijan",
-	"AM": "Armenia",
+	"AM": "Armenia", "IQ": "Iraq", "JO": "Jordan", "LB": "Lebanon", "PK": "Pakistan",
+	"BD": "Bangladesh", "LK": "Sri Lanka", "NP": "Nepal", "KH": "Cambodia", "MN": "Mongolia",
+	"UZ": "Uzbekistan", "KG": "Kyrgyzstan", "TN": "Tunisia", "MA": "Morocco", "DZ": "Algeria",
+	"NG": "Nigeria", "KE": "Kenya", "GH": "Ghana", "AO": "Angola", "MZ": "Mozambique",
+	"PE": "Peru", "VE": "Venezuela", "EC": "Ecuador", "UY": "Uruguay", "PY": "Paraguay",
+	"BO": "Bolivia", "PA": "Panama", "GT": "Guatemala", "HN": "Honduras", "DO": "Dominican Republic",
+	"JM": "Jamaica", "TT": "Trinidad and Tobago", "BS": "Bahamas", "PR": "Puerto Rico", "MT": "Malta",
+	"ME": "Montenegro", "AD": "Andorra", "MC": "Monaco", "LI": "Liechtenstein", "BY": "Belarus",
+	"BN": "Brunei", "LA": "Laos", "MM": "Myanmar", "PG": "Papua New Guinea", "GL": "Greenland",
+	"BZ": "Belize", "BM": "Bermuda", "KY": "Cayman Islands", "IM": "Isle of Man", "JE": "Jersey",
+	"SN": "Senegal", "SD": "Sudan", "LY": "Libya", "SY": "Syria", "YE": "Yemen", "AF": "Afghanistan",
 }
 
 // nordOutbounds are the target's NordVPN locations, in config order.

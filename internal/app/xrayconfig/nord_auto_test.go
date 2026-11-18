@@ -134,6 +134,7 @@ func TestNordLocationNames(t *testing.T) {
 		"nord-tr80.nordvpn.com":   "🇹🇷 Turkey",
 		"nord-us9150.nordvpn.com": "🇺🇸 USA",
 		"nord-uk2001.nordvpn.com": "🇬🇧 UK",
+		"nord-iq3.nordvpn.com":    "🇮🇶 Iraq",
 		"nord-zz1.nordvpn.com":    "ZZ",
 	} {
 		if got := NordLocationRemark(NordLocationCode(tag)); got != want {
