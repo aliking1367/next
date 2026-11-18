@@ -38,6 +38,7 @@ import {
 import { type FC, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch as apiFetch } from "service/http";
+import { NordAutoPanel } from "./NordAutoPanel";
 import {
 	XrayModalBody,
 	XrayModalContent,
@@ -588,6 +589,7 @@ export const NordVPNModal: FC<Props> = ({
 								)}
 							</Stack>
 						)}
+						{nordData?.private_key && <NordAutoPanel />}
 					</VStack>
 				</XrayModalBody>
 				<XrayModalFooter>

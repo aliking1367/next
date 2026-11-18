@@ -166,6 +166,8 @@ func (s *Server) registerCoreRoutes(r chi.Router) {
 	r.HandleFunc("/core/tsin/lab", s.requireSudo(s.handleCoreTSinLab))
 	r.HandleFunc("/core/cdn-domains", s.requireSudo(s.handleCoreCDNDomains))
 	r.HandleFunc("/core/tsin", s.requireSudo(s.handleCoreTSin))
+	r.HandleFunc("/core/nord-auto/sync", s.requireSudo(s.handleCoreNordAutoSync))
+	r.HandleFunc("/core/nord-auto", s.requireSudo(s.handleCoreNordAuto))
 	r.HandleFunc("/core/verify-protocols", s.requireSudo(s.handleCoreVerifyProtocols))
 	r.HandleFunc("/core/xray/releases", s.requireSudo(s.handleCoreXrayReleases))
 	r.HandleFunc("/core/geo/templates", s.requireSudo(s.handleGeoTemplates))

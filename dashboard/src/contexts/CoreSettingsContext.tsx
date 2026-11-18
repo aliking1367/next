@@ -106,7 +106,12 @@ export const useCoreSettings = create<CoreSettingsStore>((set, get) => ({
 			headers: { "Content-Type": "application/json" },
 		})
 			.then(parseCoreConfig)
-			.then(() => undefined)
+			.then((saved) => {
+				// The server may add to what was saved (the NordVPN auto configs
+				// do), so the page takes its answer; saving the page's own copy
+				// later would otherwise drop those additions.
+				if (saved) set({ config: saved });
+			})
 			.catch((error) => {
 				console.error("Update error:", error);
 				throw error;

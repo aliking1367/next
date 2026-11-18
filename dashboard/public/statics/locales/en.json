@@ -4109,5 +4109,17 @@
 	"tunnelUsage.dailyAvg": "Average per day",
 	"tunnelUsage.busiest": "Busiest hour",
 	"tunnelUsage.tunnel": "Tunnel",
-	"tunnelUsage.peakAvgShort": "Peak speed"
+	"tunnelUsage.peakAvgShort": "Peak speed",
+	"pages.xray.nordAuto.title": "Automatic configs",
+	"pages.xray.nordAuto.help": "Every location added here gets its own config on the chosen service after you save the settings page; removing a location removes its config.",
+	"pages.xray.nordAuto.address": "Entry address",
+	"pages.xray.nordAuto.addressHelp": "The server users connect to (the Hetzner front).",
+	"pages.xray.nordAuto.service": "Service",
+	"pages.xray.nordAuto.ai": "AI sites leave through",
+	"pages.xray.nordAuto.aiNone": "Each location itself",
+	"pages.xray.nordAuto.location": "Location",
+	"pages.xray.nordAuto.config": "Config",
+	"pages.xray.nordAuto.pending": "made on the next save",
+	"pages.xray.nordAuto.saved": "NordVPN auto configs saved",
+	"pages.xray.nordAuto.saveFailed": "Could not save"
 }

@@ -38,6 +38,15 @@ func (s *Server) handleCoreConfig(w http.ResponseWriter, r *http.Request) {
 			writeConfigError(w, err)
 			return
 		}
+		// NordVPN locations added or removed in this save get or lose their
+		// configs; the answer then carries what the sync changed, so the page
+		// does not save over it next time. A failed sync leaves the save done
+		// and is shown in the NordVPN dialog.
+		if result, syncErr := s.runNordAuto(r.Context(), target); syncErr == nil && result.Changed {
+			if fresh, err := s.configRepo.GetTargetRawConfig(r.Context(), target); err == nil {
+				config = fresh
+			}
+		}
 		s.kickNodeOperationsSoon()
 		writeJSON(w, http.StatusOK, config)
 	default:

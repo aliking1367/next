@@ -4111,5 +4111,17 @@
 	"tunnelUsage.dailyAvg": "میانگین مصرف روزانه",
 	"tunnelUsage.busiest": "پرمصرف‌ترین ساعت",
 	"tunnelUsage.tunnel": "تانل",
-	"tunnelUsage.peakAvgShort": "سرعت اوج"
+	"tunnelUsage.peakAvgShort": "سرعت اوج",
+	"pages.xray.nordAuto.title": "ساخت خودکار کانفیگ",
+	"pages.xray.nordAuto.help": "هر لوکیشنی که اینجا اضافه شود، بعد از ذخیرهٔ صفحهٔ تنظیمات، کانفیگ خودش را روی سرویس انتخاب‌شده می‌گیرد؛ حذف لوکیشن کانفیگش را هم حذف می‌کند.",
+	"pages.xray.nordAuto.address": "آدرس ورودی",
+	"pages.xray.nordAuto.addressHelp": "سروری که کاربرها به آن وصل می‌شوند (هتزنر).",
+	"pages.xray.nordAuto.service": "سرویس",
+	"pages.xray.nordAuto.ai": "سایت‌های هوش مصنوعی از",
+	"pages.xray.nordAuto.aiNone": "از همان لوکیشن",
+	"pages.xray.nordAuto.location": "لوکیشن",
+	"pages.xray.nordAuto.config": "کانفیگ",
+	"pages.xray.nordAuto.pending": "با ذخیرهٔ بعدی ساخته می‌شود",
+	"pages.xray.nordAuto.saved": "تنظیمات کانفیگ خودکار نورد ذخیره شد",
+	"pages.xray.nordAuto.saveFailed": "ذخیره نشد"
 }
