@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-67e71cc",
-  "updated_at": "2026-11-18T10:42:27Z",
+  "latest": "dev-e7c93e9",
+  "updated_at": "2026-11-18T12:33:50Z",
   "builds": [
+    {
+      "tag": "dev-e7c93e9",
+      "sha": "e7c93e9d5586c782487d83f928c823c6603b5b26",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "44304460643",
+      "run_number": "247",
+      "created_at": "2026-11-18T12:33:50Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-e7c93e9.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-e7c93e9.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-e7c93e9.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-e7c93e9.zip"
+        }
+      }
+    },
     {
       "tag": "dev-67e71cc",
       "sha": "67e71cc0ca4d9b280605bcd794a9c187b9379ca9",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-3ce77cd.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-3ce77cd.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-50147fd",
-      "sha": "50147fd5e78b55a1669e7f2e0b2f8a486aa3e4dc",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41285462944",
-      "run_number": "147",
-      "created_at": "2026-11-01T07:40:54Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-50147fd.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-50147fd.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-50147fd.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-50147fd.zip"
         }
       }
     }
