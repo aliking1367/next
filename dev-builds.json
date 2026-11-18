@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-e7c93e9",
-  "updated_at": "2026-11-18T12:33:50Z",
+  "latest": "dev-c5b522f",
+  "updated_at": "2026-11-18T12:57:32Z",
   "builds": [
+    {
+      "tag": "dev-c5b522f",
+      "sha": "c5b522fa98f74cf19467a6a2f6f5b54c44b53894",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "44308228955",
+      "run_number": "249",
+      "created_at": "2026-11-18T12:57:32Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-c5b522f.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-c5b522f.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-c5b522f.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-c5b522f.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-e7c93e9",
       "sha": "e7c93e9d5586c782487d83f928c823c6603b5b26",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-3feec9b.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-3feec9b.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-3ce77cd",
-      "sha": "3ce77cd3ffb70c4488451662450f03999338f69f",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41287246627",
-      "run_number": "148",
-      "created_at": "2026-11-01T08:07:52Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-3ce77cd.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-3ce77cd.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-3ce77cd.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-3ce77cd.tar.gz"
         }
       }
     }
