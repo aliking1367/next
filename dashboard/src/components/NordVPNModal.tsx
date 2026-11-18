@@ -133,13 +133,24 @@ export const NordVPNModal: FC<Props> = ({
 	const [cityID, setCityID] = useState("");
 	const [serverID, setServerID] = useState("");
 
-	const nordOutboundIndex = useMemo(
+	// Each NordVPN server is its own outbound (tag nord-<hostname>), so several
+	// locations can be used at once; the same NordLynx key works on all of them.
+	const nordOutboundIndexes = useMemo(
 		() =>
-			initialOutbounds.findIndex((outbound) =>
-				String(outbound?.tag ?? "").startsWith("nord-"),
+			initialOutbounds.flatMap((outbound, index) =>
+				String(outbound?.tag ?? "").startsWith("nord-") ? [index] : [],
 			),
 		[initialOutbounds],
 	);
+	const selectedHostname = servers.find(
+		(item) => String(item.id) === serverID,
+	)?.hostname;
+	const nordOutboundIndex = selectedHostname
+		? initialOutbounds.findIndex(
+				(outbound) =>
+					String(outbound?.tag ?? "") === `nord-${selectedHostname}`,
+			)
+		: -1;
 
 	const filteredServers = useMemo(() => {
 		if (!cityID) return servers;
@@ -258,8 +269,9 @@ export const NordVPNModal: FC<Props> = ({
 			await apiFetch<NordAPIResponse>("/panel/xray/nord/del", {
 				method: "POST",
 			});
-			if (nordOutboundIndex >= 0) {
-				onDelete(nordOutboundIndex);
+			// Highest index first, so the earlier indexes stay valid.
+			for (const index of [...nordOutboundIndexes].reverse()) {
+				onDelete(index);
 			}
 			setNordData(null);
 			setToken("");
