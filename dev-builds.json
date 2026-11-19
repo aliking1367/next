@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-c5b522f",
-  "updated_at": "2026-11-18T12:57:32Z",
+  "latest": "dev-19c9f68",
+  "updated_at": "2026-11-19T12:40:10Z",
   "builds": [
+    {
+      "tag": "dev-19c9f68",
+      "sha": "19c9f68d5ebf1b4c601b4966681ba8f1746af850",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "44525415958",
+      "run_number": "251",
+      "created_at": "2026-11-19T12:40:10Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-19c9f68.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-19c9f68.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-19c9f68.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-19c9f68.zip"
+        }
+      }
+    },
     {
       "tag": "dev-c5b522f",
       "sha": "c5b522fa98f74cf19467a6a2f6f5b54c44b53894",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-3202a56.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-3202a56.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-3feec9b",
-      "sha": "3feec9b4bc3238064fe53553b7867bfdb3782df8",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41302370853",
-      "run_number": "150",
-      "created_at": "2026-11-01T11:37:12Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-3feec9b.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-3feec9b.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-3feec9b.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-3feec9b.tar.gz"
         }
       }
     }
