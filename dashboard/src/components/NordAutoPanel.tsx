@@ -41,11 +41,13 @@ type NordAutoView = {
 	sni: string;
 	service_id: number;
 	ai_outbound: string;
+	front_port: number;
 	locations: NordAutoLocation[];
 	last_error?: string;
 };
 
 type ServiceOption = { id: number; name: string };
+type TargetOption = { id: string; name: string };
 
 const shortTag = (tag: string) =>
 	tag.replace(/^nord-/, "").replace(/\.nordvpn\.com$/, "");
@@ -60,17 +62,27 @@ export const NordAutoPanel: FC = () => {
 	const toast = useToast();
 	const [view, setView] = useState<NordAutoView | null>(null);
 	const [services, setServices] = useState<ServiceOption[]>([]);
+	const [targets, setTargets] = useState<TargetOption[]>([]);
 	const [draft, setDraft] = useState<Partial<NordAutoView>>({});
 	const [saving, setSaving] = useState(false);
 
 	const load = useCallback(async () => {
 		try {
-			const [next, list] = await Promise.all([
+			const [next, list, targetList] = await Promise.all([
 				apiFetch<NordAutoView>("/core/nord-auto"),
 				apiFetch<{ services?: ServiceOption[] } | ServiceOption[]>(
 					"/v2/services",
 				),
+				apiFetch<{ targets?: TargetOption[] }>("/core/config/targets").catch(
+					() => ({ targets: [] }),
+				),
 			]);
+			setTargets(
+				(targetList?.targets ?? []).map((item) => ({
+					id: item.id,
+					name: item.name,
+				})),
+			);
 			setView(next);
 			setDraft({});
 			const items = Array.isArray(list) ? list : (list.services ?? []);
@@ -198,6 +210,55 @@ export const NordAutoPanel: FC = () => {
 							</option>
 						))}
 					</Select>
+				</FormControl>
+				<FormControl>
+					<FormLabel>
+						{t("pages.xray.nordAuto.target", "Server the configs run on")}
+					</FormLabel>
+					<Select
+						value={value.target}
+						onChange={(event) =>
+							setDraft({ ...draft, target: event.target.value })
+						}
+					>
+						{targets.length === 0 ? (
+							<option value={value.target}>{value.target}</option>
+						) : null}
+						{targets.map((item) => (
+							<option key={item.id} value={item.id}>
+								{item.name}
+							</option>
+						))}
+					</Select>
+					<FormHelperText>
+						{t(
+							"pages.xray.nordAuto.targetHelp",
+							"New locations are added on this server; configs already made elsewhere stay as they are.",
+						)}
+					</FormHelperText>
+				</FormControl>
+				<FormControl>
+					<FormLabel>
+						{t("pages.xray.nordAuto.frontPort", "One port for every location")}
+					</FormLabel>
+					<Input
+						dir="ltr"
+						type="number"
+						value={value.front_port ? String(value.front_port) : ""}
+						onChange={(event) =>
+							setDraft({
+								...draft,
+								front_port: Number(event.target.value) || 0,
+							})
+						}
+						placeholder="443"
+					/>
+					<FormHelperText>
+						{t(
+							"pages.xray.nordAuto.frontPortHelp",
+							"Empty: each location on its own port. 443: every new location on port 443 of the entry address, each with its own SNI.",
+						)}
+					</FormHelperText>
 				</FormControl>
 				<FormControl>
 					<FormLabel>REALITY SNI</FormLabel>

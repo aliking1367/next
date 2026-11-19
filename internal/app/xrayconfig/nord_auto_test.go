@@ -145,3 +145,116 @@ func TestNordLocationNames(t *testing.T) {
 		t.Errorf("tag = %q", got)
 	}
 }
+
+func TestSyncNordAutoSharedPort(t *testing.T) {
+	repo, db := provisionTestRepository(t)
+	ctx := context.Background()
+	seed, err := buildTSinVisionInbound("tsin-turkey", 22577, DefaultTSinVisionSNI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed["targets"] = []any{"master"}
+	if _, err := repo.CreateInbound(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+	config, err := repo.GetTargetRawConfig(ctx, "master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config["outbounds"] = []any{
+		map[string]any{"tag": "DIRECT", "protocol": "freedom"},
+		map[string]any{"tag": "BLOCK", "protocol": "blackhole"},
+		nordTestOutbound("nord-tr80.nordvpn.com"),
+		nordTestOutbound("nord-ae72.nordvpn.com"),
+	}
+	config["routing"] = map[string]any{"rules": []any{
+		map[string]any{"type": "field", "ip": []any{"geoip:private"}, "outboundTag": "BLOCK"},
+	}}
+	if _, err := repo.SaveTargetRawConfig(ctx, "master", config); err != nil {
+		t.Fatal(err)
+	}
+	opts := NordAutoOptions{Target: "master", Address: "195.201.252.8", SNI: "www.hetzner.com", FrontPort: 443}
+	result, err := repo.SyncNordAuto(ctx, opts)
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if len(result.Created) != 2 {
+		t.Fatalf("created %v", result.Created)
+	}
+	rows, err := db.Query(`SELECT inbound_tag, port, sni FROM hosts WHERE inbound_tag LIKE 'nord-in-%' ORDER BY inbound_tag`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snis := map[string]bool{}
+	for rows.Next() {
+		var tag, sni string
+		var port int
+		if err := rows.Scan(&tag, &port, &sni); err != nil {
+			t.Fatal(err)
+		}
+		if port != 443 || sni == "" || snis[sni] {
+			t.Fatalf("host %s = %d %q", tag, port, sni)
+		}
+		snis[sni] = true
+	}
+	rows.Close()
+
+	config, _ = repo.GetTargetRawConfig(ctx, "master")
+	front := findInbound(config, NordFrontInboundTag)
+	if front == nil || stringValue(front["protocol"]) != "dokodemo-door" {
+		t.Fatalf("front inbound = %#v", front)
+	}
+	for _, tag := range result.Created {
+		inbound := findInbound(config, tag)
+		if stringValue(inbound["listen"]) != "127.0.0.1" {
+			t.Fatalf("%s listens on %v", tag, inbound["listen"])
+		}
+		if mapValue(mapValue(inbound["streamSettings"])["sockopt"])["acceptProxyProtocol"] != true {
+			t.Fatalf("%s does not take the PROXY header", tag)
+		}
+	}
+	rules := interfaceSlice(mapValue(config["routing"])["rules"])
+	var order []string
+	for _, item := range rules {
+		rule := mapValue(item)
+		order = append(order, firstNonEmptyString(stringValue(rule["ruleTag"]), "-")+">"+stringValue(rule["outboundTag"]))
+	}
+	if len(order) != 6 || !strings.HasPrefix(order[0], "nord-auto-front-") || order[2] != "nord-auto-front>"+NordFrontFallbackTag || order[3] != "->BLOCK" {
+		t.Fatalf("rules = %v", order)
+	}
+	var redirects int
+	for _, item := range interfaceSlice(config["outbounds"]) {
+		outbound := mapValue(item)
+		if strings.HasPrefix(stringValue(outbound["tag"]), NordFrontOutboundPrefix) && stringValue(mapValue(outbound["settings"])["redirect"]) != "" {
+			redirects++
+		}
+	}
+	if redirects != 2 {
+		t.Fatalf("hand-over outbounds = %d", redirects)
+	}
+
+	// Nothing new: nothing saved.
+	opts.Managed = result.Managed
+	again, err := repo.SyncNordAuto(ctx, opts)
+	if err != nil || again.Changed {
+		t.Fatalf("second sync changed=%v err=%v", again.Changed, err)
+	}
+
+	// A third location gets the next free SNI.
+	config["outbounds"] = append(interfaceSlice(config["outbounds"]), nordTestOutbound("nord-us9150.nordvpn.com"))
+	if _, err := repo.SaveTargetRawConfig(ctx, "master", config); err != nil {
+		t.Fatal(err)
+	}
+	opts.Managed = again.Managed
+	third, err := repo.SyncNordAuto(ctx, opts)
+	if err != nil || len(third.Created) != 1 {
+		t.Fatalf("third: %v %v", third.Created, err)
+	}
+	var sni string
+	if err := db.QueryRow(`SELECT sni FROM hosts WHERE inbound_tag = ?`, third.Created[0]).Scan(&sni); err != nil {
+		t.Fatal(err)
+	}
+	if snis[sni] {
+		t.Fatalf("third location reuses %q", sni)
+	}
+}

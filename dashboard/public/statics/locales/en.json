@@ -4121,5 +4121,9 @@
 	"pages.xray.nordAuto.config": "Config",
 	"pages.xray.nordAuto.pending": "made on the next save",
 	"pages.xray.nordAuto.saved": "NordVPN auto configs saved",
-	"pages.xray.nordAuto.saveFailed": "Could not save"
+	"pages.xray.nordAuto.saveFailed": "Could not save",
+	"pages.xray.nordAuto.target": "Server the configs run on",
+	"pages.xray.nordAuto.targetHelp": "New locations are added on this server; configs already made elsewhere stay as they are.",
+	"pages.xray.nordAuto.frontPort": "One port for every location",
+	"pages.xray.nordAuto.frontPortHelp": "Empty: each location on its own port. 443: every new location on port 443 of the entry address, each with its own SNI."
 }

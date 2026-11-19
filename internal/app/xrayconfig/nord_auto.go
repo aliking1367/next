@@ -47,6 +47,31 @@ type NordAutoOptions struct {
 	// Managed maps a location's outbound tag to its inbound tag.
 	Managed  map[string]string
 	PortBusy func(int) bool
+	// FrontPort, when set (443), puts every location on that one port of the
+	// entry address: a front inbound on the target reads each connection's SNI
+	// and hands it to that location's config, which listens only on loopback.
+	// Every location gets its own SNI from NordFrontSNIs (SNI first).
+	FrontPort int
+}
+
+// NordFrontInboundTag is the front inbound that shares FrontPort.
+const NordFrontInboundTag = "nord-front"
+
+// NordFrontOutboundPrefix starts the outbounds that hand a front connection to
+// a location's config; NordFrontFallbackTag takes the ones with an unknown SNI
+// to the real site, as a plain web server would answer.
+const (
+	NordFrontOutboundPrefix = "nord-front-"
+	NordFrontFallbackTag    = NordFrontOutboundPrefix + "fallback"
+	nordFrontRuleTag        = NordAutoRulePrefix + "front"
+)
+
+// NordFrontSNIs are the sites the locations on the shared port borrow, one
+// each: the entry server's own company, so the SNI fits the address.
+var NordFrontSNIs = []string{
+	"www.hetzner.com", "docs.hetzner.com", "accounts.hetzner.com", "console.hetzner.cloud",
+	"www.hetzner.cloud", "status.hetzner.com", "community.hetzner.com", "robot.hetzner.com",
+	"konsoleh.hetzner.com", "api.hetzner.cloud", "dns.hetzner.com", "hetzner.com",
 }
 
 // NordAutoLocation is one location's config.
@@ -223,7 +248,23 @@ func (r Repository) SyncNordAuto(ctx context.Context, opts NordAutoOptions) (Nor
 	}
 
 	// New locations: an inbound each, on a free port.
+	frontPort := opts.FrontPort
+	if frontPort < 0 || frontPort > 65535 {
+		return result, errors.New("the shared port must be between 1 and 65535")
+	}
 	used, ranges := extractUsedPorts(config)
+	if frontPort > 0 {
+		used[frontPort] = true
+	}
+	frontSNIs := map[string]string{} // inbound tag -> its SNI on the shared port
+	takenSNI := map[string]bool{}
+	if frontPort > 0 {
+		for _, inbound := range managed {
+			if name := strings.ToLower(tsinVisionInboundSNI(findInbound(config, inbound))); name != "" {
+				takenSNI[name] = true
+			}
+		}
+	}
 	for _, outbound := range outbounds {
 		if managed[outbound] != "" {
 			continue
@@ -234,9 +275,23 @@ func (r Repository) SyncNordAuto(ctx context.Context, opts NordAutoOptions) (Nor
 			return result, err
 		}
 		used[port] = true
-		payload, err := buildTSinVisionInbound(tag, port, sni)
+		locationSNI := sni
+		if frontPort > 0 {
+			locationSNI = nextNordFrontSNI(sni, takenSNI)
+			if locationSNI == "" {
+				return result, errors.New("every SNI for the shared port is in use; remove a location first")
+			}
+			takenSNI[locationSNI] = true
+		}
+		payload, err := buildTSinVisionInbound(tag, port, locationSNI)
 		if err != nil {
 			return result, err
+		}
+		if frontPort > 0 {
+			payload["listen"] = "127.0.0.1"
+			stream := mapValue(payload["streamSettings"])
+			stream["sockopt"] = map[string]any{"acceptProxyProtocol": true}
+			frontSNIs[tag] = locationSNI
 		}
 		payload["targets"] = []any{target}
 		if _, err := r.CreateInbound(ctx, payload); err != nil {
@@ -264,8 +319,12 @@ func (r Repository) SyncNordAuto(ctx context.Context, opts NordAutoOptions) (Nor
 		if location.Created {
 			// Only a config made now gets its host set; an adopted one keeps
 			// whatever the admin made of it.
-			if _, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = NULL, sni = NULL, host = NULL,
-security = 'inbound_default', alpn = 'none', fingerprint = 'chrome' WHERE inbound_tag = ?`, remark, address, location.Inbound); err != nil {
+			var hostPort, hostSNI any
+			if name := frontSNIs[location.Inbound]; name != "" {
+				hostPort, hostSNI = frontPort, name
+			}
+			if _, err := r.db.ExecContext(ctx, `UPDATE hosts SET remark = ?, address = ?, port = ?, sni = ?, host = NULL,
+security = 'inbound_default', alpn = 'none', fingerprint = 'chrome' WHERE inbound_tag = ?`, remark, address, hostPort, hostSNI, location.Inbound); err != nil {
 				return result, err
 			}
 		}
@@ -288,7 +347,7 @@ security = 'inbound_default', alpn = 'none', fingerprint = 'chrome' WHERE inboun
 	if routing == nil {
 		routing = map[string]any{}
 	}
-	before, _ := json.Marshal(routing["rules"])
+	before, _ := json.Marshal([]any{routing["rules"], config["inbounds"], config["outbounds"]})
 	kept := []any{}
 	for _, item := range interfaceSlice(routing["rules"]) {
 		rule := mapValue(item)
@@ -317,7 +376,10 @@ security = 'inbound_default', alpn = 'none', fingerprint = 'chrome' WHERE inboun
 			})
 		}
 	}
-	after, _ := json.Marshal(kept)
+	// The shared port: its front inbound, a hand-over outbound per location on
+	// loopback and its rules, first so no block rule sees the loopback address.
+	kept = applyNordFront(config, kept, frontPort, sni, result.Locations)
+	after, _ := json.Marshal([]any{kept, config["inbounds"], config["outbounds"]})
 	if string(before) != string(after) {
 		routing["rules"] = kept
 		config["routing"] = routing
@@ -331,6 +393,102 @@ security = 'inbound_default', alpn = 'none', fingerprint = 'chrome' WHERE inboun
 	}
 	result.Managed = managed
 	return result, nil
+}
+
+// nextNordFrontSNI is the first site for the shared port not yet in use,
+// starting with the chosen SNI.
+func nextNordFrontSNI(first string, taken map[string]bool) string {
+	for _, name := range append([]string{first}, NordFrontSNIs...) {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "" && !taken[name] {
+			return name
+		}
+	}
+	return ""
+}
+
+func findInbound(config map[string]any, tag string) map[string]any {
+	for _, item := range interfaceSlice(config["inbounds"]) {
+		if inbound := mapValue(item); stringValue(inbound["tag"]) == tag {
+			return inbound
+		}
+	}
+	return nil
+}
+
+// applyNordFront rebuilds the shared port's pieces in config and returns the
+// rules with the front's own ones first. Only locations whose config listens
+// on loopback (made for the shared port) are put behind it; with no shared
+// port, or none of those, the pieces are removed.
+func applyNordFront(config map[string]any, rules []any, frontPort int, fallbackSNI string, locations []NordAutoLocation) []any {
+	type entry struct {
+		sni  string
+		port int
+		tag  string
+	}
+	entries := []entry{}
+	if frontPort > 0 {
+		for _, location := range locations {
+			inbound := findInbound(config, location.Inbound)
+			if inbound == nil || stringValue(inbound["listen"]) != "127.0.0.1" {
+				continue
+			}
+			name := tsinVisionInboundSNI(inbound)
+			port, _ := parseConfigPort(inbound["port"])
+			if name == "" || port <= 0 {
+				continue
+			}
+			entries = append(entries, entry{sni: strings.ToLower(name), port: port, tag: location.Inbound})
+		}
+	}
+
+	inbounds := []any{}
+	hadFront := false
+	for _, item := range interfaceSlice(config["inbounds"]) {
+		if stringValue(mapValue(item)["tag"]) == NordFrontInboundTag {
+			hadFront = true
+			continue
+		}
+		inbounds = append(inbounds, item)
+	}
+	outbounds := []any{}
+	for _, item := range interfaceSlice(config["outbounds"]) {
+		if strings.HasPrefix(stringValue(mapValue(item)["tag"]), NordFrontOutboundPrefix) {
+			hadFront = true
+			continue
+		}
+		outbounds = append(outbounds, item)
+	}
+	if len(entries) == 0 && !hadFront {
+		return rules
+	}
+	front := []any{}
+	if len(entries) > 0 {
+		inbounds = append(inbounds, map[string]any{
+			"tag": NordFrontInboundTag, "listen": "0.0.0.0", "port": frontPort, "protocol": "dokodemo-door",
+			"settings": map[string]any{"address": fallbackSNI, "port": 443, "network": "tcp"},
+			"sniffing": map[string]any{"enabled": true, "destOverride": []any{"tls"}, "routeOnly": true},
+		})
+		for _, item := range entries {
+			outbounds = append(outbounds, map[string]any{
+				"tag": NordFrontOutboundPrefix + item.tag, "protocol": "freedom",
+				"settings": map[string]any{"redirect": fmt.Sprintf("127.0.0.1:%d", item.port), "proxyProtocol": 2},
+			})
+			front = append(front, map[string]any{
+				"type": "field", "ruleTag": nordFrontRuleTag + "-" + item.tag,
+				"inboundTag": []any{NordFrontInboundTag}, "domain": []any{"full:" + item.sni},
+				"outboundTag": NordFrontOutboundPrefix + item.tag,
+			})
+		}
+		outbounds = append(outbounds, map[string]any{"tag": NordFrontFallbackTag, "protocol": "freedom", "settings": map[string]any{}})
+		front = append(front, map[string]any{
+			"type": "field", "ruleTag": nordFrontRuleTag,
+			"inboundTag": []any{NordFrontInboundTag}, "outboundTag": NordFrontFallbackTag,
+		})
+	}
+	config["inbounds"] = inbounds
+	config["outbounds"] = outbounds
+	return append(front, rules...)
 }
 
 // nordAutoOwnsRule reports a rule this sync keeps: one tagged as ours, or an

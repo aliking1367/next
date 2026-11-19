@@ -4123,5 +4123,9 @@
 	"pages.xray.nordAuto.config": "کانفیگ",
 	"pages.xray.nordAuto.pending": "با ذخیرهٔ بعدی ساخته می‌شود",
 	"pages.xray.nordAuto.saved": "تنظیمات کانفیگ خودکار نورد ذخیره شد",
-	"pages.xray.nordAuto.saveFailed": "ذخیره نشد"
+	"pages.xray.nordAuto.saveFailed": "ذخیره نشد",
+	"pages.xray.nordAuto.target": "سروری که کانفیگ‌ها روی آن ساخته شوند",
+	"pages.xray.nordAuto.targetHelp": "لوکیشن‌های جدید روی این سرور ساخته می‌شوند؛ کانفیگ‌هایی که قبلاً جای دیگری ساخته شده‌اند دست نمی‌خورند.",
+	"pages.xray.nordAuto.frontPort": "یک پورت برای همهٔ لوکیشن‌ها",
+	"pages.xray.nordAuto.frontPortHelp": "خالی: هر لوکیشن پورت خودش. 443: هر لوکیشن جدید روی پورت 443 آدرس ورودی، هر کدام با SNI خودش."
 }

@@ -26,6 +26,7 @@ type nordAutoSettings struct {
 	SNI        string            `json:"sni"`
 	ServiceID  int64             `json:"service_id"`
 	AIOutbound string            `json:"ai_outbound"`
+	FrontPort  int               `json:"front_port"`
 	Managed    map[string]string `json:"-"`
 }
 
@@ -41,9 +42,9 @@ func (s *Server) loadNordAutoSettings(ctx context.Context) (nordAutoSettings, er
 	settings := nordAutoSettings{Managed: map[string]string{}}
 	var enabled sql.NullBool
 	var target, address, sni, aiOutbound, managed sql.NullString
-	var serviceID sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT enabled, target, address, sni, service_id, ai_outbound, managed FROM nord_auto_settings WHERE id = 1`).
-		Scan(&enabled, &target, &address, &sni, &serviceID, &aiOutbound, &managed)
+	var serviceID, frontPort sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT enabled, target, address, sni, service_id, ai_outbound, managed, front_port FROM nord_auto_settings WHERE id = 1`).
+		Scan(&enabled, &target, &address, &sni, &serviceID, &aiOutbound, &managed, &frontPort)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return settings, err
 	}
@@ -53,6 +54,7 @@ func (s *Server) loadNordAutoSettings(ctx context.Context) (nordAutoSettings, er
 	settings.SNI = strings.TrimSpace(sni.String)
 	settings.ServiceID = serviceID.Int64
 	settings.AIOutbound = strings.TrimSpace(aiOutbound.String)
+	settings.FrontPort = int(frontPort.Int64)
 	if managed.String != "" {
 		_ = json.Unmarshal([]byte(managed.String), &settings.Managed)
 	}
@@ -87,8 +89,8 @@ func (s *Server) saveNordAutoSettings(ctx context.Context, settings nordAutoSett
 		serviceID = settings.ServiceID
 	}
 	return s.withTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `UPDATE nord_auto_settings SET enabled = ?, target = ?, address = ?, sni = ?, service_id = ?, ai_outbound = ?, managed = ? WHERE id = 1`,
-			settings.Enabled, settings.Target, settings.Address, settings.SNI, serviceID, settings.AIOutbound, string(managed))
+		result, err := tx.ExecContext(ctx, `UPDATE nord_auto_settings SET enabled = ?, target = ?, address = ?, sni = ?, service_id = ?, ai_outbound = ?, managed = ?, front_port = ? WHERE id = 1`,
+			settings.Enabled, settings.Target, settings.Address, settings.SNI, serviceID, settings.AIOutbound, string(managed), settings.FrontPort)
 		if err != nil {
 			return err
 		}
@@ -104,8 +106,8 @@ func (s *Server) saveNordAutoSettings(ctx context.Context, settings nordAutoSett
 		if exists > 0 {
 			return nil
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO nord_auto_settings (id, enabled, target, address, sni, service_id, ai_outbound, managed) VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
-			settings.Enabled, settings.Target, settings.Address, settings.SNI, serviceID, settings.AIOutbound, string(managed))
+		_, err = tx.ExecContext(ctx, `INSERT INTO nord_auto_settings (id, enabled, target, address, sni, service_id, ai_outbound, managed, front_port) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			settings.Enabled, settings.Target, settings.Address, settings.SNI, serviceID, settings.AIOutbound, string(managed), settings.FrontPort)
 		return err
 	})
 }
@@ -126,6 +128,7 @@ func (s *Server) runNordAuto(ctx context.Context, target string) (xrayconfig.Nor
 	result, err := s.configRepo.SyncNordAuto(ctx, xrayconfig.NordAutoOptions{
 		Target: settings.Target, Address: settings.Address, SNI: settings.SNI,
 		AIOutbound: settings.AIOutbound, Managed: settings.Managed, PortBusy: s.tsinPortBusy(settings.Target),
+		FrontPort: settings.FrontPort,
 	})
 	nordAutoLastRun = time.Now().UTC()
 	if result.Managed != nil {
@@ -226,6 +229,9 @@ func (s *Server) nordAutoView(ctx context.Context) (map[string]any, error) {
 			}
 			if inbound != "" {
 				entry["port"] = ports[inbound]
+				if settings.FrontPort > 0 {
+					entry["front_port"] = settings.FrontPort
+				}
 			}
 			locations = append(locations, entry)
 		}
@@ -237,6 +243,7 @@ func (s *Server) nordAutoView(ctx context.Context) (map[string]any, error) {
 		"sni":         settings.SNI,
 		"service_id":  settings.ServiceID,
 		"ai_outbound": settings.AIOutbound,
+		"front_port":  settings.FrontPort,
 		"ai_domains":  xrayconfig.NordAutoAIDomains,
 		"locations":   locations,
 		"last_error":  nordAutoLastError,
@@ -263,6 +270,7 @@ func (s *Server) handleCoreNordAuto(w http.ResponseWriter, r *http.Request) {
 			SNI        *string `json:"sni"`
 			ServiceID  *int64  `json:"service_id"`
 			AIOutbound *string `json:"ai_outbound"`
+			FrontPort  *int    `json:"front_port"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid request body")
@@ -292,6 +300,13 @@ func (s *Server) handleCoreNordAuto(w http.ResponseWriter, r *http.Request) {
 			}
 			if payload.AIOutbound != nil {
 				settings.AIOutbound = strings.TrimSpace(*payload.AIOutbound)
+			}
+			if payload.FrontPort != nil {
+				if *payload.FrontPort < 0 || *payload.FrontPort > 65535 {
+					err = errors.New("the shared port must be between 1 and 65535, or empty for none")
+				} else {
+					settings.FrontPort = *payload.FrontPort
+				}
 			}
 			if err == nil && settings.Enabled && settings.Address == "" {
 				err = errors.New("set the address the configs connect to (the entry server)")
