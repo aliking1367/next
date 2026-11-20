@@ -4125,5 +4125,11 @@
 	"pages.xray.nordAuto.target": "Server the configs run on",
 	"pages.xray.nordAuto.targetHelp": "New locations are added on this server; configs already made elsewhere stay as they are.",
 	"pages.xray.nordAuto.frontPort": "One port for every location",
-	"pages.xray.nordAuto.frontPortHelp": "Empty: each location on its own port. 443: every new location on port 443 of the entry address, each with its own SNI."
+	"pages.xray.nordAuto.frontPortHelp": "Empty: each location on its own port. 443: every new location on port 443 of the entry address, each with its own SNI.",
+	"tsin.cloud.title": "Cloudflare XHTTP configs ☁️",
+	"tsin.cloud.help": "Configs marked ☁️ reach the server through Cloudflare as VLESS over XHTTP with TLS, which Cloudflare tolerates far longer than WebSocket. Each ticked country gets its own name under the domain below (germany.x.example.com), all on port 443. Use a domain on a separate Cloudflare account, never the panel's own.",
+	"tsin.cloud.domain": "Domain",
+	"tsin.cloud.port": "Server port",
+	"tsin.cloud.connect": "Connect address (optional)",
+	"tsin.cloud.setup": "In that domain's Cloudflare account:"
 }

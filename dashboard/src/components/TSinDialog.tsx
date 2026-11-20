@@ -98,6 +98,13 @@ type TSinView = {
 	// config through Fastly, and fastly_backends are the backends to create.
 	fastly_host?: string;
 	fastly_countries?: string[] | null;
+	// cloud_domain names the Cloudflare XHTTP configs (each country gets
+	// <country>.<cloud_domain>); cloud_port is the server port its Origin Rule
+	// points at, cloud_connect where the configs connect to.
+	cloud_domain?: string;
+	cloud_port?: number;
+	cloud_connect?: string;
+	cloud_countries?: string[] | null;
 	fastly_backends?: TSinFastlyBackend[] | null;
 	// tunnel_countries maps a country (lower case) to the Iranian tunnel port
 	// its 🛡 config goes through; tunnel_host is the tunnel's address (the
@@ -330,6 +337,10 @@ export const TSinDialog: FC<{
 	const [visionSni, setVisionSni] = useState("www.hetzner.com");
 	const [cdnHidden, setCdnHidden] = useState(false);
 	const [fastlyHost, setFastlyHost] = useState("");
+	const [cloudDomain, setCloudDomain] = useState("");
+	const [cloudPort, setCloudPort] = useState("24443");
+	const [cloudConnect, setCloudConnect] = useState("");
+	const [cloud, setCloud] = useState<string[]>([]);
 	const [fastly, setFastly] = useState<string[]>([]);
 	const [tunnelCountries, setTunnelCountries] = useState<
 		Record<string, number>
@@ -461,6 +472,10 @@ export const TSinDialog: FC<{
 			setVisionSni(data.vision_sni || "www.hetzner.com");
 			setCdnHidden(Boolean(data.cdn_hidden));
 			setFastlyHost(data.fastly_host ?? "");
+			setCloudDomain(data.cloud_domain ?? "");
+			setCloudPort(String(data.cloud_port || 24443));
+			setCloudConnect(data.cloud_connect ?? "");
+			setCloud(data.cloud_countries ?? []);
 			setFastly(data.fastly_countries ?? ["Best ping"]);
 			const savedTunnel = data.tunnel_countries ?? {};
 			setTunnelCountries(savedTunnel);
@@ -557,6 +572,10 @@ export const TSinDialog: FC<{
 				vision_sni: visionSni.trim(),
 				cdn_hidden: cdnHidden,
 				fastly_host: fastlyHost.trim(),
+				cloud_domain: cloudDomain.trim(),
+				cloud_port: Number.parseInt(cloudPort, 10) || 24443,
+				cloud_connect: cloudConnect.trim(),
+				cloud_countries: cloud.filter((name) => selected.includes(name)),
 				fastly_countries: fastly.filter((name) => selected.includes(name)),
 				tunnel_countries: Object.fromEntries(
 					selected
@@ -1270,6 +1289,96 @@ export const TSinDialog: FC<{
 										)}
 									</FormHelperText>
 								</FormControl>
+							</Box>
+							<Box mt={4} borderTopWidth="1px" pt={3}>
+								<Text fontWeight="semibold" fontSize="sm" mb={1}>
+									{tt("tsin.cloud.title", "Cloudflare XHTTP configs ☁️")}
+								</Text>
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.cloud.help",
+										"Configs marked ☁️ reach the server through Cloudflare as VLESS over XHTTP with TLS, which Cloudflare tolerates far longer than WebSocket. Each ticked country gets its own name under the domain below (germany.x.example.com), all on port 443. Use a domain on a separate Cloudflare account, never the panel's own.",
+									)}
+								</Text>
+								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+									{selected.map((name) => (
+										<Checkbox
+											key={name}
+											isChecked={cloud.includes(name)}
+											onChange={() =>
+												setCloud((current) =>
+													current.includes(name)
+														? current.filter((item) => item !== name)
+														: [...current, name],
+												)
+											}
+										>
+											{name} ☁️
+										</Checkbox>
+									))}
+								</SimpleGrid>
+								<SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} mt={3}>
+									<FormControl>
+										<FormLabel fontSize="sm" mb={1}>
+											{tt("tsin.cloud.domain", "Domain")}
+										</FormLabel>
+										<Input
+											value={cloudDomain}
+											onChange={(event) => setCloudDomain(event.target.value)}
+											placeholder="x.example.com"
+											dir="ltr"
+											autoComplete="off"
+											spellCheck={false}
+										/>
+									</FormControl>
+									<FormControl>
+										<FormLabel fontSize="sm" mb={1}>
+											{tt("tsin.cloud.port", "Server port")}
+										</FormLabel>
+										<Input
+											value={cloudPort}
+											onChange={(event) => setCloudPort(event.target.value)}
+											placeholder="24443"
+											dir="ltr"
+											inputMode="numeric"
+										/>
+									</FormControl>
+									<FormControl>
+										<FormLabel fontSize="sm" mb={1}>
+											{tt("tsin.cloud.connect", "Connect address (optional)")}
+										</FormLabel>
+										<Input
+											value={cloudConnect}
+											onChange={(event) => setCloudConnect(event.target.value)}
+											placeholder="render.com"
+											dir="ltr"
+											autoComplete="off"
+											spellCheck={false}
+										/>
+									</FormControl>
+								</SimpleGrid>
+								{cloudDomain.trim() ? (
+									<Box
+										mt={3}
+										p={3}
+										borderWidth="1px"
+										borderRadius="md"
+										fontSize="xs"
+									>
+										<Text fontWeight="semibold" mb={1}>
+											{tt(
+												"tsin.cloud.setup",
+												"In that domain's Cloudflare account:",
+											)}
+										</Text>
+										<Text dir="ltr" fontFamily="mono" whiteSpace="pre-wrap">
+											{`1) DNS: A  *.${cloudDomain.trim()}  ->  ${view?.origin_ip || "<server IP>"}  (Proxied)
+2) SSL/TLS: Full
+3) Origin Rule: hostname ends with ".${cloudDomain.trim()}"  ->  port ${Number.parseInt(cloudPort, 10) || 24443}
+4) WAF: skip challenges for *.${cloudDomain.trim()}`}
+										</Text>
+									</Box>
+								) : null}
 							</Box>
 							<Checkbox
 								mt={4}

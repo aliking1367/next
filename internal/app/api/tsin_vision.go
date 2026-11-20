@@ -66,7 +66,7 @@ func (s *Server) saveTSinCDNHidden(ctx context.Context, hidden bool) error {
 func (s *Server) applyTSinCDNHidden(ctx context.Context, inbounds []xrayconfig.TSinInbound, hidden bool) error {
 	tags := []string{}
 	for _, inbound := range inbounds {
-		if inbound.Direct || inbound.Vision || inbound.Fastly || inbound.Tunnel {
+		if inbound.Direct || inbound.Vision || inbound.Fastly || inbound.Tunnel || inbound.Cloud {
 			continue
 		}
 		tags = append(tags, inbound.Tag)

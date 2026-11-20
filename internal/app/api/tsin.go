@@ -164,6 +164,13 @@ type tsinRequest struct {
 	// CDNHidden keeps the countries' Cloudflare configs out of subscriptions
 	// (true) or shows them again (false). Omitted keeps it.
 	CDNHidden *bool `json:"cdn_hidden"`
+	// CloudDomain, CloudPort, CloudConnect and CloudCountries replace the
+	// Cloudflare XHTTP settings ("" clears the domain or the connect address,
+	// 0 is the default port). Omitted keeps them.
+	CloudDomain    *string   `json:"cloud_domain"`
+	CloudPort      *int      `json:"cloud_port"`
+	CloudConnect   *string   `json:"cloud_connect"`
+	CloudCountries *[]string `json:"cloud_countries"`
 }
 
 func tokenSum(token string) string {
@@ -287,7 +294,12 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visionCountries, visionSNI := s.loadTSinVision(r.Context())
+	cloud := s.loadTSinCloud(r.Context())
 	view := map[string]any{
+		"cloud_domain":     cloud.Domain,
+		"cloud_port":       cloud.Port,
+		"cloud_connect":    cloud.Connect,
+		"cloud_countries":  cloud.Countries,
 		"vision_countries": visionCountries,
 		"vision_sni":       visionSNI,
 		"cdn_hidden":       s.loadTSinCDNHidden(r.Context()),
@@ -542,6 +554,37 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	for _, name := range visionCountries {
 		vision[strings.ToLower(name)] = true
 	}
+	cloudSettings := s.loadTSinCloud(ctx)
+	if request.CloudDomain != nil {
+		domain, err := xrayconfig.NormalizeCDNDomain(*request.CloudDomain)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "the Cloudflare XHTTP domain must be a plain domain such as x.example.com, without https:// or a path")
+			return
+		}
+		cloudSettings.Domain = domain
+	}
+	if request.CloudPort != nil {
+		if *request.CloudPort < 0 || *request.CloudPort > 65535 {
+			writeError(w, http.StatusUnprocessableEntity, "the Cloudflare XHTTP port must be between 1 and 65535")
+			return
+		}
+		cloudSettings.Port = *request.CloudPort
+		if cloudSettings.Port == 0 {
+			cloudSettings.Port = xrayconfig.DefaultTSinCloudPort
+		}
+	}
+	if request.CloudConnect != nil {
+		cloudSettings.Connect = strings.TrimSpace(*request.CloudConnect)
+	}
+	if request.CloudCountries != nil {
+		cloudSettings.Countries = cleanTSinCountries(*request.CloudCountries)
+	}
+	cloudCountries := map[string]bool{}
+	if cloudSettings.Domain != "" {
+		for _, name := range cloudSettings.Countries {
+			cloudCountries[strings.ToLower(name)] = true
+		}
+	}
 	tunnelPortBy := map[int]tsinTunnelPort{}
 	for _, item := range tunnelPorts {
 		tunnelPortBy[item.NodePort] = item
@@ -605,6 +648,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
 			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
 			Vision: settings.Transport == xrayconfig.TSinTransportPath && vision[strings.ToLower(proxy.Country)],
+			Cloud:  settings.Transport == xrayconfig.TSinTransportPath && cloudCountries[strings.ToLower(proxy.Country)],
 			// The tunnel configs go to the emergency tunnel's address.
 			TunnelPort:       tunnelCountries[strings.ToLower(proxy.Country)],
 			TunnelAddress:    tunnelPortBy[tunnelCountries[strings.ToLower(proxy.Country)]].Address,
@@ -618,7 +662,8 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
 		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost,
-			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI}, countries, portBusy)
+			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI,
+			CloudDomain: cloudSettings.Domain, CloudPort: cloudSettings.Port, CloudConnectAddress: cloudSettings.Connect}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return
@@ -684,6 +729,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.VisionCountries != nil || request.VisionSNI != nil {
 		if err := s.saveTSinVision(ctx, visionCountries, visionSNI); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if request.CloudDomain != nil || request.CloudPort != nil || request.CloudConnect != nil || request.CloudCountries != nil {
+		if err := s.saveTSinCloud(ctx, cloudSettings); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
