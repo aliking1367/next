@@ -157,6 +157,7 @@ func (s *Server) registerCoreRoutes(r chi.Router) {
 	r.HandleFunc("/core/cdn-automation/sync", s.requireSudo(s.handleCoreCDNAutomationSync))
 	r.HandleFunc("/core/cdn-automation", s.requireSudo(s.handleCoreCDNAutomation))
 	r.HandleFunc("/core/tsin/apply", s.requireSudo(s.handleCoreTSinApply))
+	r.HandleFunc("/core/tsin/addresses", s.requireSudo(s.handleCoreTSinAddresses))
 	r.HandleFunc("/core/tsin/datacenters", s.requireSudo(s.handleCoreTSinDatacenters))
 	r.HandleFunc("/core/tsin/checklist", s.requireSudo(s.handleCoreTSinChecklist))
 	r.HandleFunc("/core/tsin/emergency", s.requireSudo(s.handleCoreTSinEmergency))

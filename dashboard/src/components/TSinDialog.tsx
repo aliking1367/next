@@ -615,6 +615,49 @@ export const TSinDialog: FC<{
 		}
 	};
 
+	// saveAddresses changes only where the configs point (the ⚡/💎 address
+	// and the tunnel rows): nothing goes to Xray, so nobody is disconnected
+	// and no Apply is needed. Users get it on their next subscription update.
+	const [addrBusy, setAddrBusy] = useState(false);
+	const saveAddresses = async () => {
+		if (addrBusy || busy) return;
+		setAddrBusy(true);
+		try {
+			const result = await fetch<{ changed: number }>("/core/tsin/addresses", {
+				method: "POST",
+				body: {
+					direct_address: directAddress.trim(),
+					tunnel_ports: tunnelRows
+						.map((row) => ({
+							node_port: Number.parseInt(row.nodePort, 10) || 0,
+							address: row.address.trim(),
+							port: Number.parseInt(row.port, 10) || 0,
+						}))
+						.filter((row) => row.node_port > 0 || row.address || row.port > 0),
+				},
+			});
+			toast({
+				status: "success",
+				isClosable: true,
+				duration: 8_000,
+				title: tt(
+					"tsin.addressesSaved",
+					"Addresses saved without Apply ({{count}} configs changed). Users get them when they update their subscription.",
+					{ count: result.changed ?? 0 },
+				),
+			});
+			await load();
+		} catch (error: any) {
+			toast({
+				status: "error",
+				isClosable: true,
+				title: error?.data?.detail ?? String(error),
+			});
+		} finally {
+			setAddrBusy(false);
+		}
+	};
+
 	// saveEmergency stores the emergency tunnel and, with enabled, shows or
 	// hides its configs for every user of the countries.
 	const saveEmergency = async (enabled?: boolean) => {
@@ -1400,7 +1443,7 @@ export const TSinDialog: FC<{
 								<Input
 									value={directAddress}
 									onChange={(event) => setDirectAddress(event.target.value)}
-									placeholder="203.0.113.7"
+									placeholder="203.0.113.7, 203.0.113.8"
 									dir="ltr"
 									autoComplete="off"
 									spellCheck={false}
@@ -1411,6 +1454,22 @@ export const TSinDialog: FC<{
 										"Recommended: buy an extra IP for this server from your provider and enter it here, so the server's main IP never appears in users' configs. If it gets filtered, buy another, enter it and press Apply; the Cloudflare configs keep working meanwhile. Empty uses the server's own IP. The ⚡ configs take the ports HTTPS sites use (443, 8443, 2053, …) when the node reports them free.",
 									)}
 								</FormHelperText>
+								<Text fontSize="xs" opacity={0.8} mt={1}>
+									{tt(
+										"tsin.direct.multiHelp",
+										"Several IPs separated by commas: every subscription gets one of them at random, so the traffic is spread over them.",
+									)}
+								</Text>
+								<Button
+									size="sm"
+									mt={2}
+									variant="outline"
+									isLoading={addrBusy}
+									isDisabled={busy || loading}
+									onClick={saveAddresses}
+								>
+									{tt("tsin.saveAddresses", "Save addresses only (no Apply, nobody disconnects)")}
+								</Button>
 							</FormControl>
 							{view?.iran_reach && !view.iran_reach.error && (
 								<Text

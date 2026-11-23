@@ -86,7 +86,8 @@ func (s *Server) iranReachTarget(ctx context.Context, settings tsinSettings) (st
 	if settings.Transport != xrayconfig.TSinTransportPath || len(settings.DirectCountries) == 0 {
 		return "", 0, false
 	}
-	address := strings.TrimSpace(settings.DirectAddress)
+	// With several direct addresses the check looks at the first one.
+	address := firstTSinAddress(settings.DirectAddress)
 	if address == "" {
 		address = s.tsinTargetAddress(ctx, settings.Target)
 	}

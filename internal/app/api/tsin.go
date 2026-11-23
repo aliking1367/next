@@ -767,6 +767,29 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 // normalizeTSinDirectAddress accepts an IP address or a host name, and ""
 // for none.
 func normalizeTSinDirectAddress(value string) (string, error) {
+	// Several addresses, separated by commas, spaces or new lines, are kept
+	// as one comma list: every config then carries all of them and each
+	// subscription picks one at random, so the traffic is spread over the IPs.
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\n' || r == '\r' || r == '\t'
+	})
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		address, err := normalizeTSinSingleAddress(part)
+		if err != nil {
+			return "", err
+		}
+		if address == "" || seen[address] {
+			continue
+		}
+		seen[address] = true
+		out = append(out, address)
+	}
+	return strings.Join(out, ","), nil
+}
+
+func normalizeTSinSingleAddress(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "", nil
@@ -777,7 +800,17 @@ func normalizeTSinDirectAddress(value string) (string, error) {
 	if len(value) <= 253 && tsinHostnamePattern.MatchString(value) {
 		return strings.ToLower(value), nil
 	}
-	return "", errors.New("the direct address must be an IP address or a host name")
+	return "", errors.New("the direct address must be IP addresses or host names, separated by commas")
+}
+
+// firstTSinAddress is the first of a comma list of addresses.
+func firstTSinAddress(value string) string {
+	for _, part := range strings.Split(value, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			return part
+		}
+	}
+	return ""
 }
 
 var tsinHostnamePattern = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$`)
