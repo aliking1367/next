@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-af7cdd4",
-  "updated_at": "2026-11-23T19:09:51Z",
+  "latest": "dev-2102023",
+  "updated_at": "2026-11-23T22:24:09Z",
   "builds": [
+    {
+      "tag": "dev-2102023",
+      "sha": "2102023a7a792bfa1c63720ffc50a4ddfd377fee",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "45278637633",
+      "run_number": "263",
+      "created_at": "2026-11-23T22:24:09Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-2102023.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-2102023.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-2102023.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-2102023.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-af7cdd4",
       "sha": "af7cdd4f46991efdc8c568fe8e02ed2148ff5552",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-8576006.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-8576006.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-644de01",
-      "sha": "644de01454537e8c824a27edd91e3d8593da2fda",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41467920823",
-      "run_number": "162",
-      "created_at": "2026-11-02T15:08:24Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-644de01.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-644de01.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-644de01.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-644de01.zip"
         }
       }
     }
