@@ -49,15 +49,19 @@ type tsinNodeReport struct {
 	ReceivedAt time.Time `json:"-"`
 }
 
-// tsinNodeState holds the latest node report.
+// tsinNodeState holds the latest report of each node with a tunnel: the
+// countries' server and, with a second licence, the direct configs' one.
 type tsinNodeState struct {
 	mu     sync.Mutex
-	latest *tsinNodeReport
+	latest map[string]*tsinNodeReport
 }
 
 func (st *tsinNodeState) store(report *tsinNodeReport) {
 	st.mu.Lock()
-	st.latest = report
+	if st.latest == nil {
+		st.latest = map[string]*tsinNodeReport{}
+	}
+	st.latest[report.Target] = report
 	st.mu.Unlock()
 }
 
@@ -65,10 +69,11 @@ func (st *tsinNodeState) store(report *tsinNodeReport) {
 func (st *tsinNodeState) load(target string) *tsinNodeReport {
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	if st.latest == nil || st.latest.Target != target {
+	latest := st.latest[target]
+	if latest == nil {
 		return nil
 	}
-	copied := *st.latest
+	copied := *latest
 	return &copied
 }
 
@@ -128,12 +133,22 @@ func (r *tsinNodeReport) failingPorts(status *tsin.Status, inUse []string) []str
 // tsinReportKey signs a node's reports. It is derived from the panel's own
 // secret, so it needs no storage and changes only with that secret.
 func (s *Server) tsinReportKey(ctx context.Context) string {
+	return s.tsinReportKeyFor(ctx, "next-tsin-node-report")
+}
+
+// tsinDirectReportKey signs the reports of the direct configs' server, the
+// one with the second licence, so the panel tells the two servers apart.
+func (s *Server) tsinDirectReportKey(ctx context.Context) string {
+	return s.tsinReportKeyFor(ctx, "next-tsin-node-report-direct")
+}
+
+func (s *Server) tsinReportKeyFor(ctx context.Context, purpose string) string {
 	secret, err := s.nodeSessionCallbackSecret(ctx)
 	if err != nil || strings.TrimSpace(secret) == "" {
 		return ""
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte("next-tsin-node-report"))
+	mac.Write([]byte(purpose))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
@@ -144,8 +159,11 @@ func (s *Server) handleTSinNodeReport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	given := []byte(bearerToken(r))
 	key := s.tsinReportKey(r.Context())
-	if key == "" || subtle.ConstantTimeCompare([]byte(key), []byte(bearerToken(r))) != 1 {
+	directKey := s.tsinDirectReportKey(r.Context())
+	fromDirect := directKey != "" && subtle.ConstantTimeCompare([]byte(directKey), given) == 1
+	if !fromDirect && (key == "" || subtle.ConstantTimeCompare([]byte(key), given) != 1) {
 		writeError(w, http.StatusForbidden, "invalid report key")
 		return
 	}
@@ -159,7 +177,11 @@ func (s *Server) handleTSinNodeReport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if settings.Target == xrayconfig.MasterTargetID {
+	target := settings.Target
+	if fromDirect {
+		target = s.loadTSinDirectTarget(r.Context())
+	}
+	if target == xrayconfig.MasterTargetID || target == "" {
 		// The panel watches its own tunnel; a stray report changes nothing.
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "ignored": true})
 		return
@@ -184,7 +206,7 @@ func (s *Server) handleTSinNodeReport(w http.ResponseWriter, r *http.Request) {
 	if len(report.Listening) > 4096 {
 		report.Listening = nil
 	}
-	report.Target, report.ReceivedAt = settings.Target, time.Now()
+	report.Target, report.ReceivedAt = target, time.Now()
 	s.tsinNode.store(&report)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

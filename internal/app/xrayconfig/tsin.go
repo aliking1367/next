@@ -159,6 +159,11 @@ type TSinGate struct {
 	CloudDomain         string
 	CloudPort           int
 	CloudConnectAddress string
+	// DirectTarget is the server the direct configs (⚡, 💎 and HTTP) run on,
+	// with its own T.Sin licence; empty keeps them on the countries' server.
+	// DirectPortBusy is what listens there, as that server last reported.
+	DirectTarget   string
+	DirectPortBusy func(int) bool
 }
 
 // tsinDirectPorts are the ports direct configs take, in order: the ones
@@ -297,36 +302,50 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 	if err != nil {
 		return nil, err
 	}
+	// The direct configs run on the direct target when there is one (see
+	// tsin_split.go), with its own tunnel and routing.
+	directTarget := target
+	if strings.TrimSpace(gate.DirectTarget) != "" {
+		if directTarget, err = normalizeTargetID(gate.DirectTarget); err != nil {
+			return nil, err
+		}
+	}
+	split := directTarget != target
+	directBusy := portBusy
+	if split {
+		directBusy = gate.DirectPortBusy
+	}
 	// Routing on every other target goes first, while its inbounds still exist:
 	// a config left with no inbounds is rejected, and the rules must not outlive
 	// the exits they point at.
-	if err := r.stripTSinRouting(ctx, target); err != nil {
+	if err := r.stripTSinRouting(ctx, target, directTarget); err != nil {
 		return nil, err
 	}
 	config, err := r.GetTargetRawConfig(ctx, target)
 	if err != nil {
 		return nil, err
 	}
-	wanted := map[string]bool{}
+	// wanted is every inbound to keep, with the target it belongs on.
+	wanted := map[string]string{}
 	for _, country := range countries {
-		wanted[TSinInboundTag(country.Name)] = true
+		wanted[TSinInboundTag(country.Name)] = target
 		if country.Direct && transport == TSinTransportPath {
-			wanted[TSinDirectInboundTag(country.Name)] = true
+			wanted[TSinDirectInboundTag(country.Name)] = directTarget
 		}
 		if country.Vision && transport == TSinTransportPath {
-			wanted[TSinVisionInboundTag(country.Name)] = true
+			wanted[TSinVisionInboundTag(country.Name)] = directTarget
 		}
 		if country.HTTP && transport == TSinTransportPath {
-			wanted[TSinHTTPInboundTag(country.Name)] = true
+			wanted[TSinHTTPInboundTag(country.Name)] = directTarget
 		}
 		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
-			wanted[TSinFastlyInboundTag(country.Name)] = true
+			wanted[TSinFastlyInboundTag(country.Name)] = target
 		}
 		if country.Cloud && transport == TSinTransportPath && gate.CloudDomain != "" {
-			wanted[TSinCloudInboundTag(country.Name)] = true
+			wanted[TSinCloudInboundTag(country.Name)] = target
 		}
 		if tsinWantsTunnel(country, transport, gate) {
-			wanted[TSinTunnelInboundTag(country.Name)] = true
+			wanted[TSinTunnelInboundTag(country.Name)] = target
 		}
 	}
 	// Every T.Sin inbound anywhere that is not wanted on this target goes: a
@@ -349,7 +368,13 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 			// Rebuilt below on every apply, since their fallbacks follow the countries.
 			continue
 		}
-		if wanted[tag] && len(direct) == 1 && direct[0] == target {
+		want, ok := wanted[tag]
+		if ok && len(direct) == 1 && direct[0] == want {
+			continue
+		}
+		if ok && len(direct) == 1 && tsinMovable(tag) {
+			// A direct config on the other server moves below, as it is, so
+			// its users' links stay the same.
 			continue
 		}
 		if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
@@ -372,6 +397,26 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 					used[gate.CloudPort] = true
 				} else {
 					used[DefaultTSinCloudPort] = true
+				}
+			}
+		}
+	}
+	// The direct target counts its own ports, and those of the direct
+	// configs about to move there, which keep their ports.
+	directUsed, directRanges := used, ranges
+	if split {
+		directConfig, err := r.GetTargetRawConfig(ctx, directTarget)
+		if err != nil {
+			return nil, err
+		}
+		directUsed, directRanges = extractUsedPorts(directConfig)
+		for tag, want := range wanted {
+			if want != directTarget {
+				continue
+			}
+			if existing, err := r.GetInbound(ctx, tag); err == nil {
+				if port, err := parseConfigPort(existing["port"]); err == nil && port > 0 {
+					directUsed[port] = true
 				}
 			}
 		}
@@ -428,21 +473,21 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		result = append(result, entry)
 
 		if country.Direct && transport == TSinTransportPath {
-			direct, err := r.ensureTSinDirectInbound(ctx, target, country, gate.DirectAddress, used, ranges, portBusy, catalog, usedDests)
+			direct, err := r.ensureTSinDirectInbound(ctx, directTarget, country, gate.DirectAddress, directUsed, directRanges, directBusy, catalog, usedDests)
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, direct)
 		}
 		if country.Vision && transport == TSinTransportPath {
-			vision, err := r.ensureTSinVisionInbound(ctx, target, country, gate, used, ranges, portBusy)
+			vision, err := r.ensureTSinVisionInbound(ctx, directTarget, country, gate, directUsed, directRanges, directBusy)
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, vision)
 		}
 		if country.HTTP && transport == TSinTransportPath {
-			httpEntry, err := r.ensureTSinHTTPInbound(ctx, target, country, gate, used, ranges, portBusy)
+			httpEntry, err := r.ensureTSinHTTPInbound(ctx, directTarget, country, gate, directUsed, directRanges, directBusy)
 			if err != nil {
 				return nil, err
 			}
@@ -481,9 +526,26 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 	if err != nil {
 		return nil, err
 	}
-	setTSinRouting(config, countries)
+	mainSplit := tsinRouteAll
+	if split {
+		mainSplit = tsinRouteMain
+	}
+	setTSinRoutingSplit(config, countries, mainSplit)
 	if _, err := r.SaveTargetRawConfig(ctx, target, config); err != nil {
 		return nil, fmt.Errorf("save routing: %w", err)
+	}
+	if split {
+		directConfig, err := r.GetTargetRawConfig(ctx, directTarget)
+		if err != nil {
+			return nil, err
+		}
+		directCountries := tsinDirectCountries(countries)
+		if len(directCountries) > 0 || hasTSinRouting(directConfig) {
+			setTSinRoutingSplit(directConfig, directCountries, tsinRouteDirect)
+			if _, err := r.SaveTargetRawConfig(ctx, directTarget, directConfig); err != nil {
+				return nil, fmt.Errorf("save the direct server's routing: %w", err)
+			}
+		}
 	}
 	// After the routing: clearing T.Sin's outbounds above also clears the
 	// front's, which are rebuilt here.
@@ -502,6 +564,9 @@ func (r Repository) ensureTSinDirectInbound(ctx context.Context, target string, 
 	entry := TSinInbound{Tag: tag, Country: country.Name, Transport: TSinTransportXHTTP, Direct: true}
 	existing, err := r.GetInbound(ctx, tag)
 	if err != nil && !errors.Is(err, ErrInboundNotFound) {
+		return entry, err
+	}
+	if existing, err = r.keepOrMoveTSinInbound(ctx, tag, existing, target); err != nil {
 		return entry, err
 	}
 	rebuild := existing != nil && tsinInboundTransport(existing) != TSinTransportXHTTP
@@ -569,7 +634,7 @@ func tsinDirectPortFree(used map[int]bool, ranges []portRange, portBusy func(int
 // and on a panel whose only inbounds are T.Sin's the last deletion would
 // otherwise leave the rules behind with nothing able to save the config.
 func (r Repository) RemoveTSin(ctx context.Context) error {
-	if err := r.stripTSinRouting(ctx, ""); err != nil {
+	if err := r.stripTSinRouting(ctx); err != nil {
 		return err
 	}
 	all, err := r.CollectInboundTags(ctx)
@@ -590,13 +655,13 @@ func (r Repository) RemoveTSin(ctx context.Context) error {
 // that holds its own, except keep ("" keeps none). A node that follows the
 // master has no config of its own: saving one would pin it to a copy, so only
 // the master is touched on its behalf.
-func (r Repository) stripTSinRouting(ctx context.Context, keep string) error {
+func (r Repository) stripTSinRouting(ctx context.Context, keep ...string) error {
 	targets, err := r.ListConfigTargets(ctx)
 	if err != nil {
 		return err
 	}
 	for _, item := range targets {
-		if item.ID == keep || (item.Type == "node" && item.Mode != ConfigModeCustom) {
+		if slices.Contains(keep, item.ID) || (item.Type == "node" && item.Mode != ConfigModeCustom) {
 			continue
 		}
 		config, err := r.GetTargetRawConfig(ctx, item.ID)
@@ -628,6 +693,11 @@ func hasTSinRouting(config map[string]any) bool {
 // capture traffic meant for anything else, while a catch-all rule above them
 // would capture theirs.
 func setTSinRouting(config map[string]any, countries []TSinCountry) {
+	setTSinRoutingSplit(config, countries, tsinRouteAll)
+}
+
+// setTSinRoutingSplit is setTSinRouting for the inbounds split covers.
+func setTSinRoutingSplit(config map[string]any, countries []TSinCountry, split tsinRoutingSplit) {
 	// The Cloudflare XHTTP front lives in the config only; ApplyTSin rebuilds
 	// it after this, and removing T.Sin leaves it out.
 	if inbounds, _, _, had := withoutTSinCloudFront(config); had && len(inbounds) > 0 {
@@ -674,25 +744,7 @@ func setTSinRouting(config map[string]any, countries []TSinCountry) {
 				"servers": []any{map[string]any{"address": address, "port": country.Port}},
 			},
 		})
-		inbounds := []any{TSinInboundTag(country.Name)}
-		if country.Direct {
-			inbounds = append(inbounds, TSinDirectInboundTag(country.Name))
-		}
-		if country.Vision {
-			inbounds = append(inbounds, TSinVisionInboundTag(country.Name))
-		}
-		if country.HTTP {
-			inbounds = append(inbounds, TSinHTTPInboundTag(country.Name))
-		}
-		if country.Fastly {
-			inbounds = append(inbounds, TSinFastlyInboundTag(country.Name))
-		}
-		if country.Cloud {
-			inbounds = append(inbounds, TSinCloudInboundTag(country.Name))
-		}
-		if country.TunnelPort > 0 {
-			inbounds = append(inbounds, TSinTunnelInboundTag(country.Name))
-		}
+		inbounds := tsinCountryInbounds(country, split)
 		rules = append(rules, map[string]any{
 			"type":        "field",
 			"inboundTag":  inbounds,

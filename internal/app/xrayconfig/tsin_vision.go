@@ -108,6 +108,9 @@ func (r Repository) ensureTSinVisionInbound(ctx context.Context, target string, 
 	if err != nil && !errors.Is(err, ErrInboundNotFound) {
 		return entry, err
 	}
+	if existing, err = r.keepOrMoveTSinInbound(ctx, tag, existing, target); err != nil {
+		return entry, err
+	}
 	if existing != nil && tsinVisionInboundSNI(existing) != sni {
 		if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
 			return entry, fmt.Errorf("rebuild %s: %w", tag, err)

@@ -137,6 +137,26 @@ type TSinView = {
 	} | null;
 	targets?: TSinTarget[];
 	node_script: string;
+	// direct_target is the server with the second T.Sin licence that runs the
+	// direct configs (⚡, 💎 and HTTP); "" keeps them with the countries.
+	direct_target?: string;
+	direct_node_script?: string;
+	// direct_licence is that licence as its server last reported it.
+	direct_licence?: {
+		target: string;
+		reported: boolean;
+		account?: TSinAccount;
+		account_error?: string;
+		tunnel?: { up: boolean; handshake_age?: number };
+		node_report?: {
+			age_seconds: number;
+			fresh: boolean;
+			tunnel_up: boolean;
+			ports_total?: number;
+			ports_working?: number;
+			ports_failing?: string[] | null;
+		};
+	};
 	dc: string;
 	datacenters: string[];
 	preferred: string[];
@@ -373,6 +393,7 @@ export const TSinDialog: FC<{
 	const [token, setToken] = useState("");
 	const [dc, setDc] = useState("dc1");
 	const [target, setTarget] = useState("master");
+	const [directTarget, setDirectTarget] = useState("");
 	const [transport, setTransport] = useState("xhttp");
 	const [gateHost, setGateHost] = useState("");
 	const [gatePort, setGatePort] = useState("2087");
@@ -420,6 +441,12 @@ export const TSinDialog: FC<{
 		.split("@PANEL_URL@")
 		.join(window.location.origin);
 	const script = useClipboard(nodeScript);
+	const directNodeScript = (view?.direct_node_script ?? "")
+		.split("@PANEL_URL@")
+		.join(window.location.origin);
+	const directScript = useClipboard(directNodeScript);
+	const licence2 = view?.direct_licence;
+	const account2 = licence2?.account;
 	const frontScript = useClipboard(view?.front_script ?? "");
 
 	// providerError turns a refused request into where the problem is and
@@ -519,6 +546,7 @@ export const TSinDialog: FC<{
 			setVision(data.vision_countries ?? []);
 			setVisionSni(data.vision_sni || "www.hetzner.com");
 			setHttpCountries(data.http_countries ?? []);
+			setDirectTarget(data.direct_target ?? "");
 			setHttpHost(data.http_host || "tgju.org");
 			setCdnHidden(Boolean(data.cdn_hidden));
 			setFastlyHost(data.fastly_host ?? "");
@@ -622,6 +650,7 @@ export const TSinDialog: FC<{
 				vision_sni: visionSni.trim(),
 				http_countries: httpCountries.filter((name) => selected.includes(name)),
 				http_host: httpHost.trim(),
+				direct_target: directTarget,
 				cdn_hidden: cdnHidden,
 				fastly_host: fastlyHost.trim(),
 				cloud_domain: cloudDomain.trim(),
@@ -1294,6 +1323,135 @@ export const TSinDialog: FC<{
 							</Text>
 						</Box>
 					)}
+
+					<TSinSection
+						title={tt(
+							"tsin.licence2.title",
+							"Second licence: direct configs 🔑",
+						)}
+						status={
+							directTarget ? (
+								<Badge
+									colorScheme={
+										licence2?.tunnel?.up
+											? "green"
+											: licence2
+												? "orange"
+												: "gray"
+									}
+								>
+									{licence2?.tunnel?.up
+										? tt("tsin.tunnelUp", "Tunnel up")
+										: tt("tsin.licence2.waiting", "Not reporting")}
+								</Badge>
+							) : (
+								<Badge>{tt("tsin.licence2.off", "Off")}</Badge>
+							)
+						}
+					>
+						<Stack spacing={4}>
+							<Alert status="info" borderRadius="6px" fontSize="sm">
+								<AlertIcon />
+								<AlertDescription>
+									{tt(
+										"tsin.licence2.help",
+										"A T.Sin licence works on one server only. With a second licence on a second server, the direct configs (⚡, 💎 and HTTP) run there and leave through its own tunnel; the tunnel (🛡) and Cloudflare configs stay on the countries' server with the first licence. Moving keeps each config's port and keys, so users' links do not change. Which countries get a direct config is still chosen in the ⚡, 💎 and HTTP sections.",
+									)}
+								</AlertDescription>
+							</Alert>
+							<FormControl>
+								<FormLabel>
+									{tt("tsin.licence2.target", "Server of the direct configs")}
+								</FormLabel>
+								<Select
+									value={directTarget}
+									onChange={(event) => setDirectTarget(event.target.value)}
+								>
+									<option value="">
+										{tt(
+											"tsin.licence2.none",
+											"Same server as the countries (one licence)",
+										)}
+									</option>
+									{(view?.targets ?? [])
+										.filter(
+											(item) => item.type === "node" && item.id !== target,
+										)
+										.map((item) => (
+											<option key={item.id} value={item.id}>
+												{item.name} {item.status ? `(${item.status})` : ""}
+											</option>
+										))}
+								</Select>
+							</FormControl>
+							{directTarget && account2 && (
+								<Box borderWidth="1px" borderRadius="6px" p={3}>
+									<HStack justify="space-between" mb={2}>
+										<Text fontWeight="semibold" dir="ltr">
+											{account2.client_name}
+										</Text>
+										<Badge colorScheme={account2.active ? "green" : "red"}>
+											{account2.active
+												? tt("tsin.active", "Active")
+												: tt("tsin.inactive", "Inactive")}
+										</Badge>
+									</HStack>
+									<SimpleGrid columns={2} spacing={2} fontSize="sm">
+										<Text dir="ltr">
+											{formatGB(account2.data_used_gb)} /{" "}
+											{formatGB(account2.data_limit_gb)}
+										</Text>
+										<Text>{expiryText(account2.expiry_date, tt)}</Text>
+										<Text>
+											{tt("tsin.licence2.connections", "Connections")}:{" "}
+											{account2.active_connections}
+										</Text>
+										{licence2?.node_report?.ports_total ? (
+											<Text>
+												{tt("tsin.licence2.ports", "Countries working")}:{" "}
+												{licence2.node_report.ports_working}/
+												{licence2.node_report.ports_total}
+											</Text>
+										) : null}
+									</SimpleGrid>
+									<Text fontSize="xs" opacity={0.7} mt={1} dir="ltr">
+										{account2.expiry_date}
+									</Text>
+								</Box>
+							)}
+							{directTarget && licence2?.account_error && (
+								<Alert status="warning" borderRadius="6px" fontSize="sm">
+									<AlertIcon />
+									<AlertDescription dir="ltr">
+										{licence2.account_error}
+									</AlertDescription>
+								</Alert>
+							)}
+							{directTarget && (
+								<Box>
+									<Text fontSize="sm" mb={2}>
+										{tt(
+											"tsin.licence2.script",
+											"Run this on the second server and enter the second licence's token. It brings up that server's tunnel, keeps it up and reports it here every minute.",
+										)}
+									</Text>
+									<Textarea
+										value={directNodeScript}
+										isReadOnly
+										rows={5}
+										fontFamily="mono"
+										fontSize="xs"
+										dir="ltr"
+									/>
+									<Button size="sm" mt={2} onClick={directScript.onCopy}>
+										{directScript.hasCopied
+											? tt("tsin.copied", "Copied")
+											: tt("tsin.copy", "Copy script")}
+									</Button>
+								</Box>
+							)}
+						</Stack>
+					</TSinSection>
 
 					{view?.applied && view.target === "master" && (
 						<HStack fontSize="sm">

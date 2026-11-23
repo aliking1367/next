@@ -176,6 +176,9 @@ type tsinRequest struct {
 	CloudPort      *int      `json:"cloud_port"`
 	CloudConnect   *string   `json:"cloud_connect"`
 	CloudCountries *[]string `json:"cloud_countries"`
+	// DirectTarget replaces the server the direct configs run on, with its
+	// own licence ("" puts them back with the countries). Omitted keeps it.
+	DirectTarget *string `json:"direct_target"`
 }
 
 func tokenSum(token string) string {
@@ -338,6 +341,10 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		"tunnel_per_port":  xrayconfig.TSinTunnelMaxPerPort,
 		"origin_ip":        s.tsinTargetAddress(r.Context(), settings.Target),
 		"node_script":      tsin.NodeScriptReporting(settings.DC, s.tsinReportKey(r.Context())),
+		"direct_target":    s.loadTSinDirectTarget(r.Context()),
+		// The second licence's server runs the same script, signed with its
+		// own key so its reports are told apart.
+		"direct_node_script": tsin.NodeScriptReporting(settings.DC, s.tsinDirectReportKey(r.Context())),
 	}
 	if targets, err := s.configRepo.ListConfigTargets(r.Context()); err == nil {
 		view["targets"] = targets
@@ -357,6 +364,7 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		view["registered_dc"] = settings.RegisteredDC
 	}
 	s.tsinAccountView(ctx, settings, view)
+	s.tsinDirectLicenceView(settings, view)
 	writeJSON(w, http.StatusOK, view)
 }
 
@@ -609,6 +617,19 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			cloudCountries[strings.ToLower(name)] = true
 		}
 	}
+	directTarget := s.loadTSinDirectTarget(ctx)
+	if request.DirectTarget != nil {
+		cleaned, err := normalizeTSinDirectTarget(*request.DirectTarget)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		directTarget = cleaned
+	}
+	if directTarget == target {
+		// Both licences on one server is what T.Sin does not allow.
+		directTarget = ""
+	}
 	tunnelPortBy := map[int]tsinTunnelPort{}
 	for _, item := range tunnelPorts {
 		tunnelPortBy[item.NodePort] = item
@@ -688,7 +709,8 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
 		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost,
 			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI, HTTPHost: httpHost,
-			CloudDomain: cloudSettings.Domain, CloudPort: cloudSettings.Port, CloudConnectAddress: cloudSettings.Connect}, countries, portBusy)
+			CloudDomain: cloudSettings.Domain, CloudPort: cloudSettings.Port, CloudConnectAddress: cloudSettings.Connect,
+			DirectTarget: directTarget, DirectPortBusy: s.tsinPortBusy(firstNonEmpty(directTarget, target))}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
 		return
@@ -751,6 +773,10 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+	}
+	if err := s.saveTSinDirectTarget(ctx, directTarget); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	if request.VisionCountries != nil || request.VisionSNI != nil {
 		if err := s.saveTSinVision(ctx, visionCountries, visionSNI); err != nil {

@@ -122,6 +122,9 @@ func (r Repository) ensureTSinHTTPInbound(ctx context.Context, target string, co
 	if err != nil && !errors.Is(err, ErrInboundNotFound) {
 		return entry, err
 	}
+	if existing, err = r.keepOrMoveTSinInbound(ctx, tag, existing, target); err != nil {
+		return entry, err
+	}
 	if existing != nil && tsinHTTPInboundHost(existing) != host {
 		if _, err := r.DeleteInbound(ctx, tag); err != nil && !errors.Is(err, ErrInboundNotFound) {
 			return entry, fmt.Errorf("rebuild %s: %w", tag, err)
