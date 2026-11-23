@@ -6,7 +6,6 @@ import {
 	Box,
 	Button,
 	Checkbox,
-	Collapse,
 	chakra,
 	FormControl,
 	FormHelperText,
@@ -274,41 +273,84 @@ const SectionChevron = chakra(ChevronDownIcon, {
 	baseStyle: { w: 4, h: 4, transition: "transform 0.2s" },
 });
 
-// TSinSection is a bordered block whose body folds away, so the dialog shows
-// the countries first and the extra tools only when opened.
+// TSinSection is one item of the T.Sin menu: a card with its title and a
+// short status that opens its settings in a popup of their own. What is
+// changed there stays in the main window and is saved with its Apply (or the
+// section's own buttons), so closing the popup loses nothing.
 const TSinSection: FC<{
 	title: ReactNode;
 	status?: ReactNode;
 	borderColor?: string;
 	defaultOpen?: boolean;
 	children: ReactNode;
-}> = ({ title, status, borderColor, defaultOpen = false, children }) => {
-	const [open, setOpen] = useState(defaultOpen);
+}> = ({ title, status, borderColor, children }) => {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
 	return (
-		<Box borderWidth="1px" borderRadius="6px" borderColor={borderColor}>
+		<>
 			<HStack
 				as="button"
 				type="button"
 				w="full"
+				h="full"
+				minH="64px"
 				justify="space-between"
 				spacing={3}
-				p={3}
+				p={4}
 				textAlign="start"
-				aria-expanded={open}
-				onClick={() => setOpen((current) => !current)}
+				borderWidth="1px"
+				borderRadius="10px"
+				borderColor={borderColor}
+				transition="background 0.15s, box-shadow 0.15s"
+				_hover={{
+					bg: "blackAlpha.50",
+					boxShadow: "sm",
+					_dark: { bg: "whiteAlpha.100" },
+				}}
+				aria-haspopup="dialog"
+				onClick={() => setOpen(true)}
 			>
-				<Text fontWeight="semibold">{title}</Text>
+				<Text fontWeight="semibold" fontSize="sm">
+					{title}
+				</Text>
 				<HStack spacing={2} flexShrink={0}>
 					{status}
-					<SectionChevron transform={open ? "rotate(180deg)" : undefined} />
+					<SectionChevron
+						transform="rotate(-90deg)"
+						sx={{ "[dir=rtl] &": { transform: "rotate(90deg)" } }}
+					/>
 				</HStack>
 			</HStack>
-			<Collapse in={open} animateOpacity>
-				<Box px={3} pb={3}>
-					{children}
-				</Box>
-			</Collapse>
-		</Box>
+			<AppDialog
+				isOpen={open}
+				onClose={() => setOpen(false)}
+				size="xl"
+				scrollBehavior="inside"
+				overlayProps={{ bg: "blackAlpha.600" }}
+				title={title}
+				footer={
+					<HStack w="full" justify="space-between" spacing={3}>
+						<Text fontSize="xs" opacity={0.7}>
+							{
+								t("tsin.sectionApplyHint", {
+									defaultValue:
+										"Changes here are saved with Apply in the T.Sin window.",
+								}) as string
+							}
+						</Text>
+						<Button
+							colorScheme="primary"
+							size="sm"
+							onClick={() => setOpen(false)}
+						>
+							{t("tsin.sectionDone", { defaultValue: "Done" }) as string}
+						</Button>
+					</HStack>
+				}
+			>
+				{children}
+			</AppDialog>
+		</>
 	);
 };
 
@@ -894,206 +936,233 @@ export const TSinDialog: FC<{
 
 					{isOpen && <TSinSetupChecklist reloadKey={view} />}
 
-					<Alert status="info" borderRadius="6px" fontSize="sm">
-						<AlertIcon />
-						<AlertDescription>
-							{tt(
-								"tsin.scope",
-								"The T.Sin tunnel lives on one server, and the countries are served by the Xray on that server. Pick the panel server, or a node you run the traffic on.",
-							)}
-						</AlertDescription>
-					</Alert>
-
-					<FormControl>
-						<FormLabel>
-							{tt("tsin.target", "Serve the countries from")}
-						</FormLabel>
-						<Select
-							value={target}
-							onChange={(event) => setTarget(event.target.value)}
-						>
-							<option value="master">
-								{tt("tsin.targetMaster", "This server (the panel)")}
-							</option>
-							{(view?.targets ?? [])
-								.filter((item) => item.type === "node")
-								.map((item) => (
-									<option key={item.id} value={item.id}>
-										{item.name} {item.status ? `(${item.status})` : ""}
-									</option>
-								))}
-						</Select>
-						{target !== "master" && (
-							<FormHelperText>
-								{tt(
-									"tsin.targetNodeHelp",
-									"The node switches to its own Xray config (a copy of the shared one made now). Later changes to the shared config will not reach it.",
-								)}
-							</FormHelperText>
+					<TSinSection
+						title={tt(
+							"tsin.connection.title",
+							"Connection, token and datacenter ⚙️",
 						)}
-					</FormControl>
-
-					<FormControl>
-						<FormLabel>{tt("tsin.transport", "Connection type")}</FormLabel>
-						<Select
-							value={transport}
-							onChange={(event) => setTransport(event.target.value)}
-						>
-							<option value="xhttp">
-								{tt("tsin.transportXhttp", "XHTTP (recommended)")}
-							</option>
-							<option value="tcp">{tt("tsin.transportTcp", "TCP")}</option>
-							<option value="path">
-								{tt(
-									"tsin.transportPath",
-									"One domain on port 443, by path (Cloudflare)",
-								)}
-							</option>
-						</Select>
-						<FormHelperText>
-							{tt(
-								"tsin.transportHelp",
-								"XHTTP held up on Iranian networks where TCP connections kept being cut every few minutes. Changing this rebuilds the country configs on new ports, so users must update their subscription.",
-							)}
-						</FormHelperText>
-					</FormControl>
-
-					{transport === "path" && (
-						<Box borderWidth="1px" borderRadius="6px" p={3}>
-							<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={3}>
-								<FormControl>
-									<FormLabel>
-										{tt("tsin.gateHost", "Cloudflare domain")}
-									</FormLabel>
-									<Input
-										value={gateHost}
-										onChange={(event) => setGateHost(event.target.value)}
-										placeholder="g1.example.com"
-										dir="ltr"
-										autoComplete="off"
-										spellCheck={false}
-									/>
-								</FormControl>
-								<FormControl>
-									<FormLabel>{tt("tsin.gatePort", "Origin port")}</FormLabel>
-									<Input
-										value={gatePort}
-										onChange={(event) => setGatePort(event.target.value)}
-										placeholder="2087"
-										dir="ltr"
-										inputMode="numeric"
-									/>
-								</FormControl>
-							</SimpleGrid>
-							<Text fontSize="xs" opacity={0.8} mt={2}>
-								{tt(
-									"tsin.gateHelp",
-									"In Cloudflare: an A record for this domain pointing at the node's IP, proxied (orange). SSL/TLS mode Full. An Origin Rule for this hostname that rewrites the destination port to the origin port above. Every country is then this domain on port 443, told apart by path.",
-								)}
-							</Text>
-						</Box>
-					)}
-
-					<FormControl>
-						<FormLabel>{tt("tsin.token", "T.Sin token")}</FormLabel>
-						<Input
-							type="password"
-							value={token}
-							onChange={(event) => setToken(event.target.value)}
-							placeholder={
-								view?.token_set
-									? tt(
-											"tsin.tokenStored",
-											"A token is saved. Leave empty to keep it.",
-										)
-									: "token"
-							}
-							dir="ltr"
-							autoComplete="off"
-							spellCheck={false}
-						/>
-						<FormHelperText>
-							{tt(
-								"tsin.tokenHelp",
-								"T.Sin's own API is plain HTTP with the token in the address, so anyone watching the network between this server and the provider can read it. The panel never shows the token again.",
-							)}
-						</FormHelperText>
-					</FormControl>
-
-					<FormControl>
-						<FormLabel>{tt("tsin.dc", "Datacenter")}</FormLabel>
-						<HStack spacing={2}>
-							<Select
-								value={dc}
-								onChange={(event) => setDc(event.target.value)}
-							>
-								{(view?.datacenters ?? ["dc1"]).map((item) => (
-									<option key={item} value={item}>
-										{item}
-									</option>
-								))}
-							</Select>
-							<Button
-								size="sm"
-								variant="outline"
-								flexShrink={0}
-								isLoading={ranking}
-								onClick={findBestDatacenter}
-							>
-								{tt("tsin.findBest", "Find the best")}
-							</Button>
-						</HStack>
-						{ranked && (
-							<Stack spacing={1} mt={2}>
-								{ranked.map((item) => (
-									<HStack key={item.dc} justify="space-between" fontSize="sm">
-										<Text
-											dir="ltr"
-											fontWeight={item.dc === dc ? "bold" : "normal"}
-										>
-											{item.dc}
-										</Text>
-										{item.ok ? (
-											<Badge colorScheme="green">
-												{item.latency_ms} ms ·{" "}
-												{tt("tsin.countriesCount", "{{count}} countries", {
-													count: item.countries ?? 0,
-												})}
-											</Badge>
-										) : (
-											<Badge
-												colorScheme={item.problem === "in_use" ? "blue" : "red"}
-												title={item.error}
-											>
-												{item.problem
-													? explainTSinProblem(item.problem, tt, nodeTunnel)
-															.where
-													: tt("tsin.dcUnavailable", "not available")}
-											</Badge>
-										)}
-									</HStack>
-								))}
-							</Stack>
-						)}
-						{dcChangedOnNode && (
-							<Alert status="warning" borderRadius="6px" fontSize="sm" mt={2}>
+						status={
+							<Badge colorScheme={view?.token_set ? "green" : "orange"}>
+								{dc}
+							</Badge>
+						}
+					>
+						<Stack spacing={4}>
+							<Alert status="info" borderRadius="6px" fontSize="sm">
 								<AlertIcon />
 								<AlertDescription>
 									{tt(
-										"tsin.dcChangeOnNode",
-										"The node's tunnel is registered on {{current}}. After applying {{next}}, run the new node script on that node right away, or every country stops working until you do.",
-										{ current: view?.dc ?? "", next: dc },
+										"tsin.scope",
+										"The T.Sin tunnel lives on one server, and the countries are served by the Xray on that server. Pick the panel server, or a node you run the traffic on.",
 									)}
 								</AlertDescription>
 							</Alert>
-						)}
-						<FormHelperText>
-							{tt(
-								"tsin.dcHelp",
-								"Find the best asks every datacenter at once and picks the fastest one that accepts the token. On this panel's own machine a watch also checks the tunnel every minute and repairs it, moving to another datacenter only if it serves the same countries on the same ports.",
+
+							<FormControl>
+								<FormLabel>
+									{tt("tsin.target", "Serve the countries from")}
+								</FormLabel>
+								<Select
+									value={target}
+									onChange={(event) => setTarget(event.target.value)}
+								>
+									<option value="master">
+										{tt("tsin.targetMaster", "This server (the panel)")}
+									</option>
+									{(view?.targets ?? [])
+										.filter((item) => item.type === "node")
+										.map((item) => (
+											<option key={item.id} value={item.id}>
+												{item.name} {item.status ? `(${item.status})` : ""}
+											</option>
+										))}
+								</Select>
+								{target !== "master" && (
+									<FormHelperText>
+										{tt(
+											"tsin.targetNodeHelp",
+											"The node switches to its own Xray config (a copy of the shared one made now). Later changes to the shared config will not reach it.",
+										)}
+									</FormHelperText>
+								)}
+							</FormControl>
+
+							<FormControl>
+								<FormLabel>{tt("tsin.transport", "Connection type")}</FormLabel>
+								<Select
+									value={transport}
+									onChange={(event) => setTransport(event.target.value)}
+								>
+									<option value="xhttp">
+										{tt("tsin.transportXhttp", "XHTTP (recommended)")}
+									</option>
+									<option value="tcp">{tt("tsin.transportTcp", "TCP")}</option>
+									<option value="path">
+										{tt(
+											"tsin.transportPath",
+											"One domain on port 443, by path (Cloudflare)",
+										)}
+									</option>
+								</Select>
+								<FormHelperText>
+									{tt(
+										"tsin.transportHelp",
+										"XHTTP held up on Iranian networks where TCP connections kept being cut every few minutes. Changing this rebuilds the country configs on new ports, so users must update their subscription.",
+									)}
+								</FormHelperText>
+							</FormControl>
+
+							{transport === "path" && (
+								<Box borderWidth="1px" borderRadius="6px" p={3}>
+									<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={3}>
+										<FormControl>
+											<FormLabel>
+												{tt("tsin.gateHost", "Cloudflare domain")}
+											</FormLabel>
+											<Input
+												value={gateHost}
+												onChange={(event) => setGateHost(event.target.value)}
+												placeholder="g1.example.com"
+												dir="ltr"
+												autoComplete="off"
+												spellCheck={false}
+											/>
+										</FormControl>
+										<FormControl>
+											<FormLabel>
+												{tt("tsin.gatePort", "Origin port")}
+											</FormLabel>
+											<Input
+												value={gatePort}
+												onChange={(event) => setGatePort(event.target.value)}
+												placeholder="2087"
+												dir="ltr"
+												inputMode="numeric"
+											/>
+										</FormControl>
+									</SimpleGrid>
+									<Text fontSize="xs" opacity={0.8} mt={2}>
+										{tt(
+											"tsin.gateHelp",
+											"In Cloudflare: an A record for this domain pointing at the node's IP, proxied (orange). SSL/TLS mode Full. An Origin Rule for this hostname that rewrites the destination port to the origin port above. Every country is then this domain on port 443, told apart by path.",
+										)}
+									</Text>
+								</Box>
 							)}
-						</FormHelperText>
-					</FormControl>
+
+							<FormControl>
+								<FormLabel>{tt("tsin.token", "T.Sin token")}</FormLabel>
+								<Input
+									type="password"
+									value={token}
+									onChange={(event) => setToken(event.target.value)}
+									placeholder={
+										view?.token_set
+											? tt(
+													"tsin.tokenStored",
+													"A token is saved. Leave empty to keep it.",
+												)
+											: "token"
+									}
+									dir="ltr"
+									autoComplete="off"
+									spellCheck={false}
+								/>
+								<FormHelperText>
+									{tt(
+										"tsin.tokenHelp",
+										"T.Sin's own API is plain HTTP with the token in the address, so anyone watching the network between this server and the provider can read it. The panel never shows the token again.",
+									)}
+								</FormHelperText>
+							</FormControl>
+
+							<FormControl>
+								<FormLabel>{tt("tsin.dc", "Datacenter")}</FormLabel>
+								<HStack spacing={2}>
+									<Select
+										value={dc}
+										onChange={(event) => setDc(event.target.value)}
+									>
+										{(view?.datacenters ?? ["dc1"]).map((item) => (
+											<option key={item} value={item}>
+												{item}
+											</option>
+										))}
+									</Select>
+									<Button
+										size="sm"
+										variant="outline"
+										flexShrink={0}
+										isLoading={ranking}
+										onClick={findBestDatacenter}
+									>
+										{tt("tsin.findBest", "Find the best")}
+									</Button>
+								</HStack>
+								{ranked && (
+									<Stack spacing={1} mt={2}>
+										{ranked.map((item) => (
+											<HStack
+												key={item.dc}
+												justify="space-between"
+												fontSize="sm"
+											>
+												<Text
+													dir="ltr"
+													fontWeight={item.dc === dc ? "bold" : "normal"}
+												>
+													{item.dc}
+												</Text>
+												{item.ok ? (
+													<Badge colorScheme="green">
+														{item.latency_ms} ms ·{" "}
+														{tt("tsin.countriesCount", "{{count}} countries", {
+															count: item.countries ?? 0,
+														})}
+													</Badge>
+												) : (
+													<Badge
+														colorScheme={
+															item.problem === "in_use" ? "blue" : "red"
+														}
+														title={item.error}
+													>
+														{item.problem
+															? explainTSinProblem(item.problem, tt, nodeTunnel)
+																	.where
+															: tt("tsin.dcUnavailable", "not available")}
+													</Badge>
+												)}
+											</HStack>
+										))}
+									</Stack>
+								)}
+								{dcChangedOnNode && (
+									<Alert
+										status="warning"
+										borderRadius="6px"
+										fontSize="sm"
+										mt={2}
+									>
+										<AlertIcon />
+										<AlertDescription>
+											{tt(
+												"tsin.dcChangeOnNode",
+												"The node's tunnel is registered on {{current}}. After applying {{next}}, run the new node script on that node right away, or every country stops working until you do.",
+												{ current: view?.dc ?? "", next: dc },
+											)}
+										</AlertDescription>
+									</Alert>
+								)}
+								<FormHelperText>
+									{tt(
+										"tsin.dcHelp",
+										"Find the best asks every datacenter at once and picks the fastest one that accepts the token. On this panel's own machine a watch also checks the tunnel every minute and repairs it, moving to another datacenter only if it serves the same countries on the same ports.",
+									)}
+								</FormHelperText>
+							</FormControl>
+						</Stack>
+					</TSinSection>
 
 					{view?.account_error &&
 						(() => {
@@ -1264,42 +1333,146 @@ export const TSinDialog: FC<{
 						)}
 					</Box>
 
-					{transport === "path" && selected.length > 0 && (
-						<TSinSection
-							title={tt("tsin.direct.title", "Direct, without Cloudflare ⚡")}
-							status={
-								<Badge>
-									{direct.filter((name) => selected.includes(name)).length}
-								</Badge>
-							}
-						>
-							<Text fontSize="sm" mb={2} opacity={0.85}>
-								{tt(
-									"tsin.direct.help",
-									"These countries also get a second config, marked ⚡, that goes straight to the server's own IP over REALITY. If Cloudflare or the domain is blocked or slow (for example on Irancell), users switch to it. Pick a few main countries so the subscription stays short. Press Apply to save.",
-								)}
-							</Text>
-							<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
-								{selected.map((name) => (
-									<Checkbox
-										key={name}
-										isChecked={direct.includes(name)}
-										onChange={() =>
-											setDirect((current) =>
-												current.includes(name)
-													? current.filter((item) => item !== name)
-													: [...current, name],
-											)
+					<SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt("tsin.direct.title", "Direct, without Cloudflare ⚡")}
+								status={
+									<Badge>
+										{direct.filter((name) => selected.includes(name)).length}
+									</Badge>
+								}
+							>
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.direct.help",
+										"These countries also get a second config, marked ⚡, that goes straight to the server's own IP over REALITY. If Cloudflare or the domain is blocked or slow (for example on Irancell), users switch to it. Pick a few main countries so the subscription stays short. Press Apply to save.",
+									)}
+								</Text>
+								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+									{selected.map((name) => (
+										<Checkbox
+											key={name}
+											isChecked={direct.includes(name)}
+											onChange={() =>
+												setDirect((current) =>
+													current.includes(name)
+														? current.filter((item) => item !== name)
+														: [...current, name],
+												)
+											}
+										>
+											{name} ⚡
+										</Checkbox>
+									))}
+								</SimpleGrid>
+								<FormControl mt={3}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt(
+											"tsin.direct.address",
+											"Separate IP for the ⚡ configs",
+										)}
+									</FormLabel>
+									<Input
+										value={directAddress}
+										onChange={(event) => setDirectAddress(event.target.value)}
+										placeholder="203.0.113.7, 203.0.113.8"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.direct.addressHelp",
+											"Recommended: buy an extra IP for this server from your provider and enter it here, so the server's main IP never appears in users' configs. If it gets filtered, buy another, enter it and press Apply; the Cloudflare configs keep working meanwhile. Empty uses the server's own IP. The ⚡ configs take the ports HTTPS sites use (443, 8443, 2053, …) when the node reports them free.",
+										)}
+									</FormHelperText>
+									<Text fontSize="xs" opacity={0.8} mt={1}>
+										{tt(
+											"tsin.direct.multiHelp",
+											"Several IPs separated by commas: every subscription gets one of them at random, so the traffic is spread over them.",
+										)}
+									</Text>
+									<Button
+										size="sm"
+										mt={2}
+										variant="outline"
+										isLoading={addrBusy}
+										isDisabled={busy || loading}
+										onClick={saveAddresses}
+									>
+										{tt(
+											"tsin.saveAddresses",
+											"Save addresses only (no Apply, nobody disconnects)",
+										)}
+									</Button>
+								</FormControl>
+								{view?.iran_reach && !view.iran_reach.error && (
+									<Text
+										fontSize="xs"
+										mt={2}
+										color={
+											view.iran_reach.open === 0
+												? "red.400"
+												: view.iran_reach.open * 2 >= view.iran_reach.total
+													? "green.400"
+													: "orange.400"
 										}
 									>
-										{name} ⚡
-									</Checkbox>
-								))}
-							</SimpleGrid>
-							<Box mt={4} borderTopWidth="1px" pt={3}>
-								<Text fontWeight="semibold" fontSize="sm" mb={1}>
-									{tt("tsin.vision.title", "TCP Vision configs 💎")}
-								</Text>
+										{tt(
+											"tsin.front.iranReach",
+											"Port check from Iranian datacenters: {{open}} of {{total}} opened {{address}} port {{port}}. This only shows the port is open; a mobile operator can still block the connection itself, so test the ⚡ configs on a phone.",
+											{
+												open: view.iran_reach.open,
+												total: view.iran_reach.total,
+												address: view.iran_reach.address,
+												port: view.iran_reach.port,
+											},
+										)}
+									</Text>
+								)}
+								{view?.front_script && (
+									<Box mt={3} borderWidth="1px" borderRadius="6px" p={3}>
+										<Text fontWeight="semibold" fontSize="sm" mb={1}>
+											{tt(
+												"tsin.front.title",
+												"Front server (hides this server's IP)",
+											)}
+										</Text>
+										<Text fontSize="xs" mb={2} opacity={0.85}>
+											{tt(
+												"tsin.front.help",
+												"1) Buy a small separate server in Europe with unlimited traffic. 2) Log in to it with SSH as root, paste this script and press Enter; it hands every port except SSH on to this server and installs nothing else. 3) Put the new server's IP in the box above and press Apply. 4) Users update their subscription. If the front's IP is ever filtered, give it a new IP or a new server, run the script there, enter the new IP and Apply; this server is never touched.",
+											)}
+										</Text>
+										<Textarea
+											value={view.front_script}
+											isReadOnly
+											rows={5}
+											fontFamily="mono"
+											fontSize="xs"
+											dir="ltr"
+										/>
+										<Button size="sm" mt={2} onClick={frontScript.onCopy}>
+											{frontScript.hasCopied
+												? tt("tsin.copied", "Copied")
+												: tt("tsin.front.copy", "Copy front script")}
+										</Button>
+									</Box>
+								)}
+								{view?.applied && <TSinLabSection />}
+							</TSinSection>
+						)}
+
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt("tsin.vision.title", "TCP Vision configs 💎")}
+								status={
+									<Badge>
+										{vision.filter((name) => selected.includes(name)).length}
+									</Badge>
+								}
+							>
 								<Text fontSize="sm" mb={2} opacity={0.85}>
 									{tt(
 										"tsin.vision.help",
@@ -1342,15 +1515,25 @@ export const TSinDialog: FC<{
 										)}
 									</FormHelperText>
 								</FormControl>
-							</Box>
-							<Box mt={4} borderTopWidth="1px" pt={3}>
-								<Text fontWeight="semibold" fontSize="sm" mb={1}>
-									{tt("tsin.http.title", "HTTP configs (all operators)")}
-								</Text>
+							</TSinSection>
+						)}
+
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt("tsin.http.title", "HTTP configs (all operators)")}
+								status={
+									<Badge>
+										{
+											httpCountries.filter((name) => selected.includes(name))
+												.length
+										}
+									</Badge>
+								}
+							>
 								<Text fontSize="sm" mb={2} opacity={0.85}>
 									{tt(
 										"tsin.http.help",
-										"VMess over plain TCP whose first bytes are an ordinary HTTP request to the site below, with no TLS. Named after the country, followed by \"همه اپراتورها\". It uses the same address as the ⚡ and 💎 configs (several, comma-separated, are picked at random). Tick the countries that should get one.",
+										'VMess over plain TCP whose first bytes are an ordinary HTTP request to the site below, with no TLS. Named after the country, followed by "همه اپراتورها". It uses the same address as the ⚡ and 💎 configs (several, comma-separated, are picked at random). Tick the countries that should get one.',
 									)}
 								</Text>
 								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
@@ -1389,11 +1572,13 @@ export const TSinDialog: FC<{
 										)}
 									</FormHelperText>
 								</FormControl>
-							</Box>
-							<Box mt={4} borderTopWidth="1px" pt={3}>
-								<Text fontWeight="semibold" fontSize="sm" mb={1}>
-									{tt("tsin.cloud.title", "Cloudflare XHTTP configs ☁️")}
-								</Text>
+							</TSinSection>
+						)}
+
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt("tsin.cloud.title", "Cloudflare XHTTP configs ☁️")}
+							>
 								<Text fontSize="sm" mb={2} opacity={0.85}>
 									{tt(
 										"tsin.cloud.help",
@@ -1479,831 +1664,763 @@ export const TSinDialog: FC<{
 										</Text>
 									</Box>
 								) : null}
-							</Box>
-							<Checkbox
-								mt={4}
-								isChecked={cdnHidden}
-								onChange={(event) => setCdnHidden(event.target.checked)}
-							>
-								{tt("tsin.cdnHidden", "Hide the Cloudflare configs from users")}
-							</Checkbox>
-							<Text fontSize="xs" opacity={0.75} mt={1}>
-								{tt(
-									"tsin.cdnHiddenHelp",
-									"Users then only get the configs ticked above and the tunnel ones. Nothing is deleted: untick this and press Apply to show them again.",
-								)}
-							</Text>
-							<FormControl mt={3}>
-								<FormLabel fontSize="sm" mb={1}>
-									{tt("tsin.direct.address", "Separate IP for the ⚡ configs")}
-								</FormLabel>
-								<Input
-									value={directAddress}
-									onChange={(event) => setDirectAddress(event.target.value)}
-									placeholder="203.0.113.7, 203.0.113.8"
-									dir="ltr"
-									autoComplete="off"
-									spellCheck={false}
-								/>
-								<FormHelperText fontSize="xs">
-									{tt(
-										"tsin.direct.addressHelp",
-										"Recommended: buy an extra IP for this server from your provider and enter it here, so the server's main IP never appears in users' configs. If it gets filtered, buy another, enter it and press Apply; the Cloudflare configs keep working meanwhile. Empty uses the server's own IP. The ⚡ configs take the ports HTTPS sites use (443, 8443, 2053, …) when the node reports them free.",
-									)}
-								</FormHelperText>
-								<Text fontSize="xs" opacity={0.8} mt={1}>
-									{tt(
-										"tsin.direct.multiHelp",
-										"Several IPs separated by commas: every subscription gets one of them at random, so the traffic is spread over them.",
-									)}
-								</Text>
-								<Button
-									size="sm"
-									mt={2}
-									variant="outline"
-									isLoading={addrBusy}
-									isDisabled={busy || loading}
-									onClick={saveAddresses}
-								>
-									{tt("tsin.saveAddresses", "Save addresses only (no Apply, nobody disconnects)")}
-								</Button>
-							</FormControl>
-							{view?.iran_reach && !view.iran_reach.error && (
-								<Text
-									fontSize="xs"
-									mt={2}
-									color={
-										view.iran_reach.open === 0
-											? "red.400"
-											: view.iran_reach.open * 2 >= view.iran_reach.total
-												? "green.400"
-												: "orange.400"
-									}
+								<Checkbox
+									mt={4}
+									isChecked={cdnHidden}
+									onChange={(event) => setCdnHidden(event.target.checked)}
 								>
 									{tt(
-										"tsin.front.iranReach",
-										"Port check from Iranian datacenters: {{open}} of {{total}} opened {{address}} port {{port}}. This only shows the port is open; a mobile operator can still block the connection itself, so test the ⚡ configs on a phone.",
-										{
-											open: view.iran_reach.open,
-											total: view.iran_reach.total,
-											address: view.iran_reach.address,
-											port: view.iran_reach.port,
-										},
+										"tsin.cdnHidden",
+										"Hide the Cloudflare configs from users",
+									)}
+								</Checkbox>
+								<Text fontSize="xs" opacity={0.75} mt={1}>
+									{tt(
+										"tsin.cdnHiddenHelp",
+										"Users then only get the configs ticked above and the tunnel ones. Nothing is deleted: untick this and press Apply to show them again.",
 									)}
 								</Text>
-							)}
-							{view?.front_script && (
-								<Box mt={3} borderWidth="1px" borderRadius="6px" p={3}>
-									<Text fontWeight="semibold" fontSize="sm" mb={1}>
-										{tt(
-											"tsin.front.title",
-											"Front server (hides this server's IP)",
-										)}
-									</Text>
-									<Text fontSize="xs" mb={2} opacity={0.85}>
-										{tt(
-											"tsin.front.help",
-											"1) Buy a small separate server in Europe with unlimited traffic. 2) Log in to it with SSH as root, paste this script and press Enter; it hands every port except SSH on to this server and installs nothing else. 3) Put the new server's IP in the box above and press Apply. 4) Users update their subscription. If the front's IP is ever filtered, give it a new IP or a new server, run the script there, enter the new IP and Apply; this server is never touched.",
-										)}
-									</Text>
-									<Textarea
-										value={view.front_script}
-										isReadOnly
-										rows={5}
-										fontFamily="mono"
-										fontSize="xs"
-										dir="ltr"
-									/>
-									<Button size="sm" mt={2} onClick={frontScript.onCopy}>
-										{frontScript.hasCopied
-											? tt("tsin.copied", "Copied")
-											: tt("tsin.front.copy", "Copy front script")}
-									</Button>
-								</Box>
-							)}
-							{view?.applied && <TSinLabSection />}
-						</TSinSection>
-					)}
+							</TSinSection>
+						)}
 
-					{transport === "path" && selected.length > 0 && (
-						<TSinSection
-							title={tt("tsin.fastly.title", "Fastly, a second CDN 🅵")}
-							status={
-								<Badge
-									colorScheme={
-										view?.fastly_host && (view.fastly_backends?.length ?? 0) > 0
-											? "green"
-											: "gray"
-									}
-								>
-									{view?.fastly_host
-										? (view.fastly_backends?.length ?? 0)
-										: tt("tsin.smart.off", "Off")}
-								</Badge>
-							}
-						>
-							<Text fontSize="sm" mb={2} opacity={0.85}>
-								{tt(
-									"tsin.fastly.help",
-									"The chosen countries also get a config marked 🅵 that goes through Fastly instead of Cloudflare, over XHTTP. If Cloudflare is banned or blocked, users switch to it. Enter your Fastly service's domain, choose a few countries and press Apply; then make one backend per country in Fastly as shown below.",
-								)}
-							</Text>
-							<FormControl mb={2}>
-								<FormLabel fontSize="sm" mb={1}>
-									{tt("tsin.fastly.host", "Fastly domain")}
-								</FormLabel>
-								<Input
-									value={fastlyHost}
-									onChange={(event) => setFastlyHost(event.target.value)}
-									placeholder="name.global.ssl.fastly.net"
-									dir="ltr"
-									autoComplete="off"
-									spellCheck={false}
-								/>
-								<FormHelperText fontSize="xs">
-									{tt(
-										"tsin.fastly.hostHelp",
-										"The domain of your Fastly service, for example the free name.global.ssl.fastly.net. Empty removes the Fastly configs on the next Apply.",
-									)}
-								</FormHelperText>
-							</FormControl>
-							<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
-								{selected.map((name) => (
-									<Checkbox
-										key={name}
-										isChecked={fastly.includes(name)}
-										onChange={() =>
-											setFastly((current) =>
-												current.includes(name)
-													? current.filter((item) => item !== name)
-													: [...current, name],
-											)
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt("tsin.fastly.title", "Fastly, a second CDN 🅵")}
+								status={
+									<Badge
+										colorScheme={
+											view?.fastly_host &&
+											(view.fastly_backends?.length ?? 0) > 0
+												? "green"
+												: "gray"
 										}
 									>
-										{name} 🅵
-									</Checkbox>
-								))}
-							</SimpleGrid>
-							<Text fontSize="xs" mt={1} opacity={0.75}>
-								{tt(
-									"tsin.fastly.fewHelp",
-									"Each country is one backend to create in Fastly, so start with Best ping alone.",
-								)}
-							</Text>
-
-							{(view?.fastly_backends?.length ?? 0) > 0 && (
-								<Box mt={3} borderWidth="1px" borderRadius="6px" p={3}>
-									<Text fontWeight="semibold" fontSize="sm" mb={1}>
-										{tt("tsin.fastly.setupTitle", "Setting Fastly up")}
-									</Text>
-									<Stack spacing={1} fontSize="xs" mb={2}>
-										<Text>
-											{tt(
-												"tsin.fastly.setup1",
-												"1) In Fastly, open your CDN service and press Edit configuration → Clone version.",
-											)}
-										</Text>
-										<Text>
-											{tt(
-												"tsin.fastly.setup2",
-												"2) Domains: the domain above must be listed.",
-											)}
-										</Text>
-										<Text>
-											{tt(
-												"tsin.fastly.setup3",
-												"3) Origins → Hosts: one host per row below, with its address and port, TLS: Yes, Verify certificate: No.",
-											)}
-										</Text>
-										<Text>
-											{tt(
-												"tsin.fastly.setup4",
-												"4) With more than one row, give each host the request condition shown, so each path reaches its own port.",
-											)}
-										</Text>
-										<Text>
-											{tt(
-												"tsin.fastly.setup5",
-												"5) Activate the version, wait a minute and press Check below.",
-											)}
-										</Text>
-									</Stack>
-									<Stack spacing={2}>
-										{view?.fastly_backends?.map((backend) => (
-											<Box
-												key={backend.tag}
-												borderWidth="1px"
-												borderRadius="6px"
-												p={2}
-												fontSize="xs"
-											>
-												<Text fontWeight="semibold" mb={1}>
-													{backend.country}
-												</Text>
-												<Text dir="ltr" fontFamily="mono">
-													{tt("tsin.fastly.address", "Address")}:{" "}
-													{view?.origin_ip ||
-														tt("cdn.thisServerIP", "this server's IP")}
-												</Text>
-												<Text dir="ltr" fontFamily="mono">
-													{tt("tsin.fastly.port", "Port")}: {backend.port}
-												</Text>
-												<Text dir="ltr" fontFamily="mono" wordBreak="break-all">
-													{tt("tsin.fastly.condition", "Condition")}:
-													req.url.path ~ "^{backend.path}"
-												</Text>
-											</Box>
-										))}
-									</Stack>
-									<Button
-										size="sm"
-										mt={3}
-										variant="outline"
-										isLoading={fastlyBusy}
-										onClick={() => void checkFastly()}
-									>
-										{tt("tsin.fastly.check", "Check through Fastly")}
-									</Button>
-									{fastlyResults && (
-										<Stack spacing={1} mt={2}>
-											{fastlyResults.map((item) => (
-												<Text
-													key={item.country}
-													fontSize="xs"
-													color={item.state === "ok" ? "green.400" : "red.400"}
-												>
-													{item.country}:{" "}
-													{item.state === "ok"
-														? tt("tsin.fastly.ok", "works through Fastly")
-														: fastlyReason(item)}
-												</Text>
-											))}
-										</Stack>
-									)}
-								</Box>
-							)}
-						</TSinSection>
-					)}
-
-					{transport === "path" && selected.length > 0 && (
-						<TSinSection
-							title={tt(
-								"tsin.tunnelCountries.title",
-								"🛡 Countries through the Iranian tunnel",
-							)}
-							status={
-								<Badge
-									colorScheme={
-										Object.keys(view?.tunnel_countries ?? {}).length > 0
-											? "green"
-											: "gray"
-									}
-								>
-									{Object.keys(view?.tunnel_countries ?? {}).length ||
-										tt("tsin.smart.off", "Off")}
-								</Badge>
-							}
-						>
-							<Text fontSize="sm" mb={2} opacity={0.85}>
-								{tt(
-									"tsin.tunnelCountries.help",
-									"The chosen countries also get a config marked 🛡 that goes through an Iranian tunnel instead of Cloudflare: VMess over WebSocket, up to {{max}} countries on one tunnel port, told apart by path. Add a row for each tunnel port with the address and port the seller gave, choose a port for each country and press Apply. With the emergency tunnel shown to Hamrah Aval only, these configs are too.",
-									{ max: view?.tunnel_per_port ?? 5 },
-								)}
-							</Text>
-							{!view?.tunnel_host &&
-								tunnelRows.every((row) => !row.address.trim()) && (
-									<Text fontSize="sm" mb={2} color="orange.400">
-										{tt(
-											"tsin.tunnelCountries.noHost",
-											"Enter the tunnel address in each row below, or the emergency tunnel's address, which rows without one use.",
-										)}
-									</Text>
-								)}
-							{view?.tunnel_host && (
-								<Text fontSize="xs" mb={2} dir="ltr" opacity={0.8}>
-									{view.tunnel_host}
-								</Text>
-							)}
-							<Text fontSize="sm" fontWeight="semibold" mb={1}>
-								{tt("tsin.tunnelCountries.ports", "Tunnel ports")}
-							</Text>
-							<Text fontSize="xs" mb={2} opacity={0.8}>
-								{tt(
-									"tsin.tunnelCountries.portsHelp",
-									"One row per port bought on the tunnel. Port on the server: where the tunnel forwards to on the countries' server. Tunnel address and tunnel port: what the seller gave (empty address uses the emergency tunnel's address, empty port the same number).",
-								)}
-							</Text>
-							<Stack spacing={2} mb={3}>
-								{tunnelRows.map((row, index) => {
-									const update = (patch: Partial<typeof row>) =>
-										setTunnelRows((current) =>
-											current.map((item, i) =>
-												i === index ? { ...item, ...patch } : item,
-											),
-										);
-									return (
-										<Box
-											key={row.id}
-											borderWidth="1px"
-											borderRadius="6px"
-											p={2}
-										>
-											<SimpleGrid
-												columns={{ base: 1, sm: 4 }}
-												spacing={2}
-												alignItems="end"
-											>
-												<FormControl>
-													<FormLabel fontSize="xs" mb={0.5}>
-														{tt(
-															"tsin.tunnelCountries.address",
-															"Tunnel address",
-														)}
-													</FormLabel>
-													<Input
-														size="sm"
-														value={row.address}
-														onChange={(event) =>
-															update({ address: event.target.value })
-														}
-														placeholder={view?.tunnel_host || "tun.example.ir"}
-														dir="ltr"
-														autoComplete="off"
-														spellCheck={false}
-													/>
-												</FormControl>
-												<FormControl>
-													<FormLabel fontSize="xs" mb={0.5}>
-														{tt(
-															"tsin.tunnelCountries.remotePort",
-															"Tunnel port",
-														)}
-													</FormLabel>
-													<Input
-														size="sm"
-														value={row.port}
-														onChange={(event) =>
-															update({ port: event.target.value })
-														}
-														placeholder={row.nodePort || "20100"}
-														dir="ltr"
-														inputMode="numeric"
-													/>
-												</FormControl>
-												<FormControl>
-													<FormLabel fontSize="xs" mb={0.5}>
-														{tt(
-															"tsin.tunnelCountries.nodePortAuto",
-															"Port on the server (any free port)",
-														)}
-													</FormLabel>
-													<Input
-														size="sm"
-														value={row.nodePort}
-														onChange={(event) =>
-															update({ nodePort: event.target.value })
-														}
-														placeholder="20100"
-														dir="ltr"
-														inputMode="numeric"
-													/>
-												</FormControl>
-												<Button
-													size="sm"
-													variant="ghost"
-													colorScheme="red"
-													onClick={() => {
-														const port = Number.parseInt(row.nodePort, 10);
-														setTunnelRows((current) =>
-															current.filter((_, i) => i !== index),
-														);
-														setTunnelCountries((current) =>
-															Object.fromEntries(
-																Object.entries(current).filter(
-																	([, value]) => value !== port,
-																),
-															),
-														);
-													}}
-												>
-													{tt("tsin.tunnelCountries.removeRow", "Remove")}
-												</Button>
-											</SimpleGrid>
-											<TunnelSellerLine
-												origin={view?.origin_ip ?? ""}
-												nodePort={row.nodePort}
-												tt={tt}
-											/>
-										</Box>
-									);
-								})}
-								<Button
-									size="sm"
-									variant="outline"
-									alignSelf="start"
-									onClick={() =>
-										setTunnelRows((current) => {
-											const highest = current.reduce(
-												(max, row) =>
-													Math.max(max, Number.parseInt(row.nodePort, 10) || 0),
-												20099,
-											);
-											return [
-												...current,
-												{
-													id: `row-${Date.now()}`,
-													nodePort: String(highest + 1),
-													address: "",
-													port: "",
-												},
-											];
-										})
-									}
-								>
-									{tt("tsin.tunnelCountries.addRow", "+ Add a tunnel port")}
-								</Button>
-							</Stack>
-							<Stack spacing={1}>
-								{selected.map((name) => {
-									const key = name.toLowerCase();
-									const ports = tunnelRows
-										.map((row) => Number.parseInt(row.nodePort, 10))
-										.filter((port) => port > 0 && port <= 65535);
-									const max = view?.tunnel_per_port ?? 5;
-									const tunnelRowLabel = (port: number) => {
-										const row = tunnelRows.find(
-											(item) => Number.parseInt(item.nodePort, 10) === port,
-										);
-										const address =
-											row?.address.trim() || view?.tunnel_host || "";
-										const remote = row?.port.trim() || String(port);
-										return address ? `${address}:${remote}` : String(port);
-									};
-									const used = (port: number) =>
-										selected.filter(
-											(other) => tunnelCountries[other.toLowerCase()] === port,
-										).length;
-									return (
-										<HStack key={name} justify="space-between" spacing={2}>
-											<Text fontSize="sm">{name} 🛡</Text>
-											<Box w="150px" flexShrink={0}>
-												<Select
-													size="sm"
-													value={String(tunnelCountries[key] ?? 0)}
-													onChange={(event) => {
-														const port =
-															Number.parseInt(event.target.value, 10) || 0;
-														setTunnelCountries((current) => {
-															const next = { ...current };
-															if (port > 0) next[key] = port;
-															else delete next[key];
-															return next;
-														});
-													}}
-												>
-													<option value="0">—</option>
-													{ports.map((port) => (
-														<option
-															key={port}
-															value={String(port)}
-															disabled={
-																tunnelCountries[key] !== port &&
-																used(port) >= max
-															}
-														>
-															{tunnelRowLabel(port)} ({used(port)}/{max})
-														</option>
-													))}
-												</Select>
-											</Box>
-										</HStack>
-									);
-								})}
-							</Stack>
-						</TSinSection>
-					)}
-
-					{view?.applied &&
-						view.transport === "path" &&
-						(view.direct_countries?.length ?? 0) > 0 && (
-							<TSinSection
-								title={tt("tsin.smart.title", "⭐ Smart config")}
-								status={
-									<Badge colorScheme={view.smart_config ? "green" : "gray"}>
-										{view.smart_config
-											? tt("tsin.smart.on", "On")
+										{view?.fastly_host
+											? (view.fastly_backends?.length ?? 0)
 											: tt("tsin.smart.off", "Off")}
 									</Badge>
 								}
 							>
 								<Text fontSize="sm" mb={2} opacity={0.85}>
 									{tt(
-										"tsin.smart.help",
-										"Adds one config, «⭐ Smart (best location)», at the top of the subscription. It goes over ⚡ and, if ⚡ stops answering, moves to Cloudflare by itself within seconds, so users stay connected without changing config. Only apps that read JSON subscriptions show it; the other configs stay as they are. Users get it when they update their subscription; nothing restarts.",
+										"tsin.fastly.help",
+										"The chosen countries also get a config marked 🅵 that goes through Fastly instead of Cloudflare, over XHTTP. If Cloudflare is banned or blocked, users switch to it. Enter your Fastly service's domain, choose a few countries and press Apply; then make one backend per country in Fastly as shown below.",
 									)}
 								</Text>
-								<FormControl>
-									<Select
-										size="sm"
-										value={String(view.smart_config ?? 0)}
-										isDisabled={smartBusy}
-										onChange={(event) =>
-											saveSmart(Number.parseInt(event.target.value, 10) || 0)
-										}
-									>
-										<option value="0">{tt("tsin.smart.level0", "Off")}</option>
-										<option value="1">
-											{tt(
-												"tsin.smart.level1",
-												"On for Happ, Streisand and other JSON apps",
-											)}
-										</option>
-										{view.smart_config === 2 && (
-											<option value="2">
-												{tt(
-													"tsin.smart.level2",
-													"On, and V2Box also gets the JSON subscription",
-												)}
-											</option>
-										)}
-									</Select>
-									<FormHelperText fontSize="xs">
-										{tt(
-											"tsin.smart.testHelp",
-											"Test first on your own phone: add ?smart=1 to the end of a subscription link (?smart=fail turns ⚡ off, ?smart=nocdn turns Cloudflare off, to see each way carry the traffic alone).",
-										)}
-									</FormHelperText>
-								</FormControl>
-								{view.smart_config === 2 && (
-									<Text fontSize="xs" mt={2} color="orange.400">
-										{tt(
-											"tsin.smart.v2boxNote",
-											"V2Box users now get their subscription as JSON. All configs stay, but after the update the app may ask them to pick a config again.",
-										)}
-									</Text>
-								)}
-								<Text fontSize="xs" mt={2} opacity={0.75}>
-									{tt(
-										"tsin.smart.v2boxUnsupported",
-										"V2Box does not run the smart config's check, so it is not offered there. The smart config only helps where the ⚡ configs connect on users' networks.",
-									)}
-								</Text>
-							</TSinSection>
-						)}
-
-					{view?.applied && (
-						<TSinSection
-							title={tt(
-								"tsin.emergency.title",
-								"🆘 Emergency tunnel (when T.Sin is down)",
-							)}
-							borderColor={view.emergency?.enabled ? "red.400" : undefined}
-							defaultOpen={Boolean(view.emergency?.enabled)}
-							status={
-								<Badge colorScheme={view.emergency?.enabled ? "red" : "gray"}>
-									{view.emergency?.enabled
-										? tt("tsin.emergency.on", "On")
-										: tt("tsin.emergency.off", "Off")}
-								</Badge>
-							}
-						>
-							<HStack justify="flex-end" mb={2} spacing={3}>
-								<HStack spacing={2} flexShrink={0}>
-									<Text
-										fontSize="sm"
-										fontWeight="semibold"
-										color={view.emergency?.enabled ? "red.400" : undefined}
-									>
-										{view.emergency?.enabled
-											? tt("tsin.emergency.on", "On")
-											: tt("tsin.emergency.off", "Off")}
-									</Text>
-									<Switch
-										colorScheme="red"
-										isChecked={Boolean(view.emergency?.enabled)}
-										isDisabled={emBusy || !emAddress.trim()}
-										onChange={(event) =>
-											void saveEmergency(event.target.checked)
-										}
-									/>
-								</HStack>
-							</HStack>
-							<Text fontSize="sm" mb={3} opacity={0.85}>
-								{tt(
-									"tsin.emergency.help",
-									"For the hours T.Sin itself is down. Turned on, every user of the countries gets two more configs, “🆘 Emergency tunnel” (VMess and Shadowsocks), that reach this server through your Iranian tunnel and go out from here directly, without T.Sin: users show this server's country instead of their chosen one, but stay connected. Turn it off when T.Sin is back. Users update their subscription to get or drop the configs.",
-								)}
-							</Text>
-							{view.emergency?.enabled && (
-								<Alert status="error" borderRadius="6px" fontSize="sm" mb={3}>
-									<AlertIcon />
-									<AlertDescription>
-										{tt(
-											"tsin.emergency.onWarning",
-											"The emergency tunnel is on. Its users go out from this server, not T.Sin. Turn it off once T.Sin works again.",
-										)}
-									</AlertDescription>
-								</Alert>
-							)}
-							<FormControl mb={2}>
-								<FormLabel fontSize="sm" mb={1}>
-									{tt("tsin.emergency.audience", "Show to")}
-								</FormLabel>
-								<Select
-									size="sm"
-									value={emAudience}
-									onChange={(event) => setEmAudience(event.target.value)}
-								>
-									<option value="all">
-										{tt("tsin.emergency.audienceAll", "Every user")}
-									</option>
-									<option value="mci">
-										{tt(
-											"tsin.emergency.audienceMci",
-											"Only users on Hamrah Aval",
-										)}
-									</option>
-								</Select>
-								<FormHelperText fontSize="xs">
-									{tt(
-										"tsin.emergency.audienceHelp",
-										"With Hamrah Aval only, the configs go into the subscription only when it is updated from Hamrah Aval's network; on Irancell, fixed lines or Wi-Fi they are left out, so the tunnel's paid traffic goes to the users who need it. An update made through a VPN keeps them for a week for someone last seen on Hamrah Aval. Users must update their subscription for a change to reach them; press Save.",
-									)}
-								</FormHelperText>
-								{emAudience === "mci" && (
-									<Text fontSize="xs" mt={1} opacity={0.85}>
-										{view?.emergency?.operator_ranges?.mci_ranges
-											? tt(
-													"tsin.emergency.mciUsers",
-													"{{count}} users updated their subscription from Hamrah Aval in the last week.",
-													{ count: view.emergency.mci_users ?? 0 },
-												)
-											: tt(
-													"tsin.emergency.rangesLoading",
-													"Hamrah Aval's address list is still loading; until then the configs go to everyone.",
-												)}
-									</Text>
-								)}
-							</FormControl>
-							{(view.emergency?.backup_candidates?.length ?? 0) > 0 && (
-								<Box mb={3}>
-									<Text fontSize="sm" fontWeight="semibold" mb={1}>
-										{tt(
-											"tsin.emergency.backups",
-											"Backup configs that follow this switch",
-										)}
-									</Text>
-									<Text fontSize="xs" opacity={0.75} mb={1}>
-										{tt(
-											"tsin.emergency.backupsHelp",
-											"Ticked configs are shown only while the emergency tunnel is on and hidden when it is off, for every user. The countries' tunnel configs (🛡) are not affected. Press Save after ticking.",
-										)}
-									</Text>
-									<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
-										{view.emergency?.backup_candidates?.map((item) => (
-											<Checkbox
-												key={item.id}
-												isChecked={emBackups.includes(item.id)}
-												onChange={() =>
-													setEmBackups((current) =>
-														current.includes(item.id)
-															? current.filter((id) => id !== item.id)
-															: [...current, item.id],
-													)
-												}
-											>
-												{item.remark || item.tag}
-											</Checkbox>
-										))}
-									</SimpleGrid>
-								</Box>
-							)}
-							<FormControl mb={2}>
-								<FormLabel fontSize="sm" mb={1}>
-									{tt("tsin.emergency.protocols", "Configs to show")}
-								</FormLabel>
-								<Select
-									size="sm"
-									value={emProtocols}
-									onChange={(event) => setEmProtocols(event.target.value)}
-								>
-									<option value="both">
-										{tt(
-											"tsin.emergency.both",
-											"VMess and Shadowsocks (two tunnel ports)",
-										)}
-									</option>
-									<option value="vmess">
-										{tt(
-											"tsin.emergency.vmessOnly",
-											"VMess only (one tunnel port)",
-										)}
-									</option>
-									<option value="shadowsocks">
-										{tt(
-											"tsin.emergency.ssOnly",
-											"Shadowsocks only (one tunnel port)",
-										)}
-									</option>
-								</Select>
-								<FormHelperText fontSize="xs">
-									{tt(
-										"tsin.emergency.protocolsHelp",
-										"Each tunnel port you buy reaches one config. With one port, pick one: VMess works on every tunnel; Shadowsocks also carries calls if the tunnel forwards UDP.",
-									)}
-								</FormHelperText>
-							</FormControl>
-							<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2}>
-								<FormControl>
+								<FormControl mb={2}>
 									<FormLabel fontSize="sm" mb={1}>
-										{tt("tsin.emergency.address", "Iranian tunnel address")}
+										{tt("tsin.fastly.host", "Fastly domain")}
 									</FormLabel>
 									<Input
-										value={emAddress}
-										onChange={(event) => setEmAddress(event.target.value)}
-										placeholder="185.x.x.x"
+										value={fastlyHost}
+										onChange={(event) => setFastlyHost(event.target.value)}
+										placeholder="name.global.ssl.fastly.net"
 										dir="ltr"
 										autoComplete="off"
 										spellCheck={false}
 									/>
-								</FormControl>
-								<FormControl
-									display={emProtocols === "shadowsocks" ? "none" : undefined}
-								>
-									<FormLabel fontSize="sm" mb={1}>
-										{tt("tsin.emergency.vmessPort", "Tunnel port for VMess")}
-									</FormLabel>
-									<Input
-										value={emVMessPort}
-										onChange={(event) => setEmVMessPort(event.target.value)}
-										placeholder={tt(
-											"tsin.emergency.samePort",
-											"same as server",
-										)}
-										dir="ltr"
-										inputMode="numeric"
-									/>
-								</FormControl>
-								<FormControl
-									display={emProtocols === "vmess" ? "none" : undefined}
-								>
-									<FormLabel fontSize="sm" mb={1}>
-										{tt("tsin.emergency.ssPort", "Tunnel port for Shadowsocks")}
-									</FormLabel>
-									<Input
-										value={emSSPort}
-										onChange={(event) => setEmSSPort(event.target.value)}
-										placeholder={tt(
-											"tsin.emergency.samePort",
-											"same as server",
-										)}
-										dir="ltr"
-										inputMode="numeric"
-									/>
-								</FormControl>
-							</SimpleGrid>
-							{view.emergency?.node_ports?.vmess ? (
-								<Box mt={3} fontSize="sm">
-									<Text mb={1}>
+									<FormHelperText fontSize="xs">
 										{tt(
-											"tsin.emergency.forward",
-											"Set your Iranian tunnel to forward to these (TCP; for Shadowsocks also UDP):",
+											"tsin.fastly.hostHelp",
+											"The domain of your Fastly service, for example the free name.global.ssl.fastly.net. Empty removes the Fastly configs on the next Apply.",
 										)}
-									</Text>
-									{emProtocols !== "shadowsocks" && (
-										<Text dir="ltr" fontFamily="mono" fontSize="xs">
-											VMess → {view.emergency.node_address}:
-											{view.emergency.node_ports.vmess}
-										</Text>
-									)}
-									{emProtocols !== "vmess" && (
-										<Text dir="ltr" fontFamily="mono" fontSize="xs">
-											Shadowsocks → {view.emergency.node_address}:
-											{view.emergency.node_ports.shadowsocks}
-										</Text>
-									)}
-								</Box>
-							) : (
-								<Text mt={3} fontSize="xs" opacity={0.75}>
+									</FormHelperText>
+								</FormControl>
+								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+									{selected.map((name) => (
+										<Checkbox
+											key={name}
+											isChecked={fastly.includes(name)}
+											onChange={() =>
+												setFastly((current) =>
+													current.includes(name)
+														? current.filter((item) => item !== name)
+														: [...current, name],
+												)
+											}
+										>
+											{name} 🅵
+										</Checkbox>
+									))}
+								</SimpleGrid>
+								<Text fontSize="xs" mt={1} opacity={0.75}>
 									{tt(
-										"tsin.emergency.firstSave",
-										"Press Save once: the panel makes the two configs on this server and shows the ports your Iranian tunnel must forward to. Making them makes the server's users reconnect for a second, once.",
+										"tsin.fastly.fewHelp",
+										"Each country is one backend to create in Fastly, so start with Best ping alone.",
 									)}
 								</Text>
-							)}
-							<Button
-								size="sm"
-								mt={3}
-								variant="outline"
-								isLoading={emBusy}
-								isDisabled={!emAddress.trim()}
-								onClick={() => void saveEmergency()}
+
+								{(view?.fastly_backends?.length ?? 0) > 0 && (
+									<Box mt={3} borderWidth="1px" borderRadius="6px" p={3}>
+										<Text fontWeight="semibold" fontSize="sm" mb={1}>
+											{tt("tsin.fastly.setupTitle", "Setting Fastly up")}
+										</Text>
+										<Stack spacing={1} fontSize="xs" mb={2}>
+											<Text>
+												{tt(
+													"tsin.fastly.setup1",
+													"1) In Fastly, open your CDN service and press Edit configuration → Clone version.",
+												)}
+											</Text>
+											<Text>
+												{tt(
+													"tsin.fastly.setup2",
+													"2) Domains: the domain above must be listed.",
+												)}
+											</Text>
+											<Text>
+												{tt(
+													"tsin.fastly.setup3",
+													"3) Origins → Hosts: one host per row below, with its address and port, TLS: Yes, Verify certificate: No.",
+												)}
+											</Text>
+											<Text>
+												{tt(
+													"tsin.fastly.setup4",
+													"4) With more than one row, give each host the request condition shown, so each path reaches its own port.",
+												)}
+											</Text>
+											<Text>
+												{tt(
+													"tsin.fastly.setup5",
+													"5) Activate the version, wait a minute and press Check below.",
+												)}
+											</Text>
+										</Stack>
+										<Stack spacing={2}>
+											{view?.fastly_backends?.map((backend) => (
+												<Box
+													key={backend.tag}
+													borderWidth="1px"
+													borderRadius="6px"
+													p={2}
+													fontSize="xs"
+												>
+													<Text fontWeight="semibold" mb={1}>
+														{backend.country}
+													</Text>
+													<Text dir="ltr" fontFamily="mono">
+														{tt("tsin.fastly.address", "Address")}:{" "}
+														{view?.origin_ip ||
+															tt("cdn.thisServerIP", "this server's IP")}
+													</Text>
+													<Text dir="ltr" fontFamily="mono">
+														{tt("tsin.fastly.port", "Port")}: {backend.port}
+													</Text>
+													<Text
+														dir="ltr"
+														fontFamily="mono"
+														wordBreak="break-all"
+													>
+														{tt("tsin.fastly.condition", "Condition")}:
+														req.url.path ~ "^{backend.path}"
+													</Text>
+												</Box>
+											))}
+										</Stack>
+										<Button
+											size="sm"
+											mt={3}
+											variant="outline"
+											isLoading={fastlyBusy}
+											onClick={() => void checkFastly()}
+										>
+											{tt("tsin.fastly.check", "Check through Fastly")}
+										</Button>
+										{fastlyResults && (
+											<Stack spacing={1} mt={2}>
+												{fastlyResults.map((item) => (
+													<Text
+														key={item.country}
+														fontSize="xs"
+														color={
+															item.state === "ok" ? "green.400" : "red.400"
+														}
+													>
+														{item.country}:{" "}
+														{item.state === "ok"
+															? tt("tsin.fastly.ok", "works through Fastly")
+															: fastlyReason(item)}
+													</Text>
+												))}
+											</Stack>
+										)}
+									</Box>
+								)}
+							</TSinSection>
+						)}
+
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt(
+									"tsin.tunnelCountries.title",
+									"🛡 Countries through the Iranian tunnel",
+								)}
+								status={
+									<Badge
+										colorScheme={
+											Object.keys(view?.tunnel_countries ?? {}).length > 0
+												? "green"
+												: "gray"
+										}
+									>
+										{Object.keys(view?.tunnel_countries ?? {}).length ||
+											tt("tsin.smart.off", "Off")}
+									</Badge>
+								}
 							>
-								{tt("tsin.emergency.save", "Save")}
-							</Button>
-						</TSinSection>
-					)}
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.tunnelCountries.help",
+										"The chosen countries also get a config marked 🛡 that goes through an Iranian tunnel instead of Cloudflare: VMess over WebSocket, up to {{max}} countries on one tunnel port, told apart by path. Add a row for each tunnel port with the address and port the seller gave, choose a port for each country and press Apply. With the emergency tunnel shown to Hamrah Aval only, these configs are too.",
+										{ max: view?.tunnel_per_port ?? 5 },
+									)}
+								</Text>
+								{!view?.tunnel_host &&
+									tunnelRows.every((row) => !row.address.trim()) && (
+										<Text fontSize="sm" mb={2} color="orange.400">
+											{tt(
+												"tsin.tunnelCountries.noHost",
+												"Enter the tunnel address in each row below, or the emergency tunnel's address, which rows without one use.",
+											)}
+										</Text>
+									)}
+								{view?.tunnel_host && (
+									<Text fontSize="xs" mb={2} dir="ltr" opacity={0.8}>
+										{view.tunnel_host}
+									</Text>
+								)}
+								<Text fontSize="sm" fontWeight="semibold" mb={1}>
+									{tt("tsin.tunnelCountries.ports", "Tunnel ports")}
+								</Text>
+								<Text fontSize="xs" mb={2} opacity={0.8}>
+									{tt(
+										"tsin.tunnelCountries.portsHelp",
+										"One row per port bought on the tunnel. Port on the server: where the tunnel forwards to on the countries' server. Tunnel address and tunnel port: what the seller gave (empty address uses the emergency tunnel's address, empty port the same number).",
+									)}
+								</Text>
+								<Stack spacing={2} mb={3}>
+									{tunnelRows.map((row, index) => {
+										const update = (patch: Partial<typeof row>) =>
+											setTunnelRows((current) =>
+												current.map((item, i) =>
+													i === index ? { ...item, ...patch } : item,
+												),
+											);
+										return (
+											<Box
+												key={row.id}
+												borderWidth="1px"
+												borderRadius="6px"
+												p={2}
+											>
+												<SimpleGrid
+													columns={{ base: 1, sm: 4 }}
+													spacing={2}
+													alignItems="end"
+												>
+													<FormControl>
+														<FormLabel fontSize="xs" mb={0.5}>
+															{tt(
+																"tsin.tunnelCountries.address",
+																"Tunnel address",
+															)}
+														</FormLabel>
+														<Input
+															size="sm"
+															value={row.address}
+															onChange={(event) =>
+																update({ address: event.target.value })
+															}
+															placeholder={
+																view?.tunnel_host || "tun.example.ir"
+															}
+															dir="ltr"
+															autoComplete="off"
+															spellCheck={false}
+														/>
+													</FormControl>
+													<FormControl>
+														<FormLabel fontSize="xs" mb={0.5}>
+															{tt(
+																"tsin.tunnelCountries.remotePort",
+																"Tunnel port",
+															)}
+														</FormLabel>
+														<Input
+															size="sm"
+															value={row.port}
+															onChange={(event) =>
+																update({ port: event.target.value })
+															}
+															placeholder={row.nodePort || "20100"}
+															dir="ltr"
+															inputMode="numeric"
+														/>
+													</FormControl>
+													<FormControl>
+														<FormLabel fontSize="xs" mb={0.5}>
+															{tt(
+																"tsin.tunnelCountries.nodePortAuto",
+																"Port on the server (any free port)",
+															)}
+														</FormLabel>
+														<Input
+															size="sm"
+															value={row.nodePort}
+															onChange={(event) =>
+																update({ nodePort: event.target.value })
+															}
+															placeholder="20100"
+															dir="ltr"
+															inputMode="numeric"
+														/>
+													</FormControl>
+													<Button
+														size="sm"
+														variant="ghost"
+														colorScheme="red"
+														onClick={() => {
+															const port = Number.parseInt(row.nodePort, 10);
+															setTunnelRows((current) =>
+																current.filter((_, i) => i !== index),
+															);
+															setTunnelCountries((current) =>
+																Object.fromEntries(
+																	Object.entries(current).filter(
+																		([, value]) => value !== port,
+																	),
+																),
+															);
+														}}
+													>
+														{tt("tsin.tunnelCountries.removeRow", "Remove")}
+													</Button>
+												</SimpleGrid>
+												<TunnelSellerLine
+													origin={view?.origin_ip ?? ""}
+													nodePort={row.nodePort}
+													tt={tt}
+												/>
+											</Box>
+										);
+									})}
+									<Button
+										size="sm"
+										variant="outline"
+										alignSelf="start"
+										onClick={() =>
+											setTunnelRows((current) => {
+												const highest = current.reduce(
+													(max, row) =>
+														Math.max(
+															max,
+															Number.parseInt(row.nodePort, 10) || 0,
+														),
+													20099,
+												);
+												return [
+													...current,
+													{
+														id: `row-${Date.now()}`,
+														nodePort: String(highest + 1),
+														address: "",
+														port: "",
+													},
+												];
+											})
+										}
+									>
+										{tt("tsin.tunnelCountries.addRow", "+ Add a tunnel port")}
+									</Button>
+								</Stack>
+								<Stack spacing={1}>
+									{selected.map((name) => {
+										const key = name.toLowerCase();
+										const ports = tunnelRows
+											.map((row) => Number.parseInt(row.nodePort, 10))
+											.filter((port) => port > 0 && port <= 65535);
+										const max = view?.tunnel_per_port ?? 5;
+										const tunnelRowLabel = (port: number) => {
+											const row = tunnelRows.find(
+												(item) => Number.parseInt(item.nodePort, 10) === port,
+											);
+											const address =
+												row?.address.trim() || view?.tunnel_host || "";
+											const remote = row?.port.trim() || String(port);
+											return address ? `${address}:${remote}` : String(port);
+										};
+										const used = (port: number) =>
+											selected.filter(
+												(other) =>
+													tunnelCountries[other.toLowerCase()] === port,
+											).length;
+										return (
+											<HStack key={name} justify="space-between" spacing={2}>
+												<Text fontSize="sm">{name} 🛡</Text>
+												<Box w="150px" flexShrink={0}>
+													<Select
+														size="sm"
+														value={String(tunnelCountries[key] ?? 0)}
+														onChange={(event) => {
+															const port =
+																Number.parseInt(event.target.value, 10) || 0;
+															setTunnelCountries((current) => {
+																const next = { ...current };
+																if (port > 0) next[key] = port;
+																else delete next[key];
+																return next;
+															});
+														}}
+													>
+														<option value="0">—</option>
+														{ports.map((port) => (
+															<option
+																key={port}
+																value={String(port)}
+																disabled={
+																	tunnelCountries[key] !== port &&
+																	used(port) >= max
+																}
+															>
+																{tunnelRowLabel(port)} ({used(port)}/{max})
+															</option>
+														))}
+													</Select>
+												</Box>
+											</HStack>
+										);
+									})}
+								</Stack>
+							</TSinSection>
+						)}
+
+						{view?.applied &&
+							view.transport === "path" &&
+							(view.direct_countries?.length ?? 0) > 0 && (
+								<TSinSection
+									title={tt("tsin.smart.title", "⭐ Smart config")}
+									status={
+										<Badge colorScheme={view.smart_config ? "green" : "gray"}>
+											{view.smart_config
+												? tt("tsin.smart.on", "On")
+												: tt("tsin.smart.off", "Off")}
+										</Badge>
+									}
+								>
+									<Text fontSize="sm" mb={2} opacity={0.85}>
+										{tt(
+											"tsin.smart.help",
+											"Adds one config, «⭐ Smart (best location)», at the top of the subscription. It goes over ⚡ and, if ⚡ stops answering, moves to Cloudflare by itself within seconds, so users stay connected without changing config. Only apps that read JSON subscriptions show it; the other configs stay as they are. Users get it when they update their subscription; nothing restarts.",
+										)}
+									</Text>
+									<FormControl>
+										<Select
+											size="sm"
+											value={String(view.smart_config ?? 0)}
+											isDisabled={smartBusy}
+											onChange={(event) =>
+												saveSmart(Number.parseInt(event.target.value, 10) || 0)
+											}
+										>
+											<option value="0">
+												{tt("tsin.smart.level0", "Off")}
+											</option>
+											<option value="1">
+												{tt(
+													"tsin.smart.level1",
+													"On for Happ, Streisand and other JSON apps",
+												)}
+											</option>
+											{view.smart_config === 2 && (
+												<option value="2">
+													{tt(
+														"tsin.smart.level2",
+														"On, and V2Box also gets the JSON subscription",
+													)}
+												</option>
+											)}
+										</Select>
+										<FormHelperText fontSize="xs">
+											{tt(
+												"tsin.smart.testHelp",
+												"Test first on your own phone: add ?smart=1 to the end of a subscription link (?smart=fail turns ⚡ off, ?smart=nocdn turns Cloudflare off, to see each way carry the traffic alone).",
+											)}
+										</FormHelperText>
+									</FormControl>
+									{view.smart_config === 2 && (
+										<Text fontSize="xs" mt={2} color="orange.400">
+											{tt(
+												"tsin.smart.v2boxNote",
+												"V2Box users now get their subscription as JSON. All configs stay, but after the update the app may ask them to pick a config again.",
+											)}
+										</Text>
+									)}
+									<Text fontSize="xs" mt={2} opacity={0.75}>
+										{tt(
+											"tsin.smart.v2boxUnsupported",
+											"V2Box does not run the smart config's check, so it is not offered there. The smart config only helps where the ⚡ configs connect on users' networks.",
+										)}
+									</Text>
+								</TSinSection>
+							)}
+
+						{view?.applied && (
+							<TSinSection
+								title={tt(
+									"tsin.emergency.title",
+									"🆘 Emergency tunnel (when T.Sin is down)",
+								)}
+								borderColor={view.emergency?.enabled ? "red.400" : undefined}
+								defaultOpen={Boolean(view.emergency?.enabled)}
+								status={
+									<Badge colorScheme={view.emergency?.enabled ? "red" : "gray"}>
+										{view.emergency?.enabled
+											? tt("tsin.emergency.on", "On")
+											: tt("tsin.emergency.off", "Off")}
+									</Badge>
+								}
+							>
+								<HStack justify="flex-end" mb={2} spacing={3}>
+									<HStack spacing={2} flexShrink={0}>
+										<Text
+											fontSize="sm"
+											fontWeight="semibold"
+											color={view.emergency?.enabled ? "red.400" : undefined}
+										>
+											{view.emergency?.enabled
+												? tt("tsin.emergency.on", "On")
+												: tt("tsin.emergency.off", "Off")}
+										</Text>
+										<Switch
+											colorScheme="red"
+											isChecked={Boolean(view.emergency?.enabled)}
+											isDisabled={emBusy || !emAddress.trim()}
+											onChange={(event) =>
+												void saveEmergency(event.target.checked)
+											}
+										/>
+									</HStack>
+								</HStack>
+								<Text fontSize="sm" mb={3} opacity={0.85}>
+									{tt(
+										"tsin.emergency.help",
+										"For the hours T.Sin itself is down. Turned on, every user of the countries gets two more configs, “🆘 Emergency tunnel” (VMess and Shadowsocks), that reach this server through your Iranian tunnel and go out from here directly, without T.Sin: users show this server's country instead of their chosen one, but stay connected. Turn it off when T.Sin is back. Users update their subscription to get or drop the configs.",
+									)}
+								</Text>
+								{view.emergency?.enabled && (
+									<Alert status="error" borderRadius="6px" fontSize="sm" mb={3}>
+										<AlertIcon />
+										<AlertDescription>
+											{tt(
+												"tsin.emergency.onWarning",
+												"The emergency tunnel is on. Its users go out from this server, not T.Sin. Turn it off once T.Sin works again.",
+											)}
+										</AlertDescription>
+									</Alert>
+								)}
+								<FormControl mb={2}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.emergency.audience", "Show to")}
+									</FormLabel>
+									<Select
+										size="sm"
+										value={emAudience}
+										onChange={(event) => setEmAudience(event.target.value)}
+									>
+										<option value="all">
+											{tt("tsin.emergency.audienceAll", "Every user")}
+										</option>
+										<option value="mci">
+											{tt(
+												"tsin.emergency.audienceMci",
+												"Only users on Hamrah Aval",
+											)}
+										</option>
+									</Select>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.emergency.audienceHelp",
+											"With Hamrah Aval only, the configs go into the subscription only when it is updated from Hamrah Aval's network; on Irancell, fixed lines or Wi-Fi they are left out, so the tunnel's paid traffic goes to the users who need it. An update made through a VPN keeps them for a week for someone last seen on Hamrah Aval. Users must update their subscription for a change to reach them; press Save.",
+										)}
+									</FormHelperText>
+									{emAudience === "mci" && (
+										<Text fontSize="xs" mt={1} opacity={0.85}>
+											{view?.emergency?.operator_ranges?.mci_ranges
+												? tt(
+														"tsin.emergency.mciUsers",
+														"{{count}} users updated their subscription from Hamrah Aval in the last week.",
+														{ count: view.emergency.mci_users ?? 0 },
+													)
+												: tt(
+														"tsin.emergency.rangesLoading",
+														"Hamrah Aval's address list is still loading; until then the configs go to everyone.",
+													)}
+										</Text>
+									)}
+								</FormControl>
+								{(view.emergency?.backup_candidates?.length ?? 0) > 0 && (
+									<Box mb={3}>
+										<Text fontSize="sm" fontWeight="semibold" mb={1}>
+											{tt(
+												"tsin.emergency.backups",
+												"Backup configs that follow this switch",
+											)}
+										</Text>
+										<Text fontSize="xs" opacity={0.75} mb={1}>
+											{tt(
+												"tsin.emergency.backupsHelp",
+												"Ticked configs are shown only while the emergency tunnel is on and hidden when it is off, for every user. The countries' tunnel configs (🛡) are not affected. Press Save after ticking.",
+											)}
+										</Text>
+										<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+											{view.emergency?.backup_candidates?.map((item) => (
+												<Checkbox
+													key={item.id}
+													isChecked={emBackups.includes(item.id)}
+													onChange={() =>
+														setEmBackups((current) =>
+															current.includes(item.id)
+																? current.filter((id) => id !== item.id)
+																: [...current, item.id],
+														)
+													}
+												>
+													{item.remark || item.tag}
+												</Checkbox>
+											))}
+										</SimpleGrid>
+									</Box>
+								)}
+								<FormControl mb={2}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.emergency.protocols", "Configs to show")}
+									</FormLabel>
+									<Select
+										size="sm"
+										value={emProtocols}
+										onChange={(event) => setEmProtocols(event.target.value)}
+									>
+										<option value="both">
+											{tt(
+												"tsin.emergency.both",
+												"VMess and Shadowsocks (two tunnel ports)",
+											)}
+										</option>
+										<option value="vmess">
+											{tt(
+												"tsin.emergency.vmessOnly",
+												"VMess only (one tunnel port)",
+											)}
+										</option>
+										<option value="shadowsocks">
+											{tt(
+												"tsin.emergency.ssOnly",
+												"Shadowsocks only (one tunnel port)",
+											)}
+										</option>
+									</Select>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.emergency.protocolsHelp",
+											"Each tunnel port you buy reaches one config. With one port, pick one: VMess works on every tunnel; Shadowsocks also carries calls if the tunnel forwards UDP.",
+										)}
+									</FormHelperText>
+								</FormControl>
+								<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2}>
+									<FormControl>
+										<FormLabel fontSize="sm" mb={1}>
+											{tt("tsin.emergency.address", "Iranian tunnel address")}
+										</FormLabel>
+										<Input
+											value={emAddress}
+											onChange={(event) => setEmAddress(event.target.value)}
+											placeholder="185.x.x.x"
+											dir="ltr"
+											autoComplete="off"
+											spellCheck={false}
+										/>
+									</FormControl>
+									<FormControl
+										display={emProtocols === "shadowsocks" ? "none" : undefined}
+									>
+										<FormLabel fontSize="sm" mb={1}>
+											{tt("tsin.emergency.vmessPort", "Tunnel port for VMess")}
+										</FormLabel>
+										<Input
+											value={emVMessPort}
+											onChange={(event) => setEmVMessPort(event.target.value)}
+											placeholder={tt(
+												"tsin.emergency.samePort",
+												"same as server",
+											)}
+											dir="ltr"
+											inputMode="numeric"
+										/>
+									</FormControl>
+									<FormControl
+										display={emProtocols === "vmess" ? "none" : undefined}
+									>
+										<FormLabel fontSize="sm" mb={1}>
+											{tt(
+												"tsin.emergency.ssPort",
+												"Tunnel port for Shadowsocks",
+											)}
+										</FormLabel>
+										<Input
+											value={emSSPort}
+											onChange={(event) => setEmSSPort(event.target.value)}
+											placeholder={tt(
+												"tsin.emergency.samePort",
+												"same as server",
+											)}
+											dir="ltr"
+											inputMode="numeric"
+										/>
+									</FormControl>
+								</SimpleGrid>
+								{view.emergency?.node_ports?.vmess ? (
+									<Box mt={3} fontSize="sm">
+										<Text mb={1}>
+											{tt(
+												"tsin.emergency.forward",
+												"Set your Iranian tunnel to forward to these (TCP; for Shadowsocks also UDP):",
+											)}
+										</Text>
+										{emProtocols !== "shadowsocks" && (
+											<Text dir="ltr" fontFamily="mono" fontSize="xs">
+												VMess → {view.emergency.node_address}:
+												{view.emergency.node_ports.vmess}
+											</Text>
+										)}
+										{emProtocols !== "vmess" && (
+											<Text dir="ltr" fontFamily="mono" fontSize="xs">
+												Shadowsocks → {view.emergency.node_address}:
+												{view.emergency.node_ports.shadowsocks}
+											</Text>
+										)}
+									</Box>
+								) : (
+									<Text mt={3} fontSize="xs" opacity={0.75}>
+										{tt(
+											"tsin.emergency.firstSave",
+											"Press Save once: the panel makes the two configs on this server and shows the ports your Iranian tunnel must forward to. Making them makes the server's users reconnect for a second, once.",
+										)}
+									</Text>
+								)}
+								<Button
+									size="sm"
+									mt={3}
+									variant="outline"
+									isLoading={emBusy}
+									isDisabled={!emAddress.trim()}
+									onClick={() => void saveEmergency()}
+								>
+									{tt("tsin.emergency.save", "Save")}
+								</Button>
+							</TSinSection>
+						)}
+					</SimpleGrid>
 
 					{target !== "master" && view && (
 						<Box borderWidth="1px" borderRadius="6px" p={3}>

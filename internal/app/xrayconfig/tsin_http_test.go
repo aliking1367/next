@@ -110,3 +110,12 @@ func TestApplyTSinHTTPConfigsOnTheFrontAddresses(t *testing.T) {
 		t.Fatal("the HTTP inbound outlived its country's choice")
 	}
 }
+
+func TestPickProvisionPortSkipsPortsBusyOnTheServer(t *testing.T) {
+	// Everything in the range except one port is taken by another program.
+	busy := func(port int) bool { return port != 20299 }
+	port, err := pickProvisionPort(nil, map[int]bool{}, nil, busy)
+	if err != nil || port != 20299 {
+		t.Fatalf("port = %d, %v; want the only free one", port, err)
+	}
+}

@@ -510,21 +510,31 @@ func pickProvisionPort(preferred []int, used map[int]bool, ranges []portRange, b
 		}
 		return candidate, nil
 	}
-	return pickAvailablePortFrom(used, ranges)
+	// The random pick also skips ports something else already listens on
+	// there (another program beside Xray, such as a tunnel's haproxy), or
+	// Xray would fail to bind it and stop for everyone.
+	return pickFreePort(used, ranges, busy)
 }
 
 func pickAvailablePortFrom(used map[int]bool, ranges []portRange) (int, error) {
+	return pickFreePort(used, ranges, nil)
+}
+
+func pickFreePort(used map[int]bool, ranges []portRange, busy func(int) bool) (int, error) {
+	free := func(candidate int) bool {
+		return !isPortUsed(candidate, used, ranges) && (busy == nil || !busy(candidate))
+	}
 	for i := 0; i < 200; i++ {
 		candidate, err := randomPort(autoInboundMinPort, autoInboundMaxPort)
 		if err != nil {
 			break
 		}
-		if !isPortUsed(candidate, used, ranges) {
+		if free(candidate) {
 			return candidate, nil
 		}
 	}
 	for candidate := autoInboundMinPort; candidate <= autoInboundMaxPort; candidate++ {
-		if !isPortUsed(candidate, used, ranges) {
+		if free(candidate) {
 			return candidate, nil
 		}
 	}
