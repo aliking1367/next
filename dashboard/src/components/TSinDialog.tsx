@@ -92,6 +92,10 @@ type TSinView = {
 	// address, borrowing vision_sni (www.hetzner.com by default).
 	vision_countries?: string[] | null;
 	vision_sni?: string;
+	// http_countries also get a VMess config behind an HTTP header (Host
+	// http_host, tgju.org by default) on the direct address.
+	http_countries?: string[] | null;
+	http_host?: string;
 	// cdn_hidden keeps the countries' Cloudflare configs out of subscriptions.
 	cdn_hidden?: boolean;
 	// fastly_host is the Fastly service's domain; fastly_countries also get a
@@ -335,6 +339,8 @@ export const TSinDialog: FC<{
 	const [directAddress, setDirectAddress] = useState("");
 	const [vision, setVision] = useState<string[]>([]);
 	const [visionSni, setVisionSni] = useState("www.hetzner.com");
+	const [httpCountries, setHttpCountries] = useState<string[]>([]);
+	const [httpHost, setHttpHost] = useState("tgju.org");
 	const [cdnHidden, setCdnHidden] = useState(false);
 	const [fastlyHost, setFastlyHost] = useState("");
 	const [cloudDomain, setCloudDomain] = useState("");
@@ -470,6 +476,8 @@ export const TSinDialog: FC<{
 			setDirectAddress(data.direct_address ?? "");
 			setVision(data.vision_countries ?? []);
 			setVisionSni(data.vision_sni || "www.hetzner.com");
+			setHttpCountries(data.http_countries ?? []);
+			setHttpHost(data.http_host || "tgju.org");
 			setCdnHidden(Boolean(data.cdn_hidden));
 			setFastlyHost(data.fastly_host ?? "");
 			setCloudDomain(data.cloud_domain ?? "");
@@ -570,6 +578,8 @@ export const TSinDialog: FC<{
 				direct_address: directAddress.trim(),
 				vision_countries: vision.filter((name) => selected.includes(name)),
 				vision_sni: visionSni.trim(),
+				http_countries: httpCountries.filter((name) => selected.includes(name)),
+				http_host: httpHost.trim(),
 				cdn_hidden: cdnHidden,
 				fastly_host: fastlyHost.trim(),
 				cloud_domain: cloudDomain.trim(),
@@ -1329,6 +1339,53 @@ export const TSinDialog: FC<{
 										{tt(
 											"tsin.vision.sniHelp",
 											"The site whose TLS these configs imitate. Match it to the front's provider: www.hetzner.com for a Hetzner IP. Changing it rebuilds the 💎 configs, so users update their subscription afterwards.",
+										)}
+									</FormHelperText>
+								</FormControl>
+							</Box>
+							<Box mt={4} borderTopWidth="1px" pt={3}>
+								<Text fontWeight="semibold" fontSize="sm" mb={1}>
+									{tt("tsin.http.title", "HTTP configs (all operators)")}
+								</Text>
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.http.help",
+										"VMess over plain TCP whose first bytes are an ordinary HTTP request to the site below, with no TLS. Named after the country, followed by \"همه اپراتورها\". It uses the same address as the ⚡ and 💎 configs (several, comma-separated, are picked at random). Tick the countries that should get one.",
+									)}
+								</Text>
+								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+									{selected.map((name) => (
+										<Checkbox
+											key={name}
+											isChecked={httpCountries.includes(name)}
+											onChange={() =>
+												setHttpCountries((current) =>
+													current.includes(name)
+														? current.filter((item) => item !== name)
+														: [...current, name],
+												)
+											}
+										>
+											{name} | همه اپراتورها
+										</Checkbox>
+									))}
+								</SimpleGrid>
+								<FormControl mt={3}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.http.host", "Host for the HTTP configs")}
+									</FormLabel>
+									<Input
+										value={httpHost}
+										onChange={(event) => setHttpHost(event.target.value)}
+										placeholder="tgju.org"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.http.hostHelp",
+											"The site the HTTP header names, best an Iranian one such as tgju.org. Changing it rebuilds these configs, so users update their subscription afterwards.",
 										)}
 									</FormHelperText>
 								</FormControl>

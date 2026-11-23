@@ -28,8 +28,8 @@ func (r Repository) SetTSinAddresses(ctx context.Context, directAddress *string,
 			address = "{SERVER_IP}"
 		}
 		result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?
-WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag NOT LIKE ? AND (inbound_tag LIKE ? OR inbound_tag LIKE ?) AND address <> ?`,
-			address, TSinLabPrefix+"%", "%"+TSinVisionSuffix, "%"+TSinDirectSuffix, address)
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag NOT LIKE ? AND (inbound_tag LIKE ? OR inbound_tag LIKE ? OR inbound_tag LIKE ?) AND address <> ?`,
+			address, TSinLabPrefix+"%", "%"+TSinVisionSuffix, "%"+TSinDirectSuffix, "%"+TSinHTTPSuffix, address)
 		if err != nil {
 			return changed, err
 		}

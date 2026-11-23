@@ -161,6 +161,11 @@ type tsinRequest struct {
 	// keeps them.
 	VisionCountries *[]string `json:"vision_countries"`
 	VisionSNI       *string   `json:"vision_sni"`
+	// HTTPCountries replaces the countries with a VMess config behind an
+	// HTTP header and HTTPHost the site those configs name ("" is the
+	// default). Omitted keeps them.
+	HTTPCountries *[]string `json:"http_countries"`
+	HTTPHost      *string   `json:"http_host"`
 	// CDNHidden keeps the countries' Cloudflare configs out of subscriptions
 	// (true) or shows them again (false). Omitted keeps it.
 	CDNHidden *bool `json:"cdn_hidden"`
@@ -294,8 +299,11 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visionCountries, visionSNI := s.loadTSinVision(r.Context())
+	httpCountries, httpHost := s.loadTSinHTTP(r.Context())
 	cloud := s.loadTSinCloud(r.Context())
 	view := map[string]any{
+		"http_countries":   httpCountries,
+		"http_host":        httpHost,
 		"cloud_domain":     cloud.Domain,
 		"cloud_port":       cloud.Port,
 		"cloud_connect":    cloud.Connect,
@@ -554,6 +562,22 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	for _, name := range visionCountries {
 		vision[strings.ToLower(name)] = true
 	}
+	httpCountries, httpHost := s.loadTSinHTTP(ctx)
+	if request.HTTPCountries != nil {
+		httpCountries = cleanTSinCountries(*request.HTTPCountries)
+	}
+	if request.HTTPHost != nil {
+		cleaned, err := xrayconfig.NormalizeTSinHTTPHost(*request.HTTPHost)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		httpHost = cleaned
+	}
+	httpWanted := map[string]bool{}
+	for _, name := range httpCountries {
+		httpWanted[strings.ToLower(name)] = true
+	}
 	cloudSettings := s.loadTSinCloud(ctx)
 	if request.CloudDomain != nil {
 		domain, err := xrayconfig.NormalizeCDNDomain(*request.CloudDomain)
@@ -648,6 +672,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			Direct: settings.Transport == xrayconfig.TSinTransportPath && direct[strings.ToLower(proxy.Country)],
 			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
 			Vision: settings.Transport == xrayconfig.TSinTransportPath && vision[strings.ToLower(proxy.Country)],
+			HTTP:   settings.Transport == xrayconfig.TSinTransportPath && httpWanted[strings.ToLower(proxy.Country)],
 			Cloud:  settings.Transport == xrayconfig.TSinTransportPath && cloudCountries[strings.ToLower(proxy.Country)],
 			// The tunnel configs go to the emergency tunnel's address.
 			TunnelPort:       tunnelCountries[strings.ToLower(proxy.Country)],
@@ -662,7 +687,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
 		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost,
-			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI,
+			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI, HTTPHost: httpHost,
 			CloudDomain: cloudSettings.Domain, CloudPort: cloudSettings.Port, CloudConnectAddress: cloudSettings.Connect}, countries, portBusy)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to configure the countries: "+err.Error())
@@ -729,6 +754,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.VisionCountries != nil || request.VisionSNI != nil {
 		if err := s.saveTSinVision(ctx, visionCountries, visionSNI); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if request.HTTPCountries != nil || request.HTTPHost != nil {
+		if err := s.saveTSinHTTP(ctx, httpCountries, httpHost); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
