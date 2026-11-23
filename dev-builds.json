@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-bd3b0aa",
-  "updated_at": "2026-11-23T18:54:45Z",
+  "latest": "dev-af7cdd4",
+  "updated_at": "2026-11-23T19:09:51Z",
   "builds": [
+    {
+      "tag": "dev-af7cdd4",
+      "sha": "af7cdd4f46991efdc8c568fe8e02ed2148ff5552",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "45245174833",
+      "run_number": "261",
+      "created_at": "2026-11-23T19:09:51Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-af7cdd4.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-af7cdd4.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-af7cdd4.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-af7cdd4.zip"
+        }
+      }
+    },
     {
       "tag": "dev-bd3b0aa",
       "sha": "bd3b0aac441cc5a31910875207533c644ec22637",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-644de01.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-644de01.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-ce71ef0",
-      "sha": "ce71ef0e0e6f81059bd2b56f5a0c2b4c11ce9667",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41460225881",
-      "run_number": "160",
-      "created_at": "2026-11-02T14:20:39Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-ce71ef0.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-ce71ef0.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-ce71ef0.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-ce71ef0.tar.gz"
         }
       }
     }
