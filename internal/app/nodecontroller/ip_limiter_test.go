@@ -147,6 +147,30 @@ func TestXrayIPBlocksIgnoreTunneledVPNAssignedIP(t *testing.T) {
 	}
 }
 
+func TestXrayIPBlocksNeverBlockSharedFrontIP(t *testing.T) {
+	base := time.Date(2026, 11, 23, 13, 0, 0, 0, time.UTC)
+	front := "167.233.180.133"
+	blocks := xrayIPBlocksForLimiterEndpoints([]limiterEndpoint{
+		// User 42 (limit 1) has a direct IP and also comes in through the
+		// front, which the node sees for every user behind it.
+		{NodeID: 5, UserID: 42, Limit: 1, Protocol: "xray", IP: "198.51.100.7", LastSeenAt: base},
+		{NodeID: 5, UserID: 42, Limit: 1, Protocol: "xray", IP: front, LastSeenAt: base.Add(time.Second)},
+		{NodeID: 5, UserID: 43, Limit: 1, Protocol: "xray", IP: front, LastSeenAt: base},
+		{NodeID: 5, UserID: 44, Limit: 0, Protocol: "xray", IP: front, LastSeenAt: base},
+		// User 50 is over the limit on its own IPs and must still be blocked.
+		{NodeID: 5, UserID: 50, Limit: 1, Protocol: "xray", IP: "198.51.100.8", LastSeenAt: base},
+		{NodeID: 5, UserID: 50, Limit: 1, Protocol: "xray", IP: "198.51.100.9", LastSeenAt: base.Add(time.Second)},
+	})
+	for _, block := range blocks {
+		if block.GetIp() == front {
+			t.Fatalf("the shared front IP must never be blocked: %#v", blocks)
+		}
+	}
+	if len(blocks) != 1 || blocks[0].GetIp() != "198.51.100.9" || blocks[0].GetUserUid() != "50" {
+		t.Fatalf("want only user 50's extra IP blocked, got %#v", blocks)
+	}
+}
+
 func TestXrayIPBlocksTreatSameClientIPAsOneDevice(t *testing.T) {
 	base := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
 	blocks := xrayIPBlocksForLimiterEndpoints([]limiterEndpoint{

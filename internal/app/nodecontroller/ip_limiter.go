@@ -407,11 +407,52 @@ WHERE vus.ended_at IS NULL
 	return result, nil
 }
 
+// sharedIPMinUsers is how many different users must come from one Xray source
+// IP before it is treated as shared: a front or relay that forwards everyone
+// (the node sees its address for every user behind it) or a carrier NAT. Such
+// an IP is never blocked and never counts as a device, because blocking it
+// cuts off every user behind it, not the one over the limit.
+const sharedIPMinUsers = 3
+
+// sharedXrayIPs is the set of Xray source IPs used by at least
+// sharedIPMinUsers different users, limited or not.
+func sharedXrayIPs(endpoints []limiterEndpoint) map[string]struct{} {
+	users := map[string]map[int64]struct{}{}
+	for _, endpoint := range endpoints {
+		if endpoint.UserID <= 0 || !strings.EqualFold(normalizedOnlineProtocol(endpoint.Protocol), "xray") {
+			continue
+		}
+		ip, ok := normalizedUsableIP(endpoint.IP)
+		if !ok {
+			continue
+		}
+		if users[ip] == nil {
+			users[ip] = map[int64]struct{}{}
+		}
+		users[ip][endpoint.UserID] = struct{}{}
+	}
+	shared := map[string]struct{}{}
+	for ip, set := range users {
+		if len(set) >= sharedIPMinUsers {
+			shared[ip] = struct{}{}
+		}
+	}
+	return shared
+}
+
 func xrayIPBlocksForLimiterEndpoints(endpoints []limiterEndpoint) []*nodev1.IPBlockEntry {
+	shared := sharedXrayIPs(endpoints)
 	byUser := map[int64][]limiterEndpoint{}
 	for _, endpoint := range endpoints {
 		if endpoint.UserID <= 0 || endpoint.Limit <= 0 {
 			continue
+		}
+		if strings.EqualFold(normalizedOnlineProtocol(endpoint.Protocol), "xray") {
+			if ip, ok := normalizedUsableIP(endpoint.IP); ok {
+				if _, isShared := shared[ip]; isShared {
+					continue
+				}
+			}
 		}
 		byUser[endpoint.UserID] = append(byUser[endpoint.UserID], endpoint)
 	}
