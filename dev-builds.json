@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-29307b6",
-  "updated_at": "2026-11-23T11:41:06Z",
+  "latest": "dev-e96a710",
+  "updated_at": "2026-11-23T13:59:18Z",
   "builds": [
+    {
+      "tag": "dev-e96a710",
+      "sha": "e96a7105dae2fbe94579990cdbdaf635478bb4c8",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "45188794279",
+      "run_number": "257",
+      "created_at": "2026-11-23T13:59:18Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-e96a710.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-e96a710.tar.gz"
+        },
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-e96a710.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-e96a710.zip"
+        }
+      }
+    },
     {
       "tag": "dev-29307b6",
       "sha": "29307b6fe7cfa5434bb464a1d9bf464e41bb0082",
@@ -981,26 +1001,6 @@
         "linux-amd64": {
           "name": "next-linux-amd64-dev-806db43.tar.gz",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-806db43.tar.gz"
-        }
-      }
-    },
-    {
-      "tag": "dev-704fdf0",
-      "sha": "704fdf0237554a1de970722e52e2ea66f91fb410",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41443036382",
-      "run_number": "156",
-      "created_at": "2026-11-02T12:19:20Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-704fdf0.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-704fdf0.zip"
-        },
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-704fdf0.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-704fdf0.tar.gz"
         }
       }
     }
