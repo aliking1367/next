@@ -39,6 +39,10 @@ import {
 } from "@heroicons/react/24/outline";
 import type { ApexOptions } from "apexcharts";
 import { AccountSecurity } from "components/AccountSecurity";
+import {
+	AccountExpiryValue,
+	AccountTopUpCalculator,
+} from "components/AccountTopUpCalculator";
 import { UserMigrationPanel } from "components/UserMigrationPanel";
 import { ChartBox } from "components/common/ChartBox";
 import {
@@ -1097,20 +1101,9 @@ export const MyAccountPage: React.FC = () => {
 											<Text color="panel.textSecondary">
 												{t("myaccount.accountExpire")}:
 											</Text>
-											<Text fontWeight="semibold">
-												{data.expire && data.expire > 0
-													? t("myaccount.accountExpireOn", {
-															date: dayjs.unix(data.expire).format("YYYY-MM-DD"),
-															days: Math.max(
-																0,
-																Math.ceil(
-																	(data.expire - Date.now() / 1000) / 86400,
-																),
-															),
-														})
-													: t("myaccount.unlimited")}
-											</Text>
+											<AccountExpiryValue expire={data.expire} />
 										</HStack>
+										<AccountTopUpCalculator expire={data.expire} />
 									</Box>
 								</SimpleGrid>
 							</ChartBox>
