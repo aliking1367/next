@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-2102023",
-  "updated_at": "2026-11-23T22:24:09Z",
+  "latest": "dev-5ed31f5",
+  "updated_at": "2026-11-25T15:34:50Z",
   "builds": [
+    {
+      "tag": "dev-5ed31f5",
+      "sha": "5ed31f55c0e13ec8cd95534e5d822ccb2aa2d7f8",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "45645961422",
+      "run_number": "265",
+      "created_at": "2026-11-25T15:34:50Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-5ed31f5.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-5ed31f5.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-5ed31f5.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-5ed31f5.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-2102023",
       "sha": "2102023a7a792bfa1c63720ffc50a4ddfd377fee",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-6cb4436.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-6cb4436.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-8576006",
-      "sha": "85760062784249014c625bc20a015a5234f6c67b",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41807766566",
-      "run_number": "164",
-      "created_at": "2026-11-04T09:32:46Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-8576006.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-8576006.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-8576006.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-8576006.zip"
         }
       }
     }
