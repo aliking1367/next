@@ -56,6 +56,7 @@ import type {
 } from "types/Admin";
 import { AdminRole, AdminStatus, AdminTrafficLimitMode } from "types/Admin";
 import type { ServiceSummary } from "types/Service";
+import { type AdminLimitsSnapshot, sumServiceLimits } from "utils/adminInvoice";
 import { relativeExpiryDate } from "utils/dateFormatter";
 import { formatBytes } from "utils/formatByte";
 import { DEFAULT_SEARCH_MATCH_OPTIONS, matchesSearch } from "utils/searchMatch";
@@ -64,6 +65,10 @@ import {
 	generateSuccessMessage,
 } from "utils/toastHandler";
 import { z } from "zod";
+import {
+	AdminInvoiceModal,
+	type AdminInvoiceRequest,
+} from "./AdminInvoiceModal";
 import { type AdminLogin, AdminLoginShareModal } from "./AdminLoginShareModal";
 import AdminPermissionsEditor from "./AdminPermissionsEditor";
 import AdminPermissionsModal from "./AdminPermissionsModal";
@@ -466,6 +471,8 @@ export const AdminDialog: FC = () => {
 	}, []);
 
 	const [createdLogin, setCreatedLogin] = useState<AdminLogin | null>(null);
+	const [invoiceRequest, setInvoiceRequest] =
+		useState<AdminInvoiceRequest | null>(null);
 	const handleCloseAdminDialog = useCallback(() => {
 		clearSubmitTimers();
 		setSubmitStatus("idle");
@@ -829,6 +836,55 @@ export const AdminDialog: FC = () => {
 				const globalDeleteUserUsageLimit = values.delete_user_usage_limit
 					? Number(values.delete_user_usage_limit) * MB_IN_BYTES
 					: null;
+				// Limits before and after this save, for the invoice of what
+				// was added. Owners and sudo admins are not billed.
+				const billable =
+					selectedRole !== AdminRole.FullAccess &&
+					selectedRole !== AdminRole.Sudo;
+				const toGB = (bytes: number | null | undefined) =>
+					bytes === null || bytes === undefined ? null : bytes / GB_IN_BYTES;
+				const afterLimits: AdminLimitsSnapshot =
+					values.use_service_traffic_limits
+						? {
+								usersLimit: sumServiceLimits(
+									(serviceLimitPayload ?? []).map((item) => item.users_limit),
+								),
+								dataGB: toGB(
+									sumServiceLimits(
+										(serviceLimitPayload ?? []).map((item) => item.data_limit),
+									),
+								),
+								expire: expireValue,
+							}
+						: {
+								usersLimit: globalUsersLimit,
+								dataGB: toGB(globalDataLimit),
+								expire: expireValue,
+							};
+				const beforeLimits: AdminLimitsSnapshot =
+					mode === "edit" && admin
+						? admin.use_service_traffic_limits
+							? {
+									usersLimit: sumServiceLimits(
+										(admin.service_limits ?? []).map(
+											(item) => item.users_limit,
+										),
+									),
+									dataGB: toGB(
+										sumServiceLimits(
+											(admin.service_limits ?? []).map(
+												(item) => item.data_limit,
+											),
+										),
+									),
+									expire: admin.expire ?? null,
+								}
+							: {
+									usersLimit: admin.users_limit ?? null,
+									dataGB: toGB(admin.data_limit),
+									expire: admin.expire ?? null,
+								}
+						: { usersLimit: 0, dataGB: 0, expire: null };
 				if (mode === "create") {
 					const payload: AdminCreatePayload = {
 						username: values.username.trim(),
@@ -965,6 +1021,18 @@ export const AdminDialog: FC = () => {
 					}
 					await updateAdmin(admin.username, payload);
 					generateSuccessMessage(t("admins.updateSuccess"), toast);
+				}
+				if (billable) {
+					setInvoiceRequest({
+						username:
+							mode === "create"
+								? values.username.trim()
+								: (admin?.username ?? ""),
+						adminId: admin?.id,
+						before: beforeLimits,
+						after: afterLimits,
+						at: Math.floor(Date.now() / 1000),
+					});
 				}
 				setSubmitStatus("success");
 				successCloseTimerRef.current = window.setTimeout(() => {
@@ -1763,6 +1831,10 @@ export const AdminDialog: FC = () => {
 			<AdminLoginShareModal
 				login={createdLogin}
 				onClose={() => setCreatedLogin(null)}
+			/>
+			<AdminInvoiceModal
+				request={createdLogin ? null : invoiceRequest}
+				onClose={() => setInvoiceRequest(null)}
 			/>
 			<AdminPermissionsModal
 				isOpen={permissionsModalOpen}
