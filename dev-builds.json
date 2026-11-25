@@ -1,9 +1,29 @@
 {
   "schema_version": 1,
   "project": "Next",
-  "latest": "dev-5ed31f5",
-  "updated_at": "2026-11-25T15:34:50Z",
+  "latest": "dev-a4870c5",
+  "updated_at": "2026-11-25T21:15:12Z",
   "builds": [
+    {
+      "tag": "dev-a4870c5",
+      "sha": "a4870c53a80429c3a41e041a15dd485b175e17a8",
+      "branch": "master",
+      "workflow": "Binary Build",
+      "run_id": "45701877958",
+      "run_number": "269",
+      "created_at": "2026-11-25T21:15:12Z",
+      "release_tag": "dev-builds",
+      "assets": {
+        "windows-amd64": {
+          "name": "next-windows-amd64-dev-a4870c5.zip",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-a4870c5.zip"
+        },
+        "linux-amd64": {
+          "name": "next-linux-amd64-dev-a4870c5.tar.gz",
+          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-a4870c5.tar.gz"
+        }
+      }
+    },
     {
       "tag": "dev-5ed31f5",
       "sha": "5ed31f55c0e13ec8cd95534e5d822ccb2aa2d7f8",
@@ -981,26 +1001,6 @@
         "windows-amd64": {
           "name": "next-windows-amd64-dev-c9c6dc6.zip",
           "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-c9c6dc6.zip"
-        }
-      }
-    },
-    {
-      "tag": "dev-6cb4436",
-      "sha": "6cb44363362d83dfe5727685933717d732e34329",
-      "branch": "master",
-      "workflow": "Binary Build",
-      "run_id": "41813761898",
-      "run_number": "166",
-      "created_at": "2026-11-04T10:26:40Z",
-      "release_tag": "dev-builds",
-      "assets": {
-        "linux-amd64": {
-          "name": "next-linux-amd64-dev-6cb4436.tar.gz",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-linux-amd64-dev-6cb4436.tar.gz"
-        },
-        "windows-amd64": {
-          "name": "next-windows-amd64-dev-6cb4436.zip",
-          "url": "https://github.com/aliking1367/next/releases/download/dev-builds/next-windows-amd64-dev-6cb4436.zip"
         }
       }
     }
