@@ -334,6 +334,11 @@ func (s *Server) handleAdminMutationPath(w http.ResponseWriter, r *http.Request)
 			s.handleAdminUsageNodes(w, r, username)
 			return
 		}
+	case "invoice/telegram":
+		if r.Method == http.MethodPost {
+			s.handleAdminInvoiceTelegram(w, r, username)
+			return
+		}
 	}
 	writeError(w, http.StatusNotFound, "not found")
 }

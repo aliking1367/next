@@ -1029,6 +1029,7 @@ export const AdminDialog: FC = () => {
 								? values.username.trim()
 								: (admin?.username ?? ""),
 						adminId: admin?.id,
+						telegramId: values.telegram_id ? Number(values.telegram_id) : null,
 						before: beforeLimits,
 						after: afterLimits,
 						at: Math.floor(Date.now() / 1000),

@@ -17,16 +17,19 @@ import {
 	Text,
 	Textarea,
 	useClipboard,
+	useToast,
 	VStack,
 } from "@chakra-ui/react";
 import {
 	ClipboardDocumentCheckIcon,
 	ClipboardDocumentIcon,
+	PaperAirplaneIcon,
 	ShareIcon,
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { type FC, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { fetch } from "service/http";
 import { parseAmount } from "utils/accountTopUp";
 import {
 	type AdminLimitsSnapshot,
@@ -37,6 +40,8 @@ import {
 export type AdminInvoiceRequest = {
 	username: string;
 	adminId?: number;
+	/** The admin's Telegram id; the invoice can be sent there by the panel bot. */
+	telegramId?: number | null;
 	before: AdminLimitsSnapshot;
 	after: AdminLimitsSnapshot;
 	/** When the save happened, unix seconds. */
@@ -184,6 +189,54 @@ export const AdminInvoiceModal: FC<{
 	useEffect(() => setMessage(generated), [generated]);
 
 	const { hasCopied, onCopy } = useClipboard(message);
+	const toast = useToast();
+	const [sending, setSending] = useState(false);
+	// The save this invoice belongs to, once sent, so a new invoice can be
+	// sent again.
+	const [sentAt, setSentAt] = useState<number | null>(null);
+	const isSent = Boolean(request && sentAt === request.at);
+	const canSendTelegram = Boolean(request?.telegramId);
+
+	const sendTelegram = async () => {
+		if (!request || sending) return;
+		setSending(true);
+		try {
+			await fetch(
+				`/admin/${encodeURIComponent(request.username)}/invoice/telegram`,
+				{ method: "POST", body: { text: message } },
+			);
+			setSentAt(request.at);
+			toast({
+				status: "success",
+				title: t("admins.invoice.sent", { username: request.username }),
+				position: "top",
+				duration: 3000,
+			});
+		} catch (error) {
+			const detail = String(
+				(error as { response?: { _data?: { detail?: unknown } } })?.response
+					?._data?.detail ?? "",
+			);
+			const key = detail.startsWith("admin_has_no_telegram_id")
+				? "admins.invoice.errorNoTelegram"
+				: detail.startsWith("telegram_not_configured")
+					? "admins.invoice.errorBotOff"
+					: detail.startsWith("telegram_send_failed")
+						? "admins.invoice.errorNotStarted"
+						: "admins.invoice.errorGeneric";
+			toast({
+				status: "error",
+				title: t(key),
+				description:
+					detail && key === "admins.invoice.errorGeneric" ? detail : undefined,
+				position: "top",
+				duration: 6000,
+				isClosable: true,
+			});
+		} finally {
+			setSending(false);
+		}
+	};
 	const canShare = typeof navigator !== "undefined" && "share" in navigator;
 
 	return (
@@ -259,6 +312,11 @@ export const AdminInvoiceModal: FC<{
 								}}
 							/>
 						</FormControl>
+						{!canSendTelegram && (
+							<Text fontSize="xs" color="panel.textMuted">
+								{t("admins.invoice.noTelegramHint")}
+							</Text>
+						)}
 						<FormControl>
 							<FormLabel fontSize="xs" mb={1}>
 								{t("admins.invoice.preview")}
@@ -275,6 +333,19 @@ export const AdminInvoiceModal: FC<{
 				</ModalBody>
 				<ModalFooter>
 					<HStack spacing={2} w="full" justify="flex-end" flexWrap="wrap">
+						{canSendTelegram && (
+							<Button
+								leftIcon={<PaperAirplaneIcon width={18} />}
+								colorScheme="blue"
+								isLoading={sending}
+								isDisabled={isSent}
+								onClick={sendTelegram}
+							>
+								{isSent
+									? t("admins.invoice.sentShort")
+									: t("admins.invoice.sendTelegram")}
+							</Button>
+						)}
 						{canShare && (
 							<Button
 								leftIcon={<ShareIcon width={18} />}
