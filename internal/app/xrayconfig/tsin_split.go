@@ -22,7 +22,7 @@ func tsinMovable(tag string) bool {
 	if !strings.HasPrefix(tag, TSinInboundPrefix) || strings.HasPrefix(tag, TSinLabPrefix) {
 		return false
 	}
-	return strings.HasSuffix(tag, TSinDirectSuffix) || strings.HasSuffix(tag, TSinVisionSuffix) || strings.HasSuffix(tag, TSinHTTPSuffix)
+	return strings.HasSuffix(tag, TSinDirectSuffix) || strings.HasSuffix(tag, TSinVisionSuffix) || strings.HasSuffix(tag, TSinHTTPSuffix) || strings.HasSuffix(tag, TSinTLSSuffix)
 }
 
 // moveTSinInbound puts an existing inbound on target alone, as it is. When the
@@ -98,6 +98,9 @@ func tsinCountryInbounds(country TSinCountry, split tsinRoutingSplit) []any {
 	if direct && country.HTTP {
 		inbounds = append(inbounds, TSinHTTPInboundTag(country.Name))
 	}
+	if direct && country.TLS {
+		inbounds = append(inbounds, TSinTLSInboundTag(country.Name))
+	}
 	if main && country.Fastly {
 		inbounds = append(inbounds, TSinFastlyInboundTag(country.Name))
 	}
@@ -115,7 +118,7 @@ func tsinCountryInbounds(country TSinCountry, split tsinRoutingSplit) []any {
 func tsinDirectCountries(countries []TSinCountry) []TSinCountry {
 	var out []TSinCountry
 	for _, country := range countries {
-		if country.Direct || country.Vision || country.HTTP {
+		if country.Direct || country.Vision || country.HTTP || country.TLS {
 			out = append(out, country)
 		}
 	}

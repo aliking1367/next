@@ -166,6 +166,13 @@ type tsinRequest struct {
 	// default). Omitted keeps them.
 	HTTPCountries *[]string `json:"http_countries"`
 	HTTPHost      *string   `json:"http_host"`
+	// TLSCountries replaces the countries with a VLESS + TLS config,
+	// TLSServerName the name those configs use (its certificate must be on
+	// the panel's server) and TLSMainCountry the country on port 443.
+	// Omitted keeps them.
+	TLSCountries   *[]string `json:"tls_countries"`
+	TLSServerName  *string   `json:"tls_server_name"`
+	TLSMainCountry *string   `json:"tls_main_country"`
 	// CDNHidden keeps the countries' Cloudflare configs out of subscriptions
 	// (true) or shows them again (false). Omitted keeps it.
 	CDNHidden *bool `json:"cdn_hidden"`
@@ -303,8 +310,13 @@ func (s *Server) tsinView(w http.ResponseWriter, r *http.Request) {
 	}
 	visionCountries, visionSNI := s.loadTSinVision(r.Context())
 	httpCountries, httpHost := s.loadTSinHTTP(r.Context())
+	tlsSettings := s.loadTSinTLS(r.Context())
 	cloud := s.loadTSinCloud(r.Context())
 	view := map[string]any{
+		"tls_countries":    tlsSettings.Countries,
+		"tls_server_name":  tlsSettings.ServerName,
+		"tls_main_country": tlsSettings.MainCountry,
+		"tls_cert_ready":   tsinTLSCertReady(tlsSettings.ServerName),
 		"http_countries":   httpCountries,
 		"http_host":        httpHost,
 		"cloud_domain":     cloud.Domain,
@@ -586,6 +598,36 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	for _, name := range httpCountries {
 		httpWanted[strings.ToLower(name)] = true
 	}
+	tlsSettings := s.loadTSinTLS(ctx)
+	if request.TLSCountries != nil {
+		tlsSettings.Countries = cleanTSinCountries(*request.TLSCountries)
+	}
+	if request.TLSServerName != nil {
+		cleaned, err := xrayconfig.NormalizeTSinTLSServerName(*request.TLSServerName)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		tlsSettings.ServerName = cleaned
+	}
+	if request.TLSMainCountry != nil {
+		tlsSettings.MainCountry = strings.TrimSpace(*request.TLSMainCountry)
+	}
+	tlsWanted := map[string]bool{}
+	for _, name := range tlsSettings.Countries {
+		tlsWanted[strings.ToLower(name)] = true
+	}
+	if len(tlsWanted) > 0 && settings.Transport == xrayconfig.TSinTransportPath {
+		if tlsSettings.ServerName == "" {
+			writeError(w, http.StatusUnprocessableEntity, "set the TLS configs' server name first")
+			return
+		}
+		if !tsinTLSCertReady(tlsSettings.ServerName) {
+			certFile, _ := xrayconfig.TSinTLSCertificatePaths(tlsSettings.ServerName)
+			writeError(w, http.StatusUnprocessableEntity, "no certificate for "+tlsSettings.ServerName+" on the panel's server yet ("+certFile+")")
+			return
+		}
+	}
 	cloudSettings := s.loadTSinCloud(ctx)
 	if request.CloudDomain != nil {
 		domain, err := xrayconfig.NormalizeCDNDomain(*request.CloudDomain)
@@ -694,6 +736,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 			Fastly: settings.Transport == xrayconfig.TSinTransportPath && fastly[strings.ToLower(proxy.Country)],
 			Vision: settings.Transport == xrayconfig.TSinTransportPath && vision[strings.ToLower(proxy.Country)],
 			HTTP:   settings.Transport == xrayconfig.TSinTransportPath && httpWanted[strings.ToLower(proxy.Country)],
+			TLS:    settings.Transport == xrayconfig.TSinTransportPath && tlsWanted[strings.ToLower(proxy.Country)],
 			Cloud:  settings.Transport == xrayconfig.TSinTransportPath && cloudCountries[strings.ToLower(proxy.Country)],
 			// The tunnel configs go to the emergency tunnel's address.
 			TunnelPort:       tunnelCountries[strings.ToLower(proxy.Country)],
@@ -709,6 +752,7 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	inbounds, err := s.configRepo.ApplyTSin(ctx, target, settings.Transport,
 		xrayconfig.TSinGate{Host: settings.GateHost, Port: settings.GatePort, DirectAddress: settings.DirectAddress, FastlyHost: settings.FastlyHost,
 			TunnelHost: settings.EmergencyAddress, ConnectAddress: s.loadTSinConnectAddress(ctx), VisionSNI: visionSNI, HTTPHost: httpHost,
+			TLSServerName: tlsSettings.ServerName, TLSMainCountry: tlsSettings.MainCountry,
 			CloudDomain: cloudSettings.Domain, CloudPort: cloudSettings.Port, CloudConnectAddress: cloudSettings.Connect,
 			DirectTarget: directTarget, DirectPortBusy: s.tsinPortBusy(firstNonEmpty(directTarget, target))}, countries, portBusy)
 	if err != nil {
@@ -786,6 +830,12 @@ func (s *Server) handleCoreTSinApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.HTTPCountries != nil || request.HTTPHost != nil {
 		if err := s.saveTSinHTTP(ctx, httpCountries, httpHost); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if request.TLSCountries != nil || request.TLSServerName != nil || request.TLSMainCountry != nil {
+		if err := s.saveTSinTLS(ctx, tlsSettings); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

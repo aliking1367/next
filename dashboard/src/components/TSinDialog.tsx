@@ -95,6 +95,13 @@ type TSinView = {
 	// http_host, tgju.org by default) on the direct address.
 	http_countries?: string[] | null;
 	http_host?: string;
+	// tls_countries also get a VLESS + TLS config named tls_server_name (the
+	// certificate must be on the panel's server: tls_cert_ready);
+	// tls_main_country takes port 443.
+	tls_countries?: string[] | null;
+	tls_server_name?: string;
+	tls_main_country?: string;
+	tls_cert_ready?: boolean;
 	// cdn_hidden keeps the countries' Cloudflare configs out of subscriptions.
 	cdn_hidden?: boolean;
 	// fastly_host is the Fastly service's domain; fastly_countries also get a
@@ -404,6 +411,10 @@ export const TSinDialog: FC<{
 	const [visionSni, setVisionSni] = useState("www.hetzner.com");
 	const [httpCountries, setHttpCountries] = useState<string[]>([]);
 	const [httpHost, setHttpHost] = useState("tgju.org");
+	const [tlsCountries, setTlsCountries] = useState<string[]>([]);
+	const [tlsServerName, setTlsServerName] = useState("");
+	const [tlsMainCountry, setTlsMainCountry] = useState("");
+	const [tlsCertReady, setTlsCertReady] = useState(false);
 	const [cdnHidden, setCdnHidden] = useState(false);
 	const [fastlyHost, setFastlyHost] = useState("");
 	const [cloudDomain, setCloudDomain] = useState("");
@@ -548,6 +559,10 @@ export const TSinDialog: FC<{
 			setHttpCountries(data.http_countries ?? []);
 			setDirectTarget(data.direct_target ?? "");
 			setHttpHost(data.http_host || "tgju.org");
+			setTlsCountries(data.tls_countries ?? []);
+			setTlsServerName(data.tls_server_name ?? "");
+			setTlsMainCountry(data.tls_main_country ?? "");
+			setTlsCertReady(Boolean(data.tls_cert_ready));
 			setCdnHidden(Boolean(data.cdn_hidden));
 			setFastlyHost(data.fastly_host ?? "");
 			setCloudDomain(data.cloud_domain ?? "");
@@ -650,6 +665,11 @@ export const TSinDialog: FC<{
 				vision_sni: visionSni.trim(),
 				http_countries: httpCountries.filter((name) => selected.includes(name)),
 				http_host: httpHost.trim(),
+				tls_countries: tlsCountries.filter((name) => selected.includes(name)),
+				tls_server_name: tlsServerName.trim(),
+				tls_main_country: tlsCountries.includes(tlsMainCountry)
+					? tlsMainCountry
+					: "",
 				direct_target: directTarget,
 				cdn_hidden: cdnHidden,
 				fastly_host: fastlyHost.trim(),
@@ -1729,6 +1749,104 @@ export const TSinDialog: FC<{
 											"The site the HTTP header names, best an Iranian one such as tgju.org. Changing it rebuilds these configs, so users update their subscription afterwards.",
 										)}
 									</FormHelperText>
+								</FormControl>
+							</TSinSection>
+						)}
+
+						{transport === "path" && selected.length > 0 && (
+							<TSinSection
+								title={tt("tsin.tls.title", "TLS configs 🔐")}
+								status={
+									<Badge>
+										{
+											tlsCountries.filter((name) => selected.includes(name))
+												.length
+										}
+									</Badge>
+								}
+							>
+								<Text fontSize="sm" mb={2} opacity={0.85}>
+									{tt(
+										"tsin.tls.help",
+										"VLESS over plain TCP with ordinary TLS and a real certificate, the way sellers run it on Hetzner: the server name is the name Hetzner gives the IP (static.<IP reversed>.clients.your-server.de), and the config connects to that name. They run on the direct server. Tick the countries that should get one; the country chosen below takes port 443.",
+									)}
+								</Text>
+								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
+									{selected.map((name) => (
+										<Checkbox
+											key={name}
+											isChecked={tlsCountries.includes(name)}
+											onChange={() =>
+												setTlsCountries((current) =>
+													current.includes(name)
+														? current.filter((item) => item !== name)
+														: [...current, name],
+												)
+											}
+										>
+											{name} | TLS 🔐
+										</Checkbox>
+									))}
+								</SimpleGrid>
+								<FormControl mt={3}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt(
+											"tsin.tls.serverName",
+											"Server name of the TLS configs",
+										)}
+									</FormLabel>
+									<Input
+										value={tlsServerName}
+										onChange={(event) => setTlsServerName(event.target.value)}
+										placeholder="static.4.3.2.1.clients.your-server.de"
+										dir="ltr"
+										autoComplete="off"
+										spellCheck={false}
+									/>
+									<FormHelperText fontSize="xs">
+										{tt(
+											"tsin.tls.serverNameHelp",
+											"Its certificate must be on the panel's server first. When the IP is blocked, put the new IP's name here: the ports stay and users only update their subscription.",
+										)}
+									</FormHelperText>
+								</FormControl>
+								{tlsServerName.trim() !== "" && !tlsCertReady && (
+									<Alert
+										status="warning"
+										borderRadius="6px"
+										fontSize="sm"
+										mt={2}
+									>
+										<AlertIcon />
+										{tt(
+											"tsin.tls.noCert",
+											"No certificate for this name on the panel's server yet; applying will be refused.",
+										)}
+									</Alert>
+								)}
+								<FormControl mt={3}>
+									<FormLabel fontSize="sm" mb={1}>
+										{tt("tsin.tls.mainCountry", "Country on port 443")}
+									</FormLabel>
+									<Select
+										value={tlsMainCountry}
+										onChange={(event) => setTlsMainCountry(event.target.value)}
+										size="sm"
+									>
+										<option value="">
+											{tt(
+												"tsin.tls.noMainCountry",
+												"None (all on their own ports)",
+											)}
+										</option>
+										{tlsCountries
+											.filter((name) => selected.includes(name))
+											.map((name) => (
+												<option key={name} value={name}>
+													{name}
+												</option>
+											))}
+									</Select>
 								</FormControl>
 							</TSinSection>
 						)}

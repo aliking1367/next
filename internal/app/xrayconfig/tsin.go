@@ -36,6 +36,9 @@ type TSinCountry struct {
 	// HTTP adds, in path mode, a config for the country over VMess with an
 	// HTTP header on the same address as the direct one (see tsin_http.go).
 	HTTP bool
+	// TLS adds, in path mode, a config for the country over VLESS with
+	// ordinary TLS and a real certificate (see tsin_tls.go).
+	TLS bool
 	// Fastly adds, in path mode, a config for the country through Fastly's
 	// CDN (see tsin_fastly.go).
 	Fastly bool
@@ -64,6 +67,8 @@ type TSinInbound struct {
 	Vision bool `json:"vision,omitempty"`
 	// HTTP marks a country's VMess config with an HTTP header.
 	HTTP bool `json:"http,omitempty"`
+	// TLS marks a country's VLESS + TLS config.
+	TLS bool `json:"tls,omitempty"`
 	// Fastly marks a country's config through Fastly.
 	Fastly bool `json:"fastly,omitempty"`
 	// Cloud marks a country's Cloudflare XHTTP config.
@@ -152,6 +157,10 @@ type TSinGate struct {
 	// HTTPHost is the site the HTTP configs name; empty is
 	// DefaultTSinHTTPHost.
 	HTTPHost string
+	// TLSServerName is the name the TLS configs use and hold a certificate
+	// for, and TLSMainCountry the country whose TLS config takes port 443.
+	TLSServerName  string
+	TLSMainCountry string
 	// CloudDomain is the domain the Cloudflare XHTTP configs are named under
 	// (each country gets <country>.<CloudDomain>), CloudPort the server port
 	// its Origin Rule points at (0 is DefaultTSinCloudPort), and
@@ -338,6 +347,9 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		if country.HTTP && transport == TSinTransportPath {
 			wanted[TSinHTTPInboundTag(country.Name)] = directTarget
 		}
+		if country.TLS && transport == TSinTransportPath {
+			wanted[TSinTLSInboundTag(country.Name)] = directTarget
+		}
 		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
 			wanted[TSinFastlyInboundTag(country.Name)] = target
 		}
@@ -492,6 +504,13 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 				return nil, err
 			}
 			result = append(result, httpEntry)
+		}
+		if country.TLS && transport == TSinTransportPath {
+			tlsEntry, err := r.ensureTSinTLSInbound(ctx, directTarget, country, gate, directUsed, directRanges, directBusy)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, tlsEntry)
 		}
 		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
 			fastly, err := r.ensureTSinFastlyInbound(ctx, target, country, gate.FastlyHost, used, ranges, portBusy)
@@ -797,7 +816,7 @@ func (r Repository) applyTSinGate(ctx context.Context, target, transport string,
 	}
 	fallbacks := make([]any, 0, len(countries))
 	for _, country := range countries {
-		if country.Direct || country.Vision || country.HTTP || country.Fastly || country.Tunnel || country.Cloud {
+		if country.Direct || country.Vision || country.HTTP || country.TLS || country.Fastly || country.Tunnel || country.Cloud {
 			continue // reached on its own port, not through the gate
 		}
 		inbound, err := r.GetInbound(ctx, country.Tag)
@@ -848,9 +867,9 @@ func (r Repository) SetTSinConnectAddress(ctx context.Context, host, address str
 		address = host
 	}
 	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = ?
-WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ?
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ?
 AND LOWER(COALESCE(sni, '')) = ?`,
-		address, TSinGateTag, "%"+TSinHTTPSuffix, "%"+TSinCloudSuffix, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinVisionSuffix, "%"+TSinTunnelSuffix, TSinLabPrefix+"%", host)
+		address, TSinGateTag, "%"+TSinHTTPSuffix, "%"+TSinTLSSuffix, "%"+TSinCloudSuffix, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinVisionSuffix, "%"+TSinTunnelSuffix, TSinLabPrefix+"%", host)
 	if err != nil {
 		return 0, err
 	}
@@ -875,9 +894,9 @@ func (r Repository) SetTSinGateHost(ctx context.Context, oldHost, newHost string
 	// A config whose address is a separate connect address (SetTSinConnectAddress)
 	// keeps it; only its SNI and Host move.
 	result, err := r.db.ExecContext(ctx, `UPDATE hosts SET address = CASE WHEN LOWER(address) = ? THEN ? ELSE address END, sni = ?, host = ?
-WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ?
+WHERE inbound_tag LIKE 'tsin-%' AND inbound_tag <> ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ? AND inbound_tag NOT LIKE ?
 AND (LOWER(address) = ? OR LOWER(COALESCE(sni, '')) = ?)`,
-		oldHost, newHost, newHost, newHost, TSinGateTag, "%"+TSinHTTPSuffix, "%"+TSinCloudSuffix, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinVisionSuffix, "%"+TSinTunnelSuffix, TSinLabPrefix+"%", oldHost, oldHost)
+		oldHost, newHost, newHost, newHost, TSinGateTag, "%"+TSinHTTPSuffix, "%"+TSinTLSSuffix, "%"+TSinCloudSuffix, "%"+TSinDirectSuffix, "%"+TSinFastlySuffix, "%"+TSinVisionSuffix, "%"+TSinTunnelSuffix, TSinLabPrefix+"%", oldHost, oldHost)
 	if err != nil {
 		return 0, err
 	}
