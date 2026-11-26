@@ -98,7 +98,7 @@ func tsinCountryInbounds(country TSinCountry, split tsinRoutingSplit) []any {
 	if direct && country.HTTP {
 		inbounds = append(inbounds, TSinHTTPInboundTag(country.Name))
 	}
-	if direct && country.TLS {
+	if direct && country.TLS && country.TLSRoute == 0 {
 		inbounds = append(inbounds, TSinTLSInboundTag(country.Name))
 	}
 	if main && country.Fastly {

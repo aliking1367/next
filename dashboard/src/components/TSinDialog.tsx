@@ -1768,7 +1768,7 @@ export const TSinDialog: FC<{
 								<Text fontSize="sm" mb={2} opacity={0.85}>
 									{tt(
 										"tsin.tls.help",
-										"VLESS over plain TCP with ordinary TLS and a real certificate, the way sellers run it on Hetzner: the server name is the name Hetzner gives the IP (static.<IP reversed>.clients.your-server.de), and the config connects to that name. They run on the direct server. Tick the countries that should get one; the country chosen below takes port 443.",
+										"VLESS over plain TCP with ordinary TLS and a real certificate, the way sellers run it on Hetzner: the server name is the name Hetzner gives the IP (static.<IP reversed>.clients.your-server.de), and the config connects to that name. They run on the direct server, all countries together on port 443: each country's link carries its own number in the user's UUID, and the server sends it to that country. Tick the countries that should get one.",
 									)}
 								</Text>
 								<SimpleGrid columns={{ base: 1, sm: 2 }} spacing={1}>
@@ -1806,7 +1806,7 @@ export const TSinDialog: FC<{
 									<FormHelperText fontSize="xs">
 										{tt(
 											"tsin.tls.serverNameHelp",
-											"Its certificate must be on the panel's server first. When the IP is blocked, put the new IP's name here: the ports stay and users only update their subscription.",
+											"Its certificate must be on the panel's server first. When the IP is blocked, put the new IP's name here: users only update their subscription.",
 										)}
 									</FormHelperText>
 								</FormControl>
@@ -1826,7 +1826,10 @@ export const TSinDialog: FC<{
 								)}
 								<FormControl mt={3}>
 									<FormLabel fontSize="sm" mb={1}>
-										{tt("tsin.tls.mainCountry", "Country on port 443")}
+										{tt(
+											"tsin.tls.mainCountry",
+											"Main country (its link keeps the user's own UUID)",
+										)}
 									</FormLabel>
 									<Select
 										value={tlsMainCountry}
@@ -1834,10 +1837,7 @@ export const TSinDialog: FC<{
 										size="sm"
 									>
 										<option value="">
-											{tt(
-												"tsin.tls.noMainCountry",
-												"None (all on their own ports)",
-											)}
+											{tt("tsin.tls.noMainCountry", "The first ticked country")}
 										</option>
 										{tlsCountries
 											.filter((name) => selected.includes(name))

@@ -46,3 +46,24 @@ func TestVLESSLinkOfATSinTLSInbound(t *testing.T) {
 		t.Fatalf("not a plain TLS link: %s", link)
 	}
 }
+
+// A routed host puts its route number in the third group of the user's
+// UUID, and nothing else in the link changes.
+func TestVLESSRouteSettings(t *testing.T) {
+	settings := map[string]any{"id": "3F3E3255-4D69-4686-8C82-902A498206AA", "flow": ""}
+	routed := vlessRouteSettings("vless", settings, 1082)
+	if routed == nil || routed["id"] != "3f3e3255-4d69-043a-8c82-902a498206aa" {
+		t.Fatalf("routed = %#v", routed)
+	}
+	if settings["id"] != "3F3E3255-4D69-4686-8C82-902A498206AA" {
+		t.Fatal("the shared settings were changed")
+	}
+	for _, bad := range []struct {
+		protocol string
+		id       string
+	}{{"vmess", "3f3e3255-4d69-4686-8c82-902a498206aa"}, {"vless", "not-a-uuid"}, {"vless", ""}} {
+		if vlessRouteSettings(bad.protocol, map[string]any{"id": bad.id}, 1082) != nil {
+			t.Fatalf("%s %q got a routed link", bad.protocol, bad.id)
+		}
+	}
+}

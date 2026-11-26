@@ -584,7 +584,33 @@ func (r Repository) hosts(ctx context.Context) ([]Host, error) {
 		return nil, err
 	}
 	r.attachHostEnabledAdmins(ctx, result)
+	r.attachHostVLESSRoutes(ctx, result)
 	return result, nil
+}
+
+// attachHostVLESSRoutes reads the hosts' VLESS route numbers. Read apart and
+// ignored on any error (an older schema), like attachHostEnabledAdmins.
+func (r Repository) attachHostVLESSRoutes(ctx context.Context, hosts []Host) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, vless_route FROM hosts WHERE COALESCE(vless_route, 0) <> 0`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	byID := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var route int
+		if rows.Scan(&id, &route) != nil {
+			return
+		}
+		byID[id] = route
+	}
+	if rows.Err() != nil {
+		return
+	}
+	for i := range hosts {
+		hosts[i].VLESSRoute = byID[hosts[i].ID]
+	}
 }
 
 // attachHostEnabledAdmins reads which admins' users still get a disabled

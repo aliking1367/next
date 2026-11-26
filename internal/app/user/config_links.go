@@ -192,7 +192,13 @@ func BuildConfigLinks(
 			if variant.prefix != "" {
 				remark = variant.prefix + " · " + remark
 			}
-			link, err := buildShareLink(remark, address, effective, binding.settings)
+			settings := binding.settings
+			if host.VLESSRoute != 0 {
+				if settings = vlessRouteSettings(binding.protocol, settings, host.VLESSRoute); settings == nil {
+					continue
+				}
+			}
+			link, err := buildShareLink(remark, address, effective, settings)
 			if err != nil {
 				return ConfigLinksResponse{}, err
 			}
@@ -2699,4 +2705,22 @@ func remainingBar(remaining, limit int64) string {
 		block = "\U0001F7E8"
 	}
 	return strings.Repeat(block, filled) + strings.Repeat("\u2B1C", 10-filled)
+}
+
+// vlessRouteSettings is a VLESS client's settings with route in its UUID's
+// bytes 7 and 8 (the third group), which Xray ignores when it finds the user
+// and hands to the routing as the VLESS route. It is nil when the protocol is
+// not VLESS or the id is not a plain UUID, so no link is made rather than one
+// that would reach the wrong exit.
+func vlessRouteSettings(protocol string, settings map[string]any, route int) map[string]any {
+	id := strings.ToLower(stringValue(settings["id"]))
+	if protocol != "vless" || route <= 0 || route > 0xffff || len(id) != 36 || id[8] != '-' || id[13] != '-' || id[18] != '-' || id[23] != '-' {
+		return nil
+	}
+	out := make(map[string]any, len(settings))
+	for key, value := range settings {
+		out[key] = value
+	}
+	out["id"] = id[:14] + fmt.Sprintf("%04x", route) + id[18:]
+	return out
 }

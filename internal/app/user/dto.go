@@ -308,7 +308,10 @@ type Host struct {
 	FinalMask       map[string]any `json:"finalmask,omitempty"`
 	RandomUserAgent bool           `json:"random_user_agent"`
 	UseSNIAsHost    bool           `json:"use_sni_as_host"`
-	ServiceIDs      []int64        `json:"service_ids,omitempty"`
+	// VLESSRoute, when set, goes into the user's UUID in this host's links
+	// (bytes 7 and 8), and the server routes the connection by it.
+	VLESSRoute int     `json:"vless_route,omitempty"`
+	ServiceIDs []int64 `json:"service_ids,omitempty"`
 }
 
 type ClientRoutingRule struct {

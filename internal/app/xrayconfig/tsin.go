@@ -39,6 +39,10 @@ type TSinCountry struct {
 	// TLS adds, in path mode, a config for the country over VLESS with
 	// ordinary TLS and a real certificate (see tsin_tls.go).
 	TLS bool
+	// TLSRoute is set by ApplyTSin: the VLESS route number that reaches the
+	// country through the shared TLS inbound, or 0 for the country that owns
+	// that inbound.
+	TLSRoute int
 	// Fastly adds, in path mode, a config for the country through Fastly's
 	// CDN (see tsin_fastly.go).
 	Fastly bool
@@ -320,6 +324,11 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		}
 	}
 	split := directTarget != target
+	if transport == TSinTransportPath {
+		if countries, err = assignTSinTLSRoutes(countries, gate.TLSMainCountry); err != nil {
+			return nil, err
+		}
+	}
 	directBusy := portBusy
 	if split {
 		directBusy = gate.DirectPortBusy
@@ -347,7 +356,7 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 		if country.HTTP && transport == TSinTransportPath {
 			wanted[TSinHTTPInboundTag(country.Name)] = directTarget
 		}
-		if country.TLS && transport == TSinTransportPath {
+		if country.TLS && country.TLSRoute == 0 && transport == TSinTransportPath {
 			wanted[TSinTLSInboundTag(country.Name)] = directTarget
 		}
 		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
@@ -505,12 +514,15 @@ func (r Repository) ApplyTSin(ctx context.Context, target, transport string, gat
 			}
 			result = append(result, httpEntry)
 		}
-		if country.TLS && transport == TSinTransportPath {
+		if country.TLS && country.TLSRoute == 0 && transport == TSinTransportPath {
 			tlsEntry, err := r.ensureTSinTLSInbound(ctx, directTarget, country, gate, directUsed, directRanges, directBusy)
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, tlsEntry)
+			if err := r.syncTSinTLSRouteHosts(ctx, tlsEntry.Tag, countries, gate); err != nil {
+				return nil, err
+			}
 		}
 		if country.Fastly && transport == TSinTransportPath && gate.FastlyHost != "" {
 			fastly, err := r.ensureTSinFastlyInbound(ctx, target, country, gate.FastlyHost, used, ranges, portBusy)
@@ -751,6 +763,10 @@ func setTSinRoutingSplit(config map[string]any, countries []TSinCountry, split t
 			rules = append(rules, rule)
 		}
 	}
+	// The shared TLS inbound's route rules go ahead of the countries' rules:
+	// the owner's rule takes everything on that inbound, so these must match
+	// first.
+	rules = append(rules, tsinTLSRouteRules(countries, split)...)
 	for _, country := range countries {
 		address := country.Address
 		if address == "" {
@@ -764,6 +780,11 @@ func setTSinRoutingSplit(config map[string]any, countries []TSinCountry, split t
 			},
 		})
 		inbounds := tsinCountryInbounds(country, split)
+		if len(inbounds) == 0 {
+			// Reached only through the shared TLS inbound's route rule above. A
+			// rule with no inbound would match every connection.
+			continue
+		}
 		rules = append(rules, map[string]any{
 			"type":        "field",
 			"inboundTag":  inbounds,
